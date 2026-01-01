@@ -3,6 +3,7 @@ package com.plateapp.plate_main.auth.security;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Optional;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -12,6 +13,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
+
+import com.plateapp.plate_main.auth.domain.Role;
+import com.plateapp.plate_main.auth.domain.User;
+import com.plateapp.plate_main.auth.repository.UserRepository;
 
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -26,6 +31,7 @@ import lombok.RequiredArgsConstructor;
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtProvider jwtProvider;
+    private final UserRepository userRepository;
 
     private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
 
@@ -33,19 +39,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     public static final String AUTH_ERROR_EXPIRED = "TOKEN_EXPIRED";
     public static final String AUTH_ERROR_INVALID = "TOKEN_INVALID";
 
-    private static final String[] PUBLIC_PATHS = {
-            // 공개 API
-            "/auth/**",
-            "/email/**",
-
-            // Swagger/OpenAPI (permitAll과 일치시키는 게 안전)
-            "/v3/api-docs/**",
-            "/swagger-ui/**",
-            "/swagger-ui.html",
-            "/swagger-ui/index.html"
-            // 필요시
-            // "/webjars/**"
-    };
+    private static final String ROLE_PREFIX = "ROLE_";
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -53,7 +47,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (HttpMethod.OPTIONS.matches(request.getMethod())) return true;
 
         String path = request.getServletPath();
-        for (String pattern : PUBLIC_PATHS) {
+        for (String pattern : SecurityPaths.PUBLIC_MATCHERS) {
             if (PATH_MATCHER.match(pattern, path)) return true;
         }
         return false;
@@ -85,12 +79,20 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         try {
         	String username = jwtProvider.getUsernameFromAccessToken(token);
 
-            // ✅ 권한은 ROLE_ prefix 권장 (추후 @PreAuthorize/hasRole 대비)
+            Optional<User> user = userRepository.findById(username);
+            if (user.isEmpty()) {
+                SecurityContextHolder.clearContext();
+                request.setAttribute(AUTH_ERROR_ATTR, AUTH_ERROR_INVALID);
+                filterChain.doFilter(request, response);
+                return;
+            }
+
+            String authority = toAuthority(user.get().getRole());
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(
                             username,
                             null,
-                            Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"))
+                            Collections.singletonList(new SimpleGrantedAuthority(authority))
                     );
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -104,5 +106,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private String toAuthority(String role) {
+        if (role == null || role.isBlank()) {
+            return ROLE_PREFIX + Role.USER.name();
+        }
+        String normalized = role.trim().toUpperCase();
+        if (normalized.startsWith(ROLE_PREFIX)) {
+            return normalized;
+        }
+        return ROLE_PREFIX + normalized;
     }
 }

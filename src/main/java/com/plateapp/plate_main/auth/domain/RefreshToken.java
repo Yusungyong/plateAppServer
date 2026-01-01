@@ -8,6 +8,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,7 +17,14 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "fp_103")
+@Table(
+        name = "fp_103",
+        indexes = {
+                @Index(name = "idx_fp103_refresh_token", columnList = "refresh_token"),
+                @Index(name = "idx_fp103_username_device", columnList = "username, device_id"),
+                @Index(name = "idx_fp103_expiry", columnList = "expiry_date")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor

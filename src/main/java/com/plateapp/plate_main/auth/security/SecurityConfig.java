@@ -37,25 +37,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                // ✅ Swagger/OpenAPI (springdoc)
-                .requestMatchers(
-                    "/v3/api-docs/**",
-                    "/swagger-ui/**",
-                    "/swagger-ui.html",
-                    "/swagger-ui/index.html"
-                    // 필요하면 아래도 추가 (환경에 따라)
-                    // "/webjars/**"
-                ).permitAll()
-
-                // ✅ 공개 엔드포인트
-                .requestMatchers(
-                    "/auth/signup",
-                    "/auth/login",
-                    "/auth/refresh",
-                    "/auth/social/**",
-                    "/email/**",
-                    "/auth/reset-password"
-                ).permitAll()
+                .requestMatchers(SecurityPaths.PUBLIC_MATCHERS).permitAll()
 
                 .anyRequest().authenticated()
             )

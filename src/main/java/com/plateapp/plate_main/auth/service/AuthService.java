@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.plateapp.plate_main.auth.domain.LoginHistory;
 import com.plateapp.plate_main.auth.domain.RefreshToken;
+import com.plateapp.plate_main.auth.domain.Role;
 import com.plateapp.plate_main.auth.domain.User;
 import com.plateapp.plate_main.auth.dto.SignupRequest;
 import com.plateapp.plate_main.auth.exception.AuthException;
@@ -32,6 +33,13 @@ import lombok.extern.slf4j.Slf4j;
 @Transactional(readOnly = true)
 public class AuthService {
 
+    private static final String LOGIN_FAIL_MESSAGE = "아이디 또는 비밀번호가 올바르지 않습니다.";
+    private static final String LOGIN_STATUS_SUCCESS = "SUCCESS";
+    private static final String LOGIN_STATUS_FAIL = "FAIL";
+    private static final String FAIL_REASON_USER_NOT_FOUND = "USER_NOT_FOUND";
+    private static final String FAIL_REASON_PASSWORD_MISMATCH = "PASSWORD_MISMATCH";
+    private static final String FAIL_REASON_PASSWORD_EMPTY = "PASSWORD_EMPTY";
+
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final LoginHistoryRepository loginHistoryRepository;
@@ -44,9 +52,9 @@ public class AuthService {
     @Transactional
     public void signup(SignupRequest request) {
 
-        String email = request.getEmail() == null ? "" : request.getEmail().trim();
+        String email = normalizeEmail(request.getEmail());
         String rawPassword = request.getPassword();
-        String nickname = request.getNickname() == null ? "" : request.getNickname().trim();
+        String nickname = normalizeValue(request.getNickname());
 
         // 이미 가입된 이메일인지 체크
         if (userRepository.existsByEmail(email)) {
@@ -60,6 +68,7 @@ public class AuthService {
                 .email(email)
                 .password(passwordEncoder.encode(rawPassword))
                 .nickname(nickname)
+                .role(Role.USER.name())
                 .createdAt(today)
                 .updatedAt(today)
                 .build();
@@ -81,30 +90,30 @@ public class AuthService {
             String appVersion,
             String ipAddress
     ) {
-
-        // ✅ 보안상 "계정 존재 여부"가 드러나지 않게 메시지 통일 권장
-        final String loginFailMessage = "아이디 또는 비밀번호가 올바르지 않습니다.";
+        username = normalizeUsername(username);
 
         User user = userRepository.findById(username)
                 .orElseThrow(() -> {
-                    logLoginHistory(username, "FAIL", "USER_NOT_FOUND",
+                    logLoginHistory(username, LOGIN_STATUS_FAIL, FAIL_REASON_USER_NOT_FOUND,
                             ipAddress, deviceId, deviceModel, os, osVersion, appVersion);
-                    return new AuthException(ErrorCode.AUTH_UNAUTHORIZED, loginFailMessage);
+                    return new AuthException(ErrorCode.AUTH_UNAUTHORIZED, LOGIN_FAIL_MESSAGE);
                 });
 
-        if (!passwordEncoder.matches(password, user.getPassword())) {
-            logLoginHistory(username, "FAIL", "PASSWORD_MISMATCH",
+        if (password == null || password.isBlank()) {
+            logLoginHistory(username, LOGIN_STATUS_FAIL, FAIL_REASON_PASSWORD_EMPTY,
                     ipAddress, deviceId, deviceModel, os, osVersion, appVersion);
-            throw new AuthException(ErrorCode.AUTH_UNAUTHORIZED, loginFailMessage);
+            throw new AuthException(ErrorCode.AUTH_UNAUTHORIZED, LOGIN_FAIL_MESSAGE);
+        }
+
+        if (!passwordEncoder.matches(password, user.getPassword())) {
+            logLoginHistory(username, LOGIN_STATUS_FAIL, FAIL_REASON_PASSWORD_MISMATCH,
+                    ipAddress, deviceId, deviceModel, os, osVersion, appVersion);
+            throw new AuthException(ErrorCode.AUTH_UNAUTHORIZED, LOGIN_FAIL_MESSAGE);
         }
 
         // 토큰 생성
         String accessToken = jwtProvider.createAccessToken(username);
         String refreshToken = jwtProvider.createRefreshToken(username);
-
-        // Refresh TTL을 JWT와 맞춤
-        Date refreshExpDate = jwtProvider.getExpiration(refreshToken);
-        OffsetDateTime refreshExpiry = refreshExpDate.toInstant().atOffset(ZoneOffset.UTC);
 
         // 멀티 디바이스: deviceId가 있으면 해당 디바이스 것만 삭제, 없으면 전체 삭제
         if (deviceId != null && !deviceId.isBlank()) {
@@ -113,18 +122,10 @@ public class AuthService {
             refreshTokenRepository.deleteByUsername(username);
         }
 
-        refreshTokenRepository.save(
-                RefreshToken.builder()
-                        .username(username)
-                        .refreshToken(refreshToken)
-                        .expiryDate(refreshExpiry)
-                        .deviceId(deviceId)
-                        .createdAt(OffsetDateTime.now(ZoneOffset.UTC))
-                        .build()
-        );
+        persistRefreshToken(username, refreshToken, deviceId);
 
         // 성공 로그
-        logLoginHistory(username, "SUCCESS", null,
+        logLoginHistory(username, LOGIN_STATUS_SUCCESS, null,
                 ipAddress, deviceId, deviceModel, os, osVersion, appVersion);
 
         log.debug("AccessToken issued for {}.", username);
@@ -143,7 +144,7 @@ public class AuthService {
                 .orElseThrow(() -> new AuthException(ErrorCode.AUTH_REFRESH_INVALID));
 
         // 2) DB TTL 체크 (만료면 삭제하고 종료)
-        if (saved.getExpiryDate().isBefore(OffsetDateTime.now(ZoneOffset.UTC))) {
+        if (isExpired(saved.getExpiryDate())) {
             refreshTokenRepository.delete(saved);
             throw new AuthException(ErrorCode.AUTH_REFRESH_EXPIRED);
         }
@@ -171,11 +172,8 @@ public class AuthService {
         String newAccess = jwtProvider.createAccessToken(username);
         String newRefresh = jwtProvider.createRefreshToken(username);
 
-        Date refreshExpDate = jwtProvider.getExpiration(newRefresh);
-        OffsetDateTime refreshExpiry = refreshExpDate.toInstant().atOffset(ZoneOffset.UTC);
-
         saved.setRefreshToken(newRefresh);
-        saved.setExpiryDate(refreshExpiry);
+        saved.setExpiryDate(toExpiry(newRefresh));
         refreshTokenRepository.save(saved);
 
         return new AuthTokens(newAccess, newRefresh);
@@ -198,7 +196,7 @@ public class AuthService {
         try {
             LoginHistory history = LoginHistory.builder()
                     .username(username)
-                    .loginDatetime(OffsetDateTime.now(ZoneOffset.UTC))
+                    .loginDatetime(nowUtc())
                     .ipAddress(ipAddress)
                     .loginStatus(status)
                     .failReason(failReason)
@@ -207,7 +205,7 @@ public class AuthService {
                     .os(os)
                     .osVersion(osVersion)
                     .appVersion(appVersion)
-                    .createdAt(OffsetDateTime.now(ZoneOffset.UTC))
+                    .createdAt(nowUtc())
                     .build();
 
             loginHistoryRepository.save(history);
@@ -215,6 +213,43 @@ public class AuthService {
             // 히스토리 적재 실패했다고 로그인 자체가 깨지면 안 되므로 로그만 남김
             log.warn("Failed to log login history for {}: {}", username, e.getMessage());
         }
+    }
+
+    private void persistRefreshToken(String username, String refreshToken, String deviceId) {
+        refreshTokenRepository.save(
+                RefreshToken.builder()
+                        .username(username)
+                        .refreshToken(refreshToken)
+                        .expiryDate(toExpiry(refreshToken))
+                        .deviceId(normalizeValue(deviceId))
+                        .createdAt(nowUtc())
+                        .build()
+        );
+    }
+
+    private OffsetDateTime toExpiry(String refreshToken) {
+        Date refreshExpDate = jwtProvider.getExpiration(refreshToken);
+        return refreshExpDate.toInstant().atOffset(ZoneOffset.UTC);
+    }
+
+    private OffsetDateTime nowUtc() {
+        return OffsetDateTime.now(ZoneOffset.UTC);
+    }
+
+    private boolean isExpired(OffsetDateTime expiryDate) {
+        return expiryDate.isBefore(nowUtc());
+    }
+
+    private String normalizeUsername(String username) {
+        return normalizeValue(username).toLowerCase();
+    }
+
+    private String normalizeEmail(String email) {
+        return normalizeValue(email).toLowerCase();
+    }
+
+    private String normalizeValue(String value) {
+        return value == null ? "" : value.trim();
     }
 
     public record AuthTokens(String accessToken, String refreshToken) {}
