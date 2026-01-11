@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.plateapp.plate_main.common.feed.FeedGuard;
 import com.plateapp.plate_main.like.dto.LikeResponses;
+import com.plateapp.plate_main.like.dto.LikeUserResponse;
 import com.plateapp.plate_main.like.entity.Fp60FeedLike;
 import com.plateapp.plate_main.like.repository.FeedLikeRepository;
 
@@ -65,5 +66,23 @@ public class FeedLikeService {
   public long countLikes(int feedId) {
     feedGuard.assertFeedExists(feedId);
     return likeRepo.countByFeedIdAndUseYn(feedId, Y);
+  }
+
+  @Transactional(readOnly = true)
+  public java.util.List<LikeUserResponse> findLikeUsers(Integer feedId, int limit, int offset) {
+    feedGuard.assertFeedExists(feedId);
+    int safeLimit = Math.min(Math.max(limit, 1), 100);
+    int safeOffset = Math.max(offset, 0);
+
+    return likeRepo.findActiveLikeUsers(feedId, safeLimit, safeOffset).stream()
+            .map(row -> LikeUserResponse.builder()
+                    .userId(row.getUserId())
+                    .username(row.getUsername())
+                    .nickname(row.getNickname())
+                    .profileImageUrl(row.getProfileImageUrl())
+                    .activeRegion(row.getActiveRegion())
+                    .likedAt(row.getLikedAt() != null ? row.getLikedAt().toLocalDateTime() : null)
+                    .build())
+            .toList();
   }
 }

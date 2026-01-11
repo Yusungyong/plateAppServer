@@ -10,9 +10,11 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.plateapp.plate_main.common.api.ApiResponse;
+import com.plateapp.plate_main.like.dto.LikeUserResponse;
 import com.plateapp.plate_main.like.service.LikeService;
 
 import lombok.RequiredArgsConstructor;
@@ -77,5 +79,15 @@ public class LikeController {
   public ResponseEntity<ApiResponse<Map<String, Object>>> myLikes() {
     String username = currentUsername();
     return ResponseEntity.ok(ApiResponse.ok(Map.of("storeIds", likeService.myLikedStoreIds(username))));
+  }
+
+  // storeId 좋아요한 사용자 목록 조회 (프로필/활동지역 포함)
+  @GetMapping("/{storeId}/users")
+  public ResponseEntity<ApiResponse<java.util.List<LikeUserResponse>>> likeUsers(
+          @PathVariable("storeId") Integer storeId,
+          @RequestParam(name = "limit", defaultValue = "20") int limit,
+          @RequestParam(name = "offset", defaultValue = "0") int offset
+  ) {
+    return ResponseEntity.ok(ApiResponse.ok(likeService.findLikeUsers(storeId, limit, offset)));
   }
 }

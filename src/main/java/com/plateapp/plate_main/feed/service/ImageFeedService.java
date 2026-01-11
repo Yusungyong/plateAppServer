@@ -18,6 +18,7 @@ import com.plateapp.plate_main.feed.dto.ImageFeedViewerResponse;
 import com.plateapp.plate_main.feed.entity.Fp400ImageFeed;
 import com.plateapp.plate_main.feed.repository.ImageFeedContextQueryRepository;
 import com.plateapp.plate_main.feed.repository.ImageFeedRepository;
+import com.plateapp.plate_main.like.repository.FeedLikeRepository;
 import com.plateapp.plate_main.user.entity.Fp100User;
 
 @Service
@@ -26,6 +27,7 @@ public class ImageFeedService {
   private final ImageFeedRepository imageFeedRepository;
   private final CommentRepository commentRepository;
   private final ReplyRepository replyRepository;
+  private final FeedLikeRepository feedLikeRepository;
 
   // ✅ 추가
   private final ImageFeedContextQueryRepository contextQueryRepository;
@@ -34,16 +36,18 @@ public class ImageFeedService {
     ImageFeedRepository imageFeedRepository,
     CommentRepository commentRepository,
     ReplyRepository replyRepository,
+    FeedLikeRepository feedLikeRepository,
     ImageFeedContextQueryRepository contextQueryRepository
   ) {
     this.imageFeedRepository = imageFeedRepository;
     this.commentRepository = commentRepository;
     this.replyRepository = replyRepository;
+    this.feedLikeRepository = feedLikeRepository;
     this.contextQueryRepository = contextQueryRepository;
   }
 
   @Transactional(readOnly = true)
-  public ImageFeedViewerResponse getViewer(Integer feedId) {
+  public ImageFeedViewerResponse getViewer(Integer feedId, String username) {
     Fp400ImageFeed feed = imageFeedRepository.findByFeedIdAndUseYn(feedId, "Y")
       .orElseThrow(() -> new AppException(ErrorCode.COMMON_NOT_FOUND, "피드를 찾을 수 없습니다."));
 
@@ -56,7 +60,11 @@ public class ImageFeedService {
     long replyCount = replyRepository.countActiveByFeedId(feedId);
     long totalCommentCount = commentCount + replyCount;
 
-    long likeCount = 0L;
+    long likeCount = feedLikeRepository.countByFeedIdAndUseYn(feedId, "Y");
+    boolean likedByMe = false;
+    if (username != null && !username.isBlank()) {
+      likedByMe = feedLikeRepository.existsByUsernameAndFeedIdAndUseYnAndDeletedAtIsNull(username, feedId, "Y");
+    }
 
     List<ImageFeedViewerResponse.ImageItem> images = parseCommaImages(feed.getImages());
 
@@ -77,6 +85,7 @@ public class ImageFeedService {
 
       totalCommentCount,
       likeCount,
+      likedByMe,
 
       feed.getCreatedAt(),
       feed.getUpdatedAt(),

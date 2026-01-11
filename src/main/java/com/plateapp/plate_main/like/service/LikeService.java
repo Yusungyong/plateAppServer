@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.plateapp.plate_main.like.dto.LikeUserResponse;
 import com.plateapp.plate_main.like.entity.Fp50Like;
 import com.plateapp.plate_main.like.entity.Fp50LikeId;
 import com.plateapp.plate_main.like.repository.Fp50LikeRepository;
@@ -85,5 +86,22 @@ public class LikeService {
     if (username == null || username.isBlank() || storeIds == null || storeIds.isEmpty()) return Collections.emptySet();
 
     return new HashSet<>(likeRepository.findMyActiveLikedStoreIds(username, storeIds));
+  }
+
+  @Transactional(readOnly = true)
+  public List<LikeUserResponse> findLikeUsers(Integer storeId, int limit, int offset) {
+    int safeLimit = Math.min(Math.max(limit, 1), 100);
+    int safeOffset = Math.max(offset, 0);
+
+    return likeRepository.findActiveLikeUsers(storeId, safeLimit, safeOffset).stream()
+            .map(row -> LikeUserResponse.builder()
+                    .userId(row.getUserId())
+                    .username(row.getUsername())
+                    .nickname(row.getNickname())
+                    .profileImageUrl(row.getProfileImageUrl())
+                    .activeRegion(row.getActiveRegion())
+                    .likedAt(row.getLikedAt() != null ? row.getLikedAt().toLocalDateTime() : null)
+                    .build())
+            .toList();
   }
 }

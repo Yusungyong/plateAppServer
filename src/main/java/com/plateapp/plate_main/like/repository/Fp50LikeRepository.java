@@ -48,4 +48,35 @@ public interface Fp50LikeRepository extends JpaRepository<Fp50Like, Fp50LikeId> 
       @Param("username") String username,
       @Param("storeIds") List<Integer> storeIds
   );
+
+  @Query(value = """
+      select
+        u.user_id           as userId,
+        u.username          as username,
+        u.nick_name         as nickname,
+        u.profile_image_url as profileImageUrl,
+        u.active_region     as activeRegion,
+        l.created_at        as likedAt
+      from fp_50 l
+      join fp_100 u on u.username = l.username
+      where l.store_id = :storeId
+        and l.use_yn = 'Y'
+        and l.deleted_at is null
+      order by l.created_at desc nulls last, u.user_id desc
+      limit :limit offset :offset
+      """, nativeQuery = true)
+  List<LikeUserRow> findActiveLikeUsers(
+          @Param("storeId") Integer storeId,
+          @Param("limit") int limit,
+          @Param("offset") int offset
+  );
+
+  interface LikeUserRow {
+    Integer getUserId();
+    String getUsername();
+    String getNickname();
+    String getProfileImageUrl();
+    String getActiveRegion();
+    java.sql.Timestamp getLikedAt();
+  }
 }

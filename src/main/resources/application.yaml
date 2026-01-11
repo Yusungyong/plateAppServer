@@ -5,9 +5,7 @@ spring:
   datasource:
     url: jdbc:postgresql://plateappdb.cp6806wks0x5.ap-northeast-2.rds.amazonaws.com:5432/mainproject_2
     username: master_user
-    # ✅ password는 local로 이동
     # password:
-
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -30,7 +28,6 @@ spring:
         registration:
           naver:
             client-name: naver
-            # ✅ client-id/secret은 local로 이동
             # client-id:
             # client-secret:
             redirect-uri: http://localhost:8080/login/oauth2/code/naver
@@ -38,7 +35,6 @@ spring:
             scope: name,email
           google:
             client-name: google
-            # ✅ client-id/secret은 local로 이동
             # client-id:
             # client-secret:
             redirect-uri: http://localhost:8080/login/oauth2/code/google
@@ -57,7 +53,6 @@ spring:
     host: smtp.sendgrid.net
     port: 587
     username: apikey
-    # ✅ password는 local로 이동
     # password:
     properties:
       mail:
@@ -73,8 +68,7 @@ server:
   port: 8080
 
 jwt:
-  # ✅ secret은 local로 이동
-  # secret:
+  secret: ${JWT_SECRET:change-me-please-and-keep-32-bytes-long!!}
   access-expire: 3600000
   refresh-expire: 1209600000
 
@@ -82,45 +76,37 @@ file:
   upload:
     path: "C:\\localFileUpload"
 
-# ✅ 기존에 쓰던 “대문자 키” 그대로 유지 가능
-# (이 값들은 local에서 덮어쓸 거라 여기선 비워둬도 되지만,
-#  @Value로 참조하는 코드가 있고 local 프로필을 안 켜면 실패할 수 있음)
+# Kakao auth redirect (override via env if needed)
 KAKAO_DEV_REDIRECT_URL: "http://localhost:3000/RedirectPage"
 # KAKAO_DEV_RESTAPI_KEY:
 KAKAO_TOKEN_URI: "https://kauth.kakao.com/oauth/token"
 # KAKAO_CLIENT_SECRET:
 
 aws:
-  # ✅ accessKeyId/secretKey는 local로 이동
   # accessKeyId:
   # secretKey:
   s3:
     region: ap-northeast-2
     bucket: foodplayerbucket
-    base-url: https://s3.amazonaws.com   # ✅ 오타 수정 (amazoonaws → amazonaws)
+    base-url: https://foodplayerbucket.s3.ap-northeast-2.amazonaws.com
     videoFilePath: foodvideos/
     imageFilePath: foodimages/
     feedImagePath: FeedImages/
     profileImagePath: profileImage/
     newsImagePath: newsImage/
+    migration:
+      old-prefix: profileImage/
+      move-enabled: true
+      include-http: true
 
-# ✅ logging 중복 제거: 한 블록으로 합침
 logging:
   level:
-    com:
-      example:
-        demo:
-          shoppingmall:
-            login:
-              controller: DEBUG
-    org:
-      springframework:
-        web:
-          multipart: DEBUG
-      apache:
-        catalina: DEBUG
+    org.springframework.web.servlet: DEBUG
+    org.springframework.web.method.annotation: TRACE
+    org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver: DEBUG
+    com.plateapp.plate_main.friend: DEBUG
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [requestId=%X{requestId}] - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [requestId=%X{requestId}] - %msg%n%wEx"
 
 management:
   endpoints:
@@ -132,14 +118,10 @@ management:
       show-details: always
 
 openai:
-  # ✅ api-key는 local로 이동
   # api-key:
 
 apple:
   client-id: org.reactjs.native.example.plateAppNew
 
 google:
-  # 이 client-id가 OAuth registration의 client-id와 다른 용도면 유지
-  # (예: 모바일 클라이언트 id)
-  # ✅ 값은 local로 이동 가능
   # client-id:

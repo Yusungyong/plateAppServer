@@ -61,4 +61,7 @@ public class User {
 
     @Column(name = "is_private")
     private Boolean isPrivate;
+
+    @Column(name = "user_id", insertable = false, updatable = false)
+    private Integer userId;
 }

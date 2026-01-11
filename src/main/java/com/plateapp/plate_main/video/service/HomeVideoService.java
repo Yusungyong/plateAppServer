@@ -3,6 +3,7 @@ package com.plateapp.plate_main.video.service;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -34,6 +35,11 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class HomeVideoService {
 
+    private static final String FLAG_Y = "Y";
+    private static final double DEFAULT_RADIUS_METERS = 2000.0;
+    private static final double RADIUS_STEP_METERS = 500.0;
+    private static final int FEED_TOTAL_LIMIT = 10;
+
     private final Fp300StoreRepository fp300StoreRepository;
     private final Fp303WatchHistoryRepository fp303WatchHistoryRepository;
     private final Fp310PlaceRepository fp310PlaceRepository;
@@ -41,7 +47,7 @@ public class HomeVideoService {
     private final Fp440CommentRepository fp440CommentRepository;
     private final MemberRepository memberRepository;
 
-    // ✅ 추가
+    // ??ì¶”ê?
     private final LikeService likeService;
 
     public Page<HomeVideoThumbnailDTO> getHomeVideoThumbnails(
@@ -88,7 +94,7 @@ public class HomeVideoService {
 
     public void saveWatchHistory(VideoWatchHistoryCreateRequest req) {
         if (req.getStoreId() == null) {
-            throw new IllegalArgumentException("storeId는 필수입니다.");
+            throw new IllegalArgumentException("storeId???„ìˆ˜?…ë‹ˆ??");
         }
 
         String username = req.getUsername();
@@ -109,91 +115,31 @@ public class HomeVideoService {
     }
 
     /**
-     * 🔹 위치 기반 동영상 피드 조회 (반경 검색 버전)
-     * + 댓글 수 / 업로더 프로필 이미지 / ✅ 좋아요 수 & 내가 좋아요 여부 포함
+     * ?”¹ ?„ì¹˜ ê¸°ë°˜ ?™ì˜???¼ë“œ ì¡°íšŒ (ë°˜ê²½ ê²€??ë²„ì „)
+     * + ?“ê? ??/ ?…ë¡œ???„ë¡œ???´ë?ì§€ / ??ì¢‹ì•„????& ?´ê? ì¢‹ì•„???¬ë? ?¬í•¨
      */
     public List<VideoFeedItemDTO> getVideoFeed(
             String username,
             Integer storeId,
             String placeId
     ) {
-        final String USE_Y = "Y";
-        final String OPEN_Y = "Y";
-        final double RADIUS_METERS = 2000.0;
-        final int TOTAL_LIMIT = 10;
-
-        // 1) 중심 좌표 가져오기 (fp_310)
-        Fp310Place centerPlace = fp310PlaceRepository
-                .findByPlaceIdAndUseYnAndDeletedAtIsNull(placeId, "Y")
-                .orElseThrow(() ->
-                        new IllegalArgumentException("좌표 정보를 찾을 수 없는 placeId: " + placeId));
-
-        if (centerPlace.getLatitude() == null || centerPlace.getLongitude() == null) {
-            throw new IllegalStateException("placeId의 위도/경도 정보가 없습니다: " + placeId);
-        }
-
-        double centerLat = centerPlace.getLatitude();
-        double centerLng = centerPlace.getLongitude();
+        Fp310Place centerPlace = findCenterPlace(placeId);
 
         List<Fp300Store> resultStores = new ArrayList<>();
+        int remainLimit = FEED_TOTAL_LIMIT;
 
-        // 2) 기준 store (최초 진입 시)
-        int remainLimit = TOTAL_LIMIT;
         if (storeId != null) {
-            Fp300Store mainStore = fp300StoreRepository
-                    .findByStoreIdAndUseYnAndOpenYnAndDeletedAtIsNull(storeId, USE_Y, OPEN_Y)
-                    .orElseThrow(() ->
-                            new IllegalArgumentException("존재하지 않는 storeId: " + storeId));
-            resultStores.add(mainStore);
+            resultStores.add(findMainStore(storeId));
             remainLimit -= 1;
         }
 
-        // 3) 반경 안의 다른 가게들 (거리순)
         if (remainLimit > 0) {
-            Integer excludeStoreId = storeId;
-            List<Fp300Store> nearby = fp300StoreRepository.findNearbyStores(
-                    centerLat,
-                    centerLng,
-                    RADIUS_METERS,
-                    excludeStoreId,
-                    remainLimit
-            );
-            resultStores.addAll(nearby);
+            resultStores.addAll(expandRadiusUntilFilled(centerPlace, storeId, remainLimit));
         }
 
-        // ✅ storeIds 준비
-        List<Integer> storeIds = resultStores.stream()
-                .map(Fp300Store::getStoreId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-
-        // ✅ (A) 댓글 카운트 배치 조회 (storeId -> count)
-        Map<Integer, Long> commentCountMap = storeIds.isEmpty()
-                ? Collections.emptyMap()
-                : fp440CommentRepository.countActiveByStoreIds(storeIds).stream()
-                .collect(Collectors.toMap(
-                        Fp440CommentRepository.StoreCommentCount::getStoreId,
-                        Fp440CommentRepository.StoreCommentCount::getCnt
-                ));
-
-        // ✅ (B) 업로더 프로필 이미지 배치 조회 (username -> profileImageUrl)
-        List<String> uploaderUsernames = resultStores.stream()
-                .map(Fp300Store::getUsername)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-
-        Map<String, String> profileImageMap = uploaderUsernames.isEmpty()
-                ? Collections.emptyMap()
-                : memberRepository.findByUsernameIn(uploaderUsernames).stream()
-                .collect(Collectors.toMap(
-                        Fp100User::getUsername,
-                        Fp100User::getProfileImageUrl,
-                        (a, b) -> a
-                ));
-
-        // ✅ (C) 좋아요 수 배치 + 내가 좋아요 여부 배치
+        List<Integer> storeIds = extractStoreIds(resultStores);
+        Map<Integer, Long> commentCountMap = loadCommentCountMap(storeIds);
+        Map<String, String> profileImageMap = loadProfileImageMap(resultStores);
         Map<Integer, Long> likeCountMap = likeService.getLikeCountMap(storeIds);
         Set<Integer> myLikedStoreIdSet = likeService.getMyLikedStoreIdSet(username, storeIds);
 
@@ -236,9 +182,116 @@ public class HomeVideoService {
                 .commentCount(commentCount)
                 .profileImageUrl(profileImageUrl)
 
-                // ✅ 좋아요 주입
+                // ??ì¢‹ì•„??ì£¼ìž…
                 .likeCount(likeCount)
                 .likedByMe(likedByMe)
                 .build();
+    }
+
+    private Fp310Place findCenterPlace(String placeId) {
+        Fp310Place centerPlace = fp310PlaceRepository
+                .findByPlaceIdAndUseYnAndDeletedAtIsNull(placeId, FLAG_Y)
+                .orElseThrow(() -> new IllegalArgumentException("ì¢Œí‘œ ?•ë³´ë¥?ì°¾ì„ ???†ëŠ” placeId: " + placeId));
+
+        if (centerPlace.getLatitude() == null || centerPlace.getLongitude() == null) {
+            throw new IllegalStateException("placeId???„ë„/ê²½ë„ ?•ë³´ê°€ ?†ìŠµ?ˆë‹¤: " + placeId);
+        }
+        return centerPlace;
+    }
+
+    private Fp300Store findMainStore(Integer storeId) {
+        return fp300StoreRepository
+                .findByStoreIdAndUseYnAndOpenYnAndDeletedAtIsNull(storeId, FLAG_Y, FLAG_Y)
+                .orElseThrow(() -> new IllegalArgumentException("ì¡´ìž¬?˜ì? ?ŠëŠ” storeId: " + storeId));
+    }
+
+    private List<Fp300Store> expandRadiusUntilFilled(Fp310Place centerPlace, Integer excludeStoreId, int limit) {
+        double radius = DEFAULT_RADIUS_METERS;
+        List<Fp300Store> collected = new ArrayList<>();
+        Set<Integer> seenIds = new HashSet<>();
+
+        while (collected.size() < limit) {
+            int requestLimit = limit - collected.size();
+            List<Fp300Store> nearby = findNearbyStores(
+                    centerPlace.getLatitude(),
+                    centerPlace.getLongitude(),
+                    radius,
+                    excludeStoreId,
+                    requestLimit
+            );
+
+            int beforeAdd = collected.size();
+            for (Fp300Store store : nearby) {
+                Integer sid = store.getStoreId();
+                if (sid != null && seenIds.add(sid)) {
+                    collected.add(store);
+                    if (collected.size() >= limit) {
+                        break;
+                    }
+                }
+            }
+
+            if (collected.size() >= limit) {
+                break;
+            }
+
+            // 더 이상 새 결과가 없으면 루프 종료
+            if (collected.size() == beforeAdd) {
+                break;
+            }
+
+            radius += RADIUS_STEP_METERS;
+        }
+
+        return collected;
+    }
+
+    private List<Fp300Store> findNearbyStores(double lat, double lng, double radius, Integer excludeStoreId, int limit) {
+        return fp300StoreRepository.findNearbyStores(
+                lat,
+                lng,
+                radius,
+                excludeStoreId,
+                limit
+        );
+    }
+
+    private List<Integer> extractStoreIds(List<Fp300Store> stores) {
+        return stores.stream()
+                .map(Fp300Store::getStoreId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+    }
+
+    private Map<Integer, Long> loadCommentCountMap(List<Integer> storeIds) {
+        if (storeIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        return fp440CommentRepository.countActiveByStoreIds(storeIds).stream()
+                .collect(Collectors.toMap(
+                        Fp440CommentRepository.StoreCommentCount::getStoreId,
+                        Fp440CommentRepository.StoreCommentCount::getCnt
+                ));
+    }
+
+    private Map<String, String> loadProfileImageMap(List<Fp300Store> stores) {
+        List<String> usernames = stores.stream()
+                .map(Fp300Store::getUsername)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        if (usernames.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        return memberRepository.findByUsernameIn(usernames).stream()
+                .collect(Collectors.toMap(
+                        Fp100User::getUsername,
+                        Fp100User::getProfileImageUrl,
+                        (a, b) -> a
+                ));
     }
 }

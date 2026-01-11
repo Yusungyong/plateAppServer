@@ -1,6 +1,8 @@
 // src/main/java/com/plateapp/plate_main/feed/controller/ImageFeedController.java
 package com.plateapp.plate_main.feed.controller;
 
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -21,8 +23,11 @@ public class ImageFeedController {
   }
 
   @GetMapping("/image-feeds/{feedId}")
-  public ApiResponse<ImageFeedViewerResponse> getImageFeedViewer(@PathVariable("feedId") Integer feedId) {
-    return ApiResponse.ok(imageFeedService.getViewer(feedId));
+  public ApiResponse<ImageFeedViewerResponse> getImageFeedViewer(
+          @PathVariable("feedId") Integer feedId,
+          @RequestParam(name = "username", required = false) String username
+  ) {
+    return ApiResponse.ok(imageFeedService.getViewer(feedId, resolveUsername(username)));
   }
 
   // ✅ 추가: 선택한 피드 기준 위치 반경 내 피드ID 스트립
@@ -33,5 +38,19 @@ public class ImageFeedController {
       @RequestParam(value = "limit", required = false, defaultValue = "50") Integer limit
   ) {
     return ApiResponse.ok(imageFeedService.getContext(baseFeedId, radiusM, limit));
+  }
+
+  private String resolveUsername(String usernameParam) {
+    if (usernameParam != null && !usernameParam.isBlank()) {
+      return usernameParam;
+    }
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    if (auth != null && auth.isAuthenticated()) {
+      String name = auth.getName();
+      if (name != null && !name.isBlank() && !"anonymousUser".equalsIgnoreCase(name)) {
+        return name;
+      }
+    }
+    return null;
   }
 }

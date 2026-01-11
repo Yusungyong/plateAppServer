@@ -25,6 +25,7 @@ import com.plateapp.plate_main.auth.dto.GoogleLoginRequest;
 import com.plateapp.plate_main.auth.dto.KakaoLoginRequest;
 import com.plateapp.plate_main.auth.dto.KakaoUserResponse;
 import com.plateapp.plate_main.auth.dto.TokenResponse;
+import com.plateapp.plate_main.auth.repository.LoginHistoryRepository;
 import com.plateapp.plate_main.auth.repository.SocialAccountRepository;
 import com.plateapp.plate_main.auth.repository.UserRepository;
 import com.plateapp.plate_main.auth.security.JwtProvider;
@@ -42,6 +43,7 @@ public class SocialAuthService {
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
+    private final LoginHistoryRepository loginHistoryRepository;
 
     /** Apple aud 검증용 (bundle id 또는 services id) */
     @Value("${apple.client-id}")

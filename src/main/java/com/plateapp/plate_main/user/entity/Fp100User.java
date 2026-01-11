@@ -26,6 +26,9 @@ public class Fp100User {
   @Column(name = "is_private")
   private Boolean isPrivate;
 
+  @Column(name = "active_region")
+  private String activeRegion;
+
   // getters/setters
   public String getUsername() { return username; }
   public void setUsername(String username) { this.username = username; }
@@ -41,4 +44,7 @@ public class Fp100User {
 
   public Boolean getIsPrivate() { return isPrivate; }
   public void setIsPrivate(Boolean isPrivate) { this.isPrivate = isPrivate; }
+
+  public String getActiveRegion() { return activeRegion; }
+  public void setActiveRegion(String activeRegion) { this.activeRegion = activeRegion; }
 }
