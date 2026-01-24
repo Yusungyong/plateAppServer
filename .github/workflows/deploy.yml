@@ -13,7 +13,7 @@ permissions:
 env:
   AWS_REGION: ap-northeast-2
   S3_BUCKET: foodplayerbucket
-  : plate-main
+  CODEDEPLOY_APP: plate-app-server
   CODEDEPLOY_GROUP: plate-main-deploy-group
   ROLE_ARN: arn:aws:iam::174977828951:role/GitHubActions-CodeDeploy
 
@@ -32,6 +32,9 @@ jobs:
           distribution: temurin
           java-version: "17"
           cache: maven
+
+      - name: Prepare mvnw
+        run: chmod +x mvnw
 
       - name: Build
         run: ./mvnw -B -DskipTests package
