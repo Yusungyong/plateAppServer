@@ -9,5 +9,7 @@ if [ -z "$JAR_FILE" ]; then
   exit 1
 fi
 
-mv "$JAR_FILE" "${APP_DIR}/app.jar"
+if [ "$JAR_FILE" != "${APP_DIR}/app.jar" ]; then
+  mv "$JAR_FILE" "${APP_DIR}/app.jar"
+fi
 chown ec2-user:ec2-user "${APP_DIR}/app.jar"

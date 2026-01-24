@@ -1,7 +1,7 @@
 version: 0.0
 os: linux
 files:
-  - source: target/*.jar
+  - source: app.jar
     destination: /opt/plate-main/
 hooks:
   ApplicationStop:

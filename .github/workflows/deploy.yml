@@ -42,8 +42,11 @@ jobs:
       - name: Prepare scripts
         run: chmod +x deploy/*.sh
 
+      - name: Prepare bundle
+        run: cp target/*.jar app.jar
+
       - name: Package deployment bundle
-        run: zip -r deployment.zip appspec.yml deploy target/*.jar
+        run: zip -r deployment.zip appspec.yml deploy app.jar
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
