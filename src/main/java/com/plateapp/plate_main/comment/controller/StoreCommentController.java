@@ -23,9 +23,11 @@ import com.plateapp.plate_main.common.error.ErrorCode;
 import com.plateapp.plate_main.user.repository.MemberRepository;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.RequestMapping;
 
 @RestController
 @RequiredArgsConstructor
+@RequestMapping("/api")
 public class StoreCommentController {
 
   private final CommentService commentService;

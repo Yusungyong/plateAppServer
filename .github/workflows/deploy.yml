@@ -1,0 +1,56 @@
+name: Deploy
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-2
+  S3_BUCKET: foodplayerbucket
+  CODEDEPLOY_APP: plate-app-server
+  CODEDEPLOY_GROUP: plate-main-deploy-group
+  ROLE_ARN: arn:aws:iam::174977828951:role/GitHubActions-CodeDeploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Build
+        run: ./mvnw -B -DskipTests package
+
+      - name: Prepare scripts
+        run: chmod +x deploy/*.sh
+
+      - name: Package deployment bundle
+        run: zip -r deployment.zip appspec.yml deploy target/*.jar
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload to S3
+        run: aws s3 cp deployment.zip s3://${{ env.S3_BUCKET }}/deployments/${{ github.sha }}.zip
+
+      - name: Create CodeDeploy deployment
+        run: >
+          aws deploy create-deployment
+          --application-name ${{ env.CODEDEPLOY_APP }}
+          --deployment-group-name ${{ env.CODEDEPLOY_GROUP }}
+          --s3-location bucket=${{ env.S3_BUCKET }},key=deployments/${{ github.sha }}.zip,bundleType=zip

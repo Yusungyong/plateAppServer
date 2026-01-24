@@ -1,23 +1,38 @@
 package com.plateapp.plate_main.friend.dto;
 
-import java.time.LocalDateTime;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Value;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-@Value
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 @Builder
-public class FriendDto {
-    Integer id;
-    String username;
-    String friendName;
-    String friendNickname;
-    String status;
-    String friendProfileImageUrl;
-    String friendActiveRegion;
-    String initiatorUsername;
-    String message;
-    Long mutualCount;
-    LocalDateTime createdAt;
-    LocalDateTime updatedAt;
-    LocalDateTime acceptedAt;
+public class FriendDTO {
+    // For friend management API
+    private Integer userId;
+    private String username;
+    private String nickname;
+    private String profileImageUrl;
+    private String activeRegion;
+    private LocalDateTime friendsSince;
+
+    // For existing friend features
+    private Integer id;
+    private String friendName;
+    private String friendNickname;
+    private String status;
+    private String friendProfileImageUrl;
+    private String friendActiveRegion;
+    private String initiatorUsername;
+    private String message;
+    private Long mutualCount;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private LocalDateTime acceptedAt;
 }

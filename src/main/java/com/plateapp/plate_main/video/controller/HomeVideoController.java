@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.validation.annotation.Validated;
+
+import jakarta.validation.Valid;
 
 import com.plateapp.plate_main.video.dto.HomeVideoThumbnailDTO;
 import com.plateapp.plate_main.video.dto.VideoFeedItemDTO;
@@ -20,6 +23,7 @@ import com.plateapp.plate_main.video.service.HomeVideoService;
 import lombok.RequiredArgsConstructor;
 
 @RestController
+@Validated
 @RequiredArgsConstructor
 @RequestMapping("/api/home")
 public class HomeVideoController {
@@ -32,7 +36,11 @@ public class HomeVideoController {
     @GetMapping("/video-thumbnails")
     public Page<HomeVideoThumbnailDTO> getHomeVideoThumbnails(
             @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "5") int size,
+            @RequestParam(name = "size", defaultValue = "10") int size,
+            @RequestParam(name = "sortType", defaultValue = "RECENT") String sortType,
+            @RequestParam(name = "lat", required = false) Double lat,
+            @RequestParam(name = "lng", required = false) Double lng,
+            @RequestParam(name = "radius", required = false) Double radius,
             @RequestParam(name = "username", required = false) String username,
             @RequestParam(name = "isGuest", defaultValue = "false") boolean isGuest,
             @RequestParam(name = "guestId", required = false) String guestId,
@@ -41,6 +49,10 @@ public class HomeVideoController {
         return homeVideoService.getHomeVideoThumbnails(
                 page,
                 size,
+                sortType,
+                lat,
+                lng,
+                radius,
                 username,
                 isGuest,
                 guestId,
@@ -51,7 +63,7 @@ public class HomeVideoController {
     // 🔹 썸네일 시청 이력 생성 API
     @PostMapping("/video-watch-history")
     public ResponseEntity<Void> createVideoWatchHistory(
-            @RequestBody VideoWatchHistoryCreateRequest request
+            @RequestBody @Valid VideoWatchHistoryCreateRequest request
     ) {
         homeVideoService.saveWatchHistory(request);
         return ResponseEntity.ok().build();

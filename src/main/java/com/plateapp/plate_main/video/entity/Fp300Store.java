@@ -1,4 +1,3 @@
-// src/main/java/com/plateapp/platehome/video/entity/Fp300Store.java
 package com.plateapp.plate_main.video.entity;
 
 import java.math.BigDecimal;
@@ -22,7 +21,6 @@ public class Fp300Store {
 
     @Id
     @Column(name = "store_id")
-    // 필요하면 @GeneratedValue 추가 (지금 PK 전략에 따라)
     private Integer storeId;
 
     @Column(name = "title")
@@ -64,11 +62,11 @@ public class Fp300Store {
     private String placeId;
 
     @Column(name = "video_duration")
-    private Integer videoDuration;  // 초 단위
+    private Integer videoDuration;
 
     @Column(name = "mute_yn", length = 1)
     private String muteYn;
 
     @Column(name = "video_size")
-    private BigDecimal videoSize;   // numeric(10,2)
+    private BigDecimal videoSize;
 }

@@ -23,18 +23,51 @@ public class HomeImageThumbnailService {
   }
 
   @Transactional(readOnly = true)
-  public HomeImageThumbnailResponse getLatestThumbs(int size) {
-    if (size < 1 || size > 20) {
+  public HomeImageThumbnailResponse getLatestThumbs(
+      int size,
+      String sortType,
+      Double lat,
+      Double lng,
+      Double radius
+  ) {
+    if (size < 1 || size > 30) {
       throw new AppException(ErrorCode.COMMON_INVALID_INPUT);
     }
 
-    List<Fp400Feed> feeds = feedRepository.findLatestForHome(PageRequest.of(0, size));
+    List<Fp400Feed> feeds;
+    if ("NEARBY".equalsIgnoreCase(sortType)) {
+      if (lat == null || lng == null) {
+        throw new AppException(ErrorCode.COMMON_MISSING_PARAMETER);
+      }
+      double safeRadius = normalizeRadius(radius);
+      feeds = feedRepository.findNearbyForHome(
+          lat,
+          lng,
+          safeRadius,
+          PageRequest.of(0, size)
+      );
+    } else {
+      feeds = feedRepository.findLatestForHome(PageRequest.of(0, size));
+    }
 
     List<HomeImageThumbnailItem> items = feeds.stream()
         .map(this::toItem)
         .toList();
 
     return new HomeImageThumbnailResponse(items);
+  }
+
+  private double normalizeRadius(Double radius) {
+    if (radius == null) {
+      return 1500.0;
+    }
+    if (radius < 300.0) {
+      return 300.0;
+    }
+    if (radius > 5000.0) {
+      return 5000.0;
+    }
+    return radius;
   }
 
   private HomeImageThumbnailItem toItem(Fp400Feed feed) {

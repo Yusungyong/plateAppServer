@@ -15,6 +15,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import com.plateapp.plate_main.common.error.AppException;
+import com.plateapp.plate_main.common.error.ErrorCode;
 import com.plateapp.plate_main.like.service.LikeService;
 import com.plateapp.plate_main.user.entity.Fp100User;
 import com.plateapp.plate_main.user.repository.MemberRepository;
@@ -39,6 +41,10 @@ public class HomeVideoService {
     private static final double DEFAULT_RADIUS_METERS = 2000.0;
     private static final double RADIUS_STEP_METERS = 500.0;
     private static final int FEED_TOTAL_LIMIT = 10;
+    private static final double NEARBY_RADIUS_DEFAULT = 1500.0;
+    private static final double NEARBY_RADIUS_MIN = 300.0;
+    private static final double NEARBY_RADIUS_MAX = 5000.0;
+    private static final int VIDEO_SIZE_MAX = 50;
 
     private final Fp300StoreRepository fp300StoreRepository;
     private final Fp303WatchHistoryRepository fp303WatchHistoryRepository;
@@ -53,12 +59,31 @@ public class HomeVideoService {
     public Page<HomeVideoThumbnailDTO> getHomeVideoThumbnails(
             int page,
             int size,
+            String sortType,
+            Double lat,
+            Double lng,
+            Double radius,
             String username,
             boolean isGuest,
             String guestId,
             List<String> placeIds
     ) {
-        Pageable pageable = PageRequest.of(page, size);
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(Math.max(size, 1), VIDEO_SIZE_MAX);
+        Pageable pageable = PageRequest.of(safePage, safeSize);
+
+        if (isNearby(sortType)) {
+            validateNearbyParams(lat, lng);
+            double safeRadius = normalizeRadius(radius);
+            Page<Fp300Store> entityPage = fp300StoreRepository.findHomeVideoThumbnailsNearby(
+                    lat,
+                    lng,
+                    safeRadius,
+                    username,
+                    pageable
+            );
+            return entityPage.map(this::toThumbnailDto);
+        }
 
         boolean usePlaceFilter = placeIds != null && !placeIds.isEmpty();
         List<String> safePlaceIds = usePlaceFilter ? placeIds : Collections.singletonList("DUMMY");
@@ -92,6 +117,29 @@ public class HomeVideoService {
                 .build();
     }
 
+    private boolean isNearby(String sortType) {
+        return sortType != null && "NEARBY".equalsIgnoreCase(sortType);
+    }
+
+    private void validateNearbyParams(Double lat, Double lng) {
+        if (lat == null || lng == null) {
+            throw new AppException(ErrorCode.COMMON_MISSING_PARAMETER);
+        }
+    }
+
+    private double normalizeRadius(Double radius) {
+        if (radius == null) {
+            return NEARBY_RADIUS_DEFAULT;
+        }
+        if (radius < NEARBY_RADIUS_MIN) {
+            return NEARBY_RADIUS_MIN;
+        }
+        if (radius > NEARBY_RADIUS_MAX) {
+            return NEARBY_RADIUS_MAX;
+        }
+        return radius;
+    }
+
     public void saveWatchHistory(VideoWatchHistoryCreateRequest req) {
         if (req.getStoreId() == null) {
             throw new IllegalArgumentException("storeId???„ìˆ˜?…ë‹ˆ??");
@@ -123,10 +171,19 @@ public class HomeVideoService {
             Integer storeId,
             String placeId
     ) {
+        List<Fp300Store> resultStores = sanitizeStores(resolveFeedStores(placeId, storeId, FEED_TOTAL_LIMIT));
+        FeedContext context = loadFeedContext(username, resultStores);
+
+        return resultStores.stream()
+                .map(store -> toVideoFeedItemDto(store, context))
+                .collect(Collectors.toList());
+    }
+
+    private List<Fp300Store> resolveFeedStores(String placeId, Integer storeId, int limit) {
         Fp310Place centerPlace = findCenterPlace(placeId);
 
         List<Fp300Store> resultStores = new ArrayList<>();
-        int remainLimit = FEED_TOTAL_LIMIT;
+        int remainLimit = limit;
 
         if (storeId != null) {
             resultStores.add(findMainStore(storeId));
@@ -137,23 +194,35 @@ public class HomeVideoService {
             resultStores.addAll(expandRadiusUntilFilled(centerPlace, storeId, remainLimit));
         }
 
-        List<Integer> storeIds = extractStoreIds(resultStores);
-        Map<Integer, Long> commentCountMap = loadCommentCountMap(storeIds);
-        Map<String, String> profileImageMap = loadProfileImageMap(resultStores);
-        Map<Integer, Long> likeCountMap = likeService.getLikeCountMap(storeIds);
-        Set<Integer> myLikedStoreIdSet = likeService.getMyLikedStoreIdSet(username, storeIds);
+        return resultStores;
+    }
 
-        return resultStores.stream()
-                .map(store -> toVideoFeedItemDto(store, commentCountMap, profileImageMap, likeCountMap, myLikedStoreIdSet))
-                .collect(Collectors.toList());
+    private List<Fp300Store> sanitizeStores(List<Fp300Store> stores) {
+        if (stores == null || stores.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return stores.stream()
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    private FeedContext loadFeedContext(String username, List<Fp300Store> stores) {
+        List<Integer> storeIds = extractStoreIds(stores);
+        if (storeIds.isEmpty()) {
+            return new FeedContext(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
+        }
+
+        Map<Integer, Long> commentCountMap = defaultMap(loadCommentCountMap(storeIds));
+        Map<String, String> profileImageMap = defaultMap(loadProfileImageMap(stores));
+        Map<Integer, Long> likeCountMap = defaultMap(likeService.getLikeCountMap(storeIds));
+        Set<Integer> myLikedStoreIdSet = defaultSet(likeService.getMyLikedStoreIdSet(username, storeIds));
+
+        return new FeedContext(commentCountMap, profileImageMap, likeCountMap, myLikedStoreIdSet);
     }
 
     private VideoFeedItemDTO toVideoFeedItemDto(
             Fp300Store store,
-            Map<Integer, Long> commentCountMap,
-            Map<String, String> profileImageMap,
-            Map<Integer, Long> likeCountMap,
-            Set<Integer> myLikedStoreIdSet
+            FeedContext context
     ) {
         String title = store.getTitle();
         if (title == null || title.isBlank()) {
@@ -162,11 +231,11 @@ public class HomeVideoService {
 
         Integer sid = store.getStoreId();
 
-        Long commentCount = commentCountMap.getOrDefault(sid, 0L);
-        String profileImageUrl = profileImageMap.get(store.getUsername());
+        Long commentCount = context.commentCountMap.getOrDefault(sid, 0L);
+        String profileImageUrl = context.profileImageMap.get(store.getUsername());
 
-        Long likeCount = likeCountMap.getOrDefault(sid, 0L);
-        Boolean likedByMe = myLikedStoreIdSet.contains(sid);
+        Long likeCount = context.likeCountMap.getOrDefault(sid, 0L);
+        Boolean likedByMe = context.myLikedStoreIdSet.contains(sid);
 
         return VideoFeedItemDTO.builder()
                 .storeId(sid)
@@ -177,6 +246,7 @@ public class HomeVideoService {
                 .fileName(store.getFileName())
                 .thumbnail(store.getThumbnail())
                 .videoDuration(store.getVideoDuration())
+                .createdAt(store.getCreatedAt())
                 .username(store.getUsername())
 
                 .commentCount(commentCount)
@@ -269,7 +339,12 @@ public class HomeVideoService {
             return Collections.emptyMap();
         }
 
-        return fp440CommentRepository.countActiveByStoreIds(storeIds).stream()
+        List<Fp440CommentRepository.StoreCommentCount> rows = fp440CommentRepository.countActiveByStoreIds(storeIds);
+        if (rows == null || rows.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        return rows.stream()
                 .collect(Collectors.toMap(
                         Fp440CommentRepository.StoreCommentCount::getStoreId,
                         Fp440CommentRepository.StoreCommentCount::getCnt
@@ -287,11 +362,46 @@ public class HomeVideoService {
             return Collections.emptyMap();
         }
 
-        return memberRepository.findByUsernameIn(usernames).stream()
-                .collect(Collectors.toMap(
-                        Fp100User::getUsername,
-                        Fp100User::getProfileImageUrl,
-                        (a, b) -> a
-                ));
+        List<Fp100User> users = memberRepository.findByUsernameIn(usernames);
+        if (users == null || users.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Map<String, String> result = new java.util.LinkedHashMap<>();
+        for (Fp100User user : users) {
+            String name = user.getUsername();
+            if (name == null || name.isBlank()) {
+                continue;
+            }
+            result.putIfAbsent(name, user.getProfileImageUrl());
+        }
+        return result;
+    }
+
+    private <K, V> Map<K, V> defaultMap(Map<K, V> map) {
+        return map != null ? map : Collections.emptyMap();
+    }
+
+    private <T> Set<T> defaultSet(Set<T> set) {
+        return set != null ? set : Collections.emptySet();
+    }
+
+    private static class FeedContext {
+        private final Map<Integer, Long> commentCountMap;
+        private final Map<String, String> profileImageMap;
+        private final Map<Integer, Long> likeCountMap;
+        private final Set<Integer> myLikedStoreIdSet;
+
+        private FeedContext(
+                Map<Integer, Long> commentCountMap,
+                Map<String, String> profileImageMap,
+                Map<Integer, Long> likeCountMap,
+                Set<Integer> myLikedStoreIdSet
+        ) {
+            this.commentCountMap = commentCountMap;
+            this.profileImageMap = profileImageMap;
+            this.likeCountMap = likeCountMap;
+            this.myLikedStoreIdSet = myLikedStoreIdSet;
+        }
     }
 }

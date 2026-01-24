@@ -14,7 +14,7 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/image-feeds")
+@RequestMapping("/api/image-feeds")
 public class FeedCommentController {
 
   private final FeedCommentService feedCommentService;

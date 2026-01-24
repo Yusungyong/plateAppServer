@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/image-feeds")
+@RequestMapping("/api/image-feeds")
 public class FeedLikeController {
 
   private final FeedLikeService service;

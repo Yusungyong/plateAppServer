@@ -1,6 +1,6 @@
 package com.plateapp.plate_main.friend.controller;
 
-import com.plateapp.plate_main.friend.dto.FriendDto;
+import com.plateapp.plate_main.friend.dto.FriendDTO;
 import com.plateapp.plate_main.friend.dto.FriendListResponse;
 import com.plateapp.plate_main.friend.dto.FriendRequests.CreateFriendRequest;
 import com.plateapp.plate_main.friend.dto.FriendRequests.UpdateStatusRequest;
@@ -51,10 +51,11 @@ public class FriendController {
     @GetMapping("/{username}/visits")
     public ResponseEntity<VisitResponse> visits(
             @PathVariable("username") String username,
+            @RequestParam(value = "friendName", required = false) String friendName,
             @RequestParam(value = "cursor", required = false) Integer cursor,
             @RequestParam(value = "limit", defaultValue = "20") int limit
     ) {
-        return ResponseEntity.ok(friendService.listVisits(username, cursor, limit));
+        return ResponseEntity.ok(friendService.listVisits(username, friendName, cursor, limit));
     }
 
     @GetMapping("/{username}/recent-stores")
@@ -65,6 +66,17 @@ public class FriendController {
         return ResponseEntity.ok(friendService.listRecentStores(username, limit));
     }
 
+    @GetMapping("/suggest")
+    public ResponseEntity<FriendListResponse> suggest(
+            @RequestParam("username") String username,
+            @RequestParam("keyword") String keyword,
+            @RequestParam(value = "status", defaultValue = "cd_002") String status,
+            @RequestParam(value = "limit", defaultValue = "10") int limit,
+            @RequestParam(value = "offset", defaultValue = "0") int offset
+    ) {
+        return ResponseEntity.ok(new FriendListResponse(friendService.suggest(username, keyword, status, limit, offset)));
+    }
+
     @GetMapping("/stores/{storeId}/friend-visits")
     public ResponseEntity<FriendStoreVisitDto> storeFriendVisits(
             @PathVariable("storeId") Integer storeId,
@@ -73,8 +85,16 @@ public class FriendController {
         return ResponseEntity.ok(friendService.getStoreFriendVisits(username, storeId));
     }
 
+    @GetMapping("/{username}/stores/{storeId}/visits")
+    public ResponseEntity<FriendStoreVisitDto> userStoreFriendVisits(
+            @PathVariable("username") String username,
+            @PathVariable("storeId") Integer storeId
+    ) {
+        return ResponseEntity.ok(friendService.getStoreFriendVisits(username, storeId));
+    }
+
     @PostMapping
-    public ResponseEntity<FriendDto> add(@RequestBody CreateFriendRequest request) {
+    public ResponseEntity<FriendDTO> add(@RequestBody CreateFriendRequest request) {
         return ResponseEntity.ok(friendService.add(request));
     }
 
@@ -98,7 +118,7 @@ public class FriendController {
     }
 
     @PatchMapping("/{id}/status")
-    public ResponseEntity<FriendDto> updateStatus(
+    public ResponseEntity<FriendDTO> updateStatus(
             @PathVariable Integer id,
             @RequestBody UpdateStatusRequest request
     ) {

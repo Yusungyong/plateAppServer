@@ -41,6 +41,14 @@ public interface ReplyRepository extends JpaRepository<Fp450Reply, Integer> {
   """)
   List<ReplyCountRow> countByCommentIds(@Param("commentIds") List<Integer> commentIds);
 
+  Page<Fp450Reply> findByCommentIdAndUseYn(Integer commentId, String useYn, Pageable pageable);
+
+  long countByCommentIdAndUseYn(Integer commentId, String useYn);
+
+  @Modifying
+  @Query("DELETE FROM Fp450Reply r WHERE r.commentId = :commentId")
+  void deleteByCommentId(@Param("commentId") Integer commentId);
+
   @Query("select r.username from Fp450Reply r where r.replyId = :replyId")
   Optional<String> findOwnerUsername(@Param("replyId") Integer replyId);
 

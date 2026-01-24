@@ -99,6 +99,76 @@ public interface Fp300StoreRepository extends JpaRepository<Fp300Store, Integer>
             Pageable pageable
     );
 
+    @Query(
+        value = """
+            SELECT s.*
+            FROM fp_300 s
+            JOIN fp_310 loc
+              ON s.place_id = loc.place_id
+            WHERE s.use_yn = 'Y'
+              AND s.open_yn = 'Y'
+              AND s.deleted_at IS NULL
+              AND s.file_name IS NOT NULL
+              AND loc.latitude IS NOT NULL
+              AND loc.longitude IS NOT NULL
+              AND (
+                  :username IS NULL OR s.username NOT IN (
+                      SELECT blocked_username
+                      FROM fp_160
+                      WHERE blocker_username = :username
+                  )
+              )
+              AND (
+                6371000 * acos(
+                    cos(radians(:centerLat)) * cos(radians(loc.latitude))
+                  * cos(radians(loc.longitude) - radians(:centerLng))
+                  + sin(radians(:centerLat)) * sin(radians(loc.latitude))
+                )
+              ) <= :radiusMeters
+            ORDER BY
+              6371000 * acos(
+                  cos(radians(:centerLat)) * cos(radians(loc.latitude))
+                * cos(radians(loc.longitude) - radians(:centerLng))
+                + sin(radians(:centerLat)) * sin(radians(loc.latitude))
+              ) ASC,
+              s.created_at DESC
+            """,
+        countQuery = """
+            SELECT COUNT(*)
+            FROM fp_300 s
+            JOIN fp_310 loc
+              ON s.place_id = loc.place_id
+            WHERE s.use_yn = 'Y'
+              AND s.open_yn = 'Y'
+              AND s.deleted_at IS NULL
+              AND s.file_name IS NOT NULL
+              AND loc.latitude IS NOT NULL
+              AND loc.longitude IS NOT NULL
+              AND (
+                  :username IS NULL OR s.username NOT IN (
+                      SELECT blocked_username
+                      FROM fp_160
+                      WHERE blocker_username = :username
+                  )
+              )
+              AND (
+                6371000 * acos(
+                    cos(radians(:centerLat)) * cos(radians(loc.latitude))
+                  * cos(radians(loc.longitude) - radians(:centerLng))
+                  + sin(radians(:centerLat)) * sin(radians(loc.latitude))
+                )
+              ) <= :radiusMeters
+            """,
+        nativeQuery = true
+    )
+    Page<Fp300Store> findHomeVideoThumbnailsNearby(
+            @Param("centerLat") double centerLat,
+            @Param("centerLng") double centerLng,
+            @Param("radiusMeters") double radiusMeters,
+            @Param("username") String username,
+            Pageable pageable
+    );
+
     // 단일 스토어 조회 (사용중 + 공개 + 삭제 안 된 것만)
     Optional<Fp300Store> findByStoreIdAndUseYnAndOpenYnAndDeletedAtIsNull(
             Integer storeId, String useYn, String openYn
@@ -157,4 +227,9 @@ public interface Fp300StoreRepository extends JpaRepository<Fp300Store, Integer>
             @Param("excludeStoreId") Integer excludeStoreId,
             @Param("limit") int limit
     );
+
+    @Query(value = "select coalesce(max(store_id),0)+1 from fp_300", nativeQuery = true)
+    Long nextStoreIdFallback();
+
+    long countByUsernameAndUseYn(String username, String useYn);
 }

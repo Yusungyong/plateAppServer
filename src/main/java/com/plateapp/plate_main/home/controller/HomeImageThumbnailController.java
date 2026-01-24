@@ -21,9 +21,13 @@ public class HomeImageThumbnailController {
 
   @GetMapping("/image-thumbnails")
   public ApiResponse<HomeImageThumbnailResponse> getHomeImageThumbnails(
-      @RequestParam(name = "size", defaultValue = "4") int size
+      @RequestParam(name = "size", defaultValue = "6") int size,
+      @RequestParam(name = "sortType", defaultValue = "RECENT") String sortType,
+      @RequestParam(name = "lat", required = false) Double lat,
+      @RequestParam(name = "lng", required = false) Double lng,
+      @RequestParam(name = "radius", required = false) Double radius
   ) {
-    return ApiResponse.ok(homeService.getLatestThumbs(size));
+    return ApiResponse.ok(homeService.getLatestThumbs(size, sortType, lat, lng, radius));
   }
 
 }

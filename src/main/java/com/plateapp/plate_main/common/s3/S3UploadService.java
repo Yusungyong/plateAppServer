@@ -20,39 +20,37 @@ public class S3UploadService {
     private final String bucket;
     private final String baseUrl;
     private final String bucketHost;
+    private final String videoPrefix;
     private final String imagePrefix;
     private final String profilePrefix;
+    private final String thumbnailPrefix;
 
     public S3UploadService(
             S3Client s3Client,
             @Value("${aws.s3.bucket}") String bucket,
             @Value("${aws.s3.base-url:https://s3.amazonaws.com}") String baseUrl,
+            @Value("${aws.s3.videoFilePath:}") String videoPrefix,
             @Value("${aws.s3.imageFilePath:}") String imagePrefix,
             @Value("${aws.s3.profileImagePath:}") String profilePrefix,
+            @Value("${aws.s3.thumbnailPath:thumbnail/}") String thumbnailPrefix,
             @Value("${aws.s3.region}") String region
     ) {
         this.s3Client = s3Client;
         this.bucket = bucket;
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.bucketHost = "https://" + bucket + ".s3." + region + ".amazonaws.com";
+        this.videoPrefix = normalizePrefix(videoPrefix);
         this.imagePrefix = normalizePrefix(imagePrefix);
         this.profilePrefix = normalizePrefix(profilePrefix);
+        this.thumbnailPrefix = normalizePrefix(thumbnailPrefix);
     }
 
-    /**
-     * 이미지 업로드용 헬퍼. key는 imageFilePath + 날짜/랜덤UUID/원본파일명 으로 구성.
-     * @param originalFilename 원본 파일명 (확장자 포함)
-     * @param inputStream 업로드 스트림 (호출 측에서 close)
-     * @param contentLength 바이트 길이
-     * @param contentType MIME 타입 (없으면 추정)
-     * @return 공개 URL
-     */
     public String uploadImage(String originalFilename, InputStream inputStream, long contentLength, String contentType) {
         String safeName = (originalFilename == null || originalFilename.isBlank())
                 ? "upload.bin"
                 : originalFilename;
 
-        String key = buildImageKey(safeName);
+        String key = buildKeyWithPrefix(imagePrefix, safeName);
         String resolvedContentType = resolveContentType(safeName, contentType);
 
         PutObjectRequest putRequest = PutObjectRequest.builder()
@@ -67,7 +65,25 @@ public class S3UploadService {
         return buildPublicUrl(key);
     }
 
-    /** 프로필 이미지 업로드 (profileImagePath가 있으면 우선 사용, 없으면 일반 imagePrefix 사용) */
+    public String uploadStreamWithPrefix(String prefix, String originalFilename, InputStream inputStream, long contentLength, String contentType) {
+        String safeName = (originalFilename == null || originalFilename.isBlank())
+                ? "upload.bin"
+                : originalFilename;
+
+        String key = buildKeyWithPrefix(normalizePrefix(prefix), safeName);
+        String resolvedContentType = resolveContentType(safeName, contentType);
+
+        PutObjectRequest putRequest = PutObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .contentLength(contentLength)
+                .contentType(resolvedContentType)
+                .build();
+
+        s3Client.putObject(putRequest, RequestBody.fromInputStream(inputStream, contentLength));
+        return buildPublicUrl(key);
+    }
+
     public String uploadProfileImage(String originalFilename, InputStream inputStream, long contentLength, String contentType) {
         String safeName = (originalFilename == null || originalFilename.isBlank())
                 ? "profile.bin"
@@ -87,12 +103,32 @@ public class S3UploadService {
         return buildPublicUrl(key);
     }
 
-    private String buildImageKey(String filename) {
-        return buildKeyWithPrefix(imagePrefix, filename);
+    public String uploadBytesWithPrefix(String prefix, String filename, byte[] data, String contentType) {
+        String key = buildKeyWithPrefix(normalizePrefix(prefix), filename);
+        PutObjectRequest putRequest = PutObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .contentLength((long) data.length)
+                .contentType(resolveContentType(filename, contentType))
+                .build();
+        s3Client.putObject(putRequest, RequestBody.fromBytes(data));
+        return buildPublicUrl(key);
+    }
+
+    public String getThumbnailPrefix() {
+        return thumbnailPrefix;
+    }
+
+    public String getVideoPrefix() {
+        return videoPrefix;
+    }
+
+    public String getImagePrefix() {
+        return imagePrefix;
     }
 
     private String buildKeyWithPrefix(String prefix, String filename) {
-        String datePrefix = LocalDate.now().toString(); // YYYY-MM-DD
+        String datePrefix = LocalDate.now().toString();
         String uuid = UUID.randomUUID().toString().replace("-", "");
         return prefix + datePrefix + "/" + uuid + "/" + filename;
     }
@@ -106,7 +142,6 @@ public class S3UploadService {
     }
 
     private String buildPublicUrl(String key) {
-        // baseUrl 예: https://s3.amazonaws.com 또는 https://<bucket>.s3.<region>.amazonaws.com
         if (baseUrl.contains(bucket)) {
             return baseUrl + "/" + key;
         }

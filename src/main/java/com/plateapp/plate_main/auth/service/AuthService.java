@@ -1,4 +1,4 @@
-﻿package com.plateapp.plate_main.auth.service;
+package com.plateapp.plate_main.auth.service;
 
 import com.plateapp.plate_main.auth.domain.RefreshToken;
 import com.plateapp.plate_main.auth.domain.User;

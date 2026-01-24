@@ -1,5 +1,6 @@
 package com.plateapp.plate_main.profile.controller;
 
+import com.plateapp.plate_main.profile.dto.PublicProfileResponse;
 import com.plateapp.plate_main.profile.dto.UserDetailResponse;
 import com.plateapp.plate_main.profile.dto.UserUpdateRequests.*;
 import com.plateapp.plate_main.profile.service.UserUpdateService;
@@ -39,6 +40,21 @@ public class UserDetailController {
                 user.getFcmToken(),
                 user.getIsPrivate()
         );
+        return ResponseEntity.ok(body);
+    }
+
+    @GetMapping("/{username}/public-profile")
+    public ResponseEntity<PublicProfileResponse> getPublicProfile(@PathVariable String username) {
+        User user = userRepository.findById(username)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + username));
+
+        PublicProfileResponse body = PublicProfileResponse.builder()
+                .username(user.getUsername())
+                .nickName(user.getNickname())
+                .profileImageUrl(user.getProfileImageUrl())
+                .activeRegion(user.getActiveRegion())
+                .build();
+
         return ResponseEntity.ok(body);
     }
 

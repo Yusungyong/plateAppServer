@@ -9,5 +9,5 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class FriendListResponse {
-    private List<FriendDto> items;
+    private List<FriendDTO> items;
 }

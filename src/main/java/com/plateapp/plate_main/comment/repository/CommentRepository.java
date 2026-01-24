@@ -15,6 +15,8 @@ import com.plateapp.plate_main.comment.entity.Fp440Comment;
 
 public interface CommentRepository extends JpaRepository<Fp440Comment, Integer> {
 
+  Page<Fp440Comment> findByStoreIdAndUseYn(Integer storeId, String useYn, Pageable pageable);
+
   Page<Fp440Comment> findByStoreIdAndUseYnAndDeletedAtIsNull(
       Integer storeId, String useYn, Pageable pageable
   );

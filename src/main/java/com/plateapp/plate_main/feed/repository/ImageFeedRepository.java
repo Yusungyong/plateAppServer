@@ -12,4 +12,6 @@ public interface ImageFeedRepository extends JpaRepository<Fp400ImageFeed, Integ
 
   @EntityGraph(attributePaths = {"writer"})
   Optional<Fp400ImageFeed> findByFeedIdAndUseYn(Integer feedId, String useYn);
+
+  long countByUsernameAndUseYn(String username, String useYn);
 }
