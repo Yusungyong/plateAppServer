@@ -18,12 +18,12 @@ public class FriendManagementController {
 
     // 친구 목록 조회
     @GetMapping
-    public ApiResponse<PagedResponse<FriendDTO>> getFriends(
+    public ApiResponse<PagedResponse<FriendDto>> getFriends(
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,
             Authentication authentication) {
         String username = authentication.getName();
-        PagedResponse<FriendDTO> friends = friendService.getFriends(username, limit, offset);
+        PagedResponse<FriendDto> friends = friendService.getFriends(username, limit, offset);
         return ApiResponse.success(friends);
     }
 

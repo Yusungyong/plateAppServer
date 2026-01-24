@@ -1,6 +1,6 @@
 package com.plateapp.plate_main.friend.service;
 
-import com.plateapp.plate_main.friend.dto.FriendDTO;
+import com.plateapp.plate_main.friend.dto.FriendDto;
 import com.plateapp.plate_main.friend.dto.FriendRequests.CreateFriendRequest;
 import com.plateapp.plate_main.friend.dto.FriendSearchDto;
 import com.plateapp.plate_main.friend.dto.FriendVisitDtos.VisitItem;
@@ -39,7 +39,7 @@ public class FriendService {
     private final MemberRepository memberRepository;
 
     @Transactional(readOnly = true)
-    public List<FriendDTO> list(String username, String status) {
+    public List<FriendDto> list(String username, String status) {
         log.debug("Listing friends: username={}, status={}", username, status);
         List<Fp150Friend> rows = (status == null || status.isBlank())
                 ? repository.findByUsername(username)
@@ -56,7 +56,7 @@ public class FriendService {
                 : memberRepository.findByUsernameIn(friendNames).stream()
                 .collect(Collectors.toMap(Fp100User::getUsername, u -> u, (a, b) -> a));
 
-        List<FriendDTO> result = rows.stream()
+        List<FriendDto> result = rows.stream()
                 .map(row -> toDto(row, friendUserMap.get(row.getFriendName())))
                 .toList();
 
@@ -65,7 +65,7 @@ public class FriendService {
     }
 
     @Transactional
-    public FriendDTO add(CreateFriendRequest request) {
+    public FriendDto add(CreateFriendRequest request) {
         if (request.username() == null || request.username().isBlank()
                 || request.friendName() == null || request.friendName().isBlank()) {
             throw new IllegalArgumentException("username and friendName are required");
@@ -91,7 +91,7 @@ public class FriendService {
     }
 
     @Transactional
-    public FriendDTO updateStatus(Integer id, String status) {
+    public FriendDto updateStatus(Integer id, String status) {
         if (status == null || status.isBlank()) {
             throw new IllegalArgumentException("status is required");
         }
@@ -295,7 +295,7 @@ public class FriendService {
     }
 
     @Transactional(readOnly = true)
-    public List<FriendDTO> suggest(String username, String keyword, String status, int limit, int offset) {
+    public List<FriendDto> suggest(String username, String keyword, String status, int limit, int offset) {
         String kw = keyword == null ? "" : keyword.trim();
         if (kw.isBlank()) {
             return List.of();
@@ -306,7 +306,7 @@ public class FriendService {
 
         return repository.suggestFriends(username, kw, statusFilter, safeLimit, safeOffset)
                 .stream()
-                .map(r -> FriendDTO.builder()
+                .map(r -> FriendDto.builder()
                         .id(r.getId())
                         .username(r.getUsername())
                         .friendName(r.getFriendName())
@@ -324,7 +324,7 @@ public class FriendService {
                 .toList();
     }
 
-    private FriendDTO toDto(Fp150Friend e, Fp100User friendUser) {
+    private FriendDto toDto(Fp150Friend e, Fp100User friendUser) {
         String nickname = null;
         String profileImage = null;
         String activeRegion = null;
@@ -337,7 +337,7 @@ public class FriendService {
             nickname = e.getFriendName(); // fallback
         }
 
-        return FriendDTO.builder()
+        return FriendDto.builder()
                 .id(e.getId())
                 .username(e.getUsername())
                 .friendName(e.getFriendName())

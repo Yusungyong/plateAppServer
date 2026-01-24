@@ -1,6 +1,6 @@
 package com.plateapp.plate_main.friend.controller;
 
-import com.plateapp.plate_main.friend.dto.FriendDTO;
+import com.plateapp.plate_main.friend.dto.FriendDto;
 import com.plateapp.plate_main.friend.dto.FriendListResponse;
 import com.plateapp.plate_main.friend.dto.FriendRequests.CreateFriendRequest;
 import com.plateapp.plate_main.friend.dto.FriendRequests.UpdateStatusRequest;
@@ -94,7 +94,7 @@ public class FriendController {
     }
 
     @PostMapping
-    public ResponseEntity<FriendDTO> add(@RequestBody CreateFriendRequest request) {
+    public ResponseEntity<FriendDto> add(@RequestBody CreateFriendRequest request) {
         return ResponseEntity.ok(friendService.add(request));
     }
 
@@ -118,7 +118,7 @@ public class FriendController {
     }
 
     @PatchMapping("/{id}/status")
-    public ResponseEntity<FriendDTO> updateStatus(
+    public ResponseEntity<FriendDto> updateStatus(
             @PathVariable Integer id,
             @RequestBody UpdateStatusRequest request
     ) {

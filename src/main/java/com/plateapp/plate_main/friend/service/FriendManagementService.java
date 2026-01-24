@@ -27,16 +27,16 @@ public class FriendManagementService {
     private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
-    public PagedResponse<FriendDTO> getFriends(String username, int limit, int offset) {
+    public PagedResponse<FriendDto> getFriends(String username, int limit, int offset) {
         Pageable pageable = PageRequest.of(offset / limit, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Fp150Friend> page = friendRepository.findByUsernameAndStatus(username, "accepted", pageable);
 
-        List<FriendDTO> friends = page.getContent().stream()
+        List<FriendDto> friends = page.getContent().stream()
                 .map(friend -> {
                     Optional<User> userOpt = userRepository.findById(friend.getFriendName());
                     if (userOpt.isPresent()) {
                         User user = userOpt.get();
-                        return FriendDTO.builder()
+                        return FriendDto.builder()
                                 .userId(user.getUserId())
                                 .username(user.getUsername())
                                 .nickname(user.getNickname())
