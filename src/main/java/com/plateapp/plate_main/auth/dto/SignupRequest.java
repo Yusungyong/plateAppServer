@@ -21,4 +21,16 @@ public class SignupRequest {
 
     @NotBlank
     private String nickname;
+
+    public String getEmail() {
+        return email;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public String getNickname() {
+        return nickname;
+    }
 }

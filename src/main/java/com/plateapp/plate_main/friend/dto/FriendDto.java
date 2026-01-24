@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class FriendDTO {
+public class FriendDto {
     // For friend management API
     private Integer userId;
     private String username;
