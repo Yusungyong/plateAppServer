@@ -52,7 +52,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Upload to S3
-        run: aws s3 cp deployment.zip s3://${{ env.S3_BUCKET }}/deployments/${{ github.sha }}.zip
+        run: aws s3api put-object --bucket ${{ env.S3_BUCKET }} --key deployments/${{ github.sha }}.zip --body deployment.zip
 
       - name: Create CodeDeploy deployment
         run: >
