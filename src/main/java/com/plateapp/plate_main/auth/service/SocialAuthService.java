@@ -1,10 +1,17 @@
-// src/main/java/com/plateapp/plate_main/auth/service/SocialAuthService.java
 package com.plateapp.plate_main.auth.service;
 
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
+import java.security.PublicKey;
+import java.security.spec.RSAPublicKeySpec;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Base64;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,6 +27,7 @@ import com.plateapp.plate_main.auth.domain.SocialAccount;
 import com.plateapp.plate_main.auth.domain.User;
 import com.plateapp.plate_main.auth.dto.AppleIdTokenPayload;
 import com.plateapp.plate_main.auth.dto.AppleLoginRequest;
+import com.plateapp.plate_main.auth.dto.AuthUserDto;
 import com.plateapp.plate_main.auth.dto.GoogleIdTokenPayload;
 import com.plateapp.plate_main.auth.dto.GoogleLoginRequest;
 import com.plateapp.plate_main.auth.dto.KakaoLoginRequest;
@@ -30,12 +38,17 @@ import com.plateapp.plate_main.auth.repository.SocialAccountRepository;
 import com.plateapp.plate_main.auth.repository.UserRepository;
 import com.plateapp.plate_main.auth.security.JwtProvider;
 
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
 import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class SocialAuthService {
+
+    private static final String APPLE_JWK_URL = "https://appleid.apple.com/auth/keys";
+    private static final Duration APPLE_JWK_TTL = Duration.ofHours(6);
 
     private final JwtProvider jwtProvider;
     private final UserRepository userRepository;
@@ -45,19 +58,16 @@ public class SocialAuthService {
     private final RestTemplate restTemplate;
     private final LoginHistoryRepository loginHistoryRepository;
 
-    /** Apple aud 검증용 (bundle id 또는 services id) */
+    private volatile AppleJwkSet cachedAppleKeys;
+    private volatile Instant appleKeysFetchedAt;
+
     @Value("${apple.client-id}")
     private String appleClientId;
 
-    /** Google aud 검증용 (iOS용 client-id) */
     @Value("${google.client-id}")
     private String googleClientId;
 
-    // =======================
-    // 🔹 Apple 로그인
-    // =======================
     public TokenResponse loginWithApple(AppleLoginRequest request) {
-
         AppleIdTokenPayload payload = parseAndValidateAppleToken(request.getIdentityToken());
 
         String provider = "APPLE";
@@ -71,13 +81,13 @@ public class SocialAuthService {
         if (socialOpt.isPresent()) {
             Integer userId = socialOpt.get().getUserId();
             user = userRepository.findByUserId(userId)
-                    .orElseThrow(() -> new IllegalStateException("소셜 매핑은 있는데 유저가 없습니다."));
+                    .orElseThrow(() -> new IllegalStateException("User not found by user_id."));
         } else {
             user = createUserForApple(payload);
 
             Integer userId = userRepository.findUserIdByUsername(user.getUsername());
             if (userId == null) {
-                throw new IllegalStateException("새 유저 생성 후 user_id 를 찾을 수 없습니다.");
+                throw new IllegalStateException("User id not found after create.");
             }
 
             SocialAccount social = SocialAccount.builder()
@@ -94,50 +104,121 @@ public class SocialAuthService {
         String accessToken = jwtProvider.createAccessToken(user.getUsername());
         String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
 
-        return new TokenResponse(accessToken, refreshToken, user);
+        return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
     }
 
     private AppleIdTokenPayload parseAndValidateAppleToken(String identityToken) {
-
         if (identityToken == null || identityToken.isBlank()) {
-            throw new IllegalArgumentException("identityToken 이 비어 있습니다.");
+            throw new IllegalArgumentException("identityToken is empty.");
+        }
+        if (appleClientId == null || appleClientId.isBlank()) {
+            throw new IllegalStateException("apple.client-id is not configured.");
         }
 
+        String kid = extractAppleKid(identityToken);
+        PublicKey publicKey = resolveApplePublicKey(kid);
+
+        try {
+            Claims claims = Jwts.parserBuilder()
+                    .setSigningKey(publicKey)
+                    .build()
+                    .parseClaimsJws(identityToken)
+                    .getBody();
+
+            String issuer = claims.getIssuer();
+            if (!"https://appleid.apple.com".equals(issuer)) {
+                throw new IllegalArgumentException("Invalid Apple token issuer.");
+            }
+
+            if (!isAudienceMatch(appleClientId, claims.get("aud"))) {
+                throw new IllegalArgumentException("aud mismatch. (apple)");
+            }
+
+            if (claims.getExpiration() != null
+                    && claims.getExpiration().toInstant().isBefore(Instant.now())) {
+                throw new IllegalArgumentException("identityToken expired.");
+            }
+
+            return objectMapper.convertValue(claims, AppleIdTokenPayload.class);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("identityToken parse/verify failed.", e);
+        }
+    }
+
+    private String extractAppleKid(String identityToken) {
         String[] parts = identityToken.split("\\.");
         if (parts.length < 2) {
-            throw new IllegalArgumentException("identityToken 형식이 올바르지 않습니다.");
+            throw new IllegalArgumentException("identityToken format invalid.");
         }
 
-        String payloadJson = new String(
-                Base64.getUrlDecoder().decode(parts[1]),
+        String headerJson = new String(
+                Base64.getUrlDecoder().decode(parts[0]),
                 StandardCharsets.UTF_8
         );
 
         try {
-            AppleIdTokenPayload payload =
-                    objectMapper.readValue(payloadJson, AppleIdTokenPayload.class);
-
-            if (!"https://appleid.apple.com".equals(payload.getIss())) {
-                throw new IllegalArgumentException("Apple 토큰이 아닙니다.(iss)");
+            Map<String, Object> header = objectMapper.readValue(headerJson, Map.class);
+            Object kid = header.get("kid");
+            if (kid == null || kid.toString().isBlank()) {
+                throw new IllegalArgumentException("Apple token header kid is missing.");
             }
-
-            if (!appleClientId.equals(payload.getAud())) {
-                throw new IllegalArgumentException("aud 가 일치하지 않습니다. (apple)");
-            }
-
-            long now = Instant.now().getEpochSecond();
-            if (payload.getExp() != null && payload.getExp() < now) {
-                throw new IllegalArgumentException("identityToken 이 만료되었습니다.");
-            }
-
-            return payload;
+            return kid.toString();
         } catch (Exception e) {
-            throw new IllegalArgumentException("identityToken 파싱에 실패했습니다.", e);
+            throw new IllegalArgumentException("identityToken header parse failed.", e);
         }
     }
 
-    private User createUserForApple(AppleIdTokenPayload payload) {
+    private PublicKey resolveApplePublicKey(String kid) {
+        AppleJwkSet keys = loadAppleKeys();
+        if (keys == null || keys.keys == null || keys.keys.isEmpty()) {
+            throw new IllegalStateException("Apple public keys not available.");
+        }
 
+        for (AppleJwk key : keys.keys) {
+            if (kid.equals(key.kid)) {
+                return toRsaPublicKey(key);
+            }
+        }
+        throw new IllegalArgumentException("Apple public key not found for kid.");
+    }
+
+    private synchronized AppleJwkSet loadAppleKeys() {
+        Instant now = Instant.now();
+        if (cachedAppleKeys != null && appleKeysFetchedAt != null
+                && now.isBefore(appleKeysFetchedAt.plus(APPLE_JWK_TTL))) {
+            return cachedAppleKeys;
+        }
+
+        AppleJwkSet fetched = restTemplate.getForObject(APPLE_JWK_URL, AppleJwkSet.class);
+        cachedAppleKeys = fetched;
+        appleKeysFetchedAt = now;
+        return fetched;
+    }
+
+    private PublicKey toRsaPublicKey(AppleJwk key) {
+        try {
+            byte[] nBytes = Base64.getUrlDecoder().decode(key.n);
+            byte[] eBytes = Base64.getUrlDecoder().decode(key.e);
+            BigInteger modulus = new BigInteger(1, nBytes);
+            BigInteger exponent = new BigInteger(1, eBytes);
+            RSAPublicKeySpec spec = new RSAPublicKeySpec(modulus, exponent);
+            return KeyFactory.getInstance("RSA").generatePublic(spec);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to build Apple public key.", e);
+        }
+    }
+
+    private boolean isAudienceMatch(String expected, Object aud) {
+        if (aud instanceof String) {
+            return expected.equals(aud);
+        }
+        if (aud instanceof Collection<?> values) {
+            return values.stream().anyMatch(v -> expected.equals(String.valueOf(v)));
+        }
+        return expected.equals(String.valueOf(aud));
+    }
+
+    private User createUserForApple(AppleIdTokenPayload payload) {
         String base = "apple_" + payload.getSub();
         String username = makeUniqueUsername(base, "apple_");
 
@@ -156,13 +237,9 @@ public class SocialAuthService {
         );
     }
 
-    // =======================
-    // 🔹 Kakao 로그인
-    // =======================
     public TokenResponse loginWithKakao(KakaoLoginRequest request) {
-
         if (request.getAccessToken() == null || request.getAccessToken().isBlank()) {
-            throw new IllegalArgumentException("카카오 accessToken 이 비어 있습니다.");
+            throw new IllegalArgumentException("accessToken is empty.");
         }
 
         KakaoUserResponse kakaoUser = getKakaoUserInfo(request.getAccessToken());
@@ -178,13 +255,13 @@ public class SocialAuthService {
         if (socialOpt.isPresent()) {
             Integer userId = socialOpt.get().getUserId();
             user = userRepository.findByUserId(userId)
-                    .orElseThrow(() -> new IllegalStateException("소셜 매핑은 있는데 유저가 없습니다."));
+                    .orElseThrow(() -> new IllegalStateException("User not found by user_id."));
         } else {
             user = createUserForKakao(kakaoUser);
 
             Integer userId = userRepository.findUserIdByUsername(user.getUsername());
             if (userId == null) {
-                throw new IllegalStateException("새 유저 생성 후 user_id 를 찾을 수 없습니다.");
+                throw new IllegalStateException("User id not found after create.");
             }
 
             String email = kakaoUser.getKakaoAccount() != null
@@ -209,7 +286,7 @@ public class SocialAuthService {
         String accessToken = jwtProvider.createAccessToken(user.getUsername());
         String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
 
-        return new TokenResponse(accessToken, refreshToken, user);
+        return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
     }
 
     private KakaoUserResponse getKakaoUserInfo(String accessToken) {
@@ -228,9 +305,9 @@ public class SocialAuthService {
 
             return response.getBody();
         } catch (HttpClientErrorException e) {
-            throw new IllegalArgumentException("카카오 토큰 검증 실패: " + e.getStatusCode(), e);
+            throw new IllegalArgumentException("Kakao token verify failed: " + e.getStatusCode(), e);
         } catch (Exception e) {
-            throw new IllegalArgumentException("카카오 사용자 정보 조회 실패", e);
+            throw new IllegalArgumentException("Kakao token verify failed.", e);
         }
     }
 
@@ -262,13 +339,12 @@ public class SocialAuthService {
         );
     }
 
-    // =======================
-    // 🔹 Google 로그인
-    // =======================
     public TokenResponse loginWithGoogle(GoogleLoginRequest request) {
-
         if (request.getIdToken() == null || request.getIdToken().isBlank()) {
-            throw new IllegalArgumentException("Google idToken 이 비어 있습니다.");
+            throw new IllegalArgumentException("Google idToken is empty.");
+        }
+        if (googleClientId == null || googleClientId.isBlank()) {
+            throw new IllegalStateException("google.client-id is not configured.");
         }
 
         GoogleIdTokenPayload payload = parseAndValidateGoogleToken(request.getIdToken());
@@ -284,13 +360,13 @@ public class SocialAuthService {
         if (socialOpt.isPresent()) {
             Integer userId = socialOpt.get().getUserId();
             user = userRepository.findByUserId(userId)
-                    .orElseThrow(() -> new IllegalStateException("소셜 매핑은 있는데 유저가 없습니다."));
+                    .orElseThrow(() -> new IllegalStateException("User not found by user_id."));
         } else {
             user = createUserForGoogle(payload);
 
             Integer userId = userRepository.findUserIdByUsername(user.getUsername());
             if (userId == null) {
-                throw new IllegalStateException("새 유저 생성 후 user_id 를 찾을 수 없습니다.");
+                throw new IllegalStateException("User id not found after create.");
             }
 
             String email = payload.getEmail();
@@ -310,7 +386,7 @@ public class SocialAuthService {
         String accessToken = jwtProvider.createAccessToken(user.getUsername());
         String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
 
-        return new TokenResponse(accessToken, refreshToken, user);
+        return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
     }
 
     private GoogleIdTokenPayload parseAndValidateGoogleToken(String idToken) {
@@ -321,28 +397,28 @@ public class SocialAuthService {
             GoogleIdTokenPayload payload = response.getBody();
 
             if (payload == null) {
-                throw new IllegalArgumentException("Google 토큰 정보가 비어 있습니다.");
+                throw new IllegalArgumentException("Google token payload empty.");
             }
 
             if (!"accounts.google.com".equals(payload.getIss())
                     && !"https://accounts.google.com".equals(payload.getIss())) {
-                throw new IllegalArgumentException("Google 토큰이 아닙니다.(iss)");
+                throw new IllegalArgumentException("Invalid Google token issuer.");
             }
 
             if (!googleClientId.equals(payload.getAud())) {
-                throw new IllegalArgumentException("aud 가 일치하지 않습니다. (google)");
+                throw new IllegalArgumentException("aud mismatch. (google)");
             }
 
             long now = Instant.now().getEpochSecond();
             if (payload.getExp() != null && payload.getExp() < now) {
-                throw new IllegalArgumentException("Google idToken 이 만료되었습니다.");
+                throw new IllegalArgumentException("Google idToken expired.");
             }
 
             return payload;
         } catch (HttpClientErrorException e) {
-            throw new IllegalArgumentException("Google 토큰 검증 실패: " + e.getStatusCode(), e);
+            throw new IllegalArgumentException("Google token verify failed: " + e.getStatusCode(), e);
         } catch (Exception e) {
-            throw new IllegalArgumentException("Google 토큰 파싱/검증 실패", e);
+            throw new IllegalArgumentException("Google token parse/verify failed.", e);
         }
     }
 
@@ -366,10 +442,6 @@ public class SocialAuthService {
         );
     }
 
-
-    // =======================
-    // 🔹 공통 유틸: username 중복 방지
-    // =======================
     private String makeUniqueUsername(String base, String prefix) {
         if (base.length() > 20) {
             base = base.substring(0, 20);
@@ -386,5 +458,15 @@ public class SocialAuthService {
             candidate = trimmedBase + s;
         }
         return candidate;
+    }
+
+    private static class AppleJwkSet {
+        public List<AppleJwk> keys;
+    }
+
+    private static class AppleJwk {
+        public String kid;
+        public String n;
+        public String e;
     }
 }

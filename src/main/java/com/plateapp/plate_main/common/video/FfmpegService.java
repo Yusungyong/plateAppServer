@@ -124,6 +124,7 @@ public class FfmpegService {
 
     private void exec(List<String> cmd) throws IOException, InterruptedException {
         Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
+        drainAsync(p);
         if (!p.waitFor(COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
             p.destroyForcibly();
             throw new IOException("ffmpeg command timed out");
@@ -150,5 +151,19 @@ public class FfmpegService {
             throw new IOException("ffprobe exited with code " + p.exitValue());
         }
         return sb.toString();
+    }
+
+    private void drainAsync(Process p) {
+        Thread t = new Thread(() -> {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+                while (reader.readLine() != null) {
+                    // drain output to avoid blocking
+                }
+            } catch (IOException ignored) {
+                // ignore
+            }
+        }, "ffmpeg-drain");
+        t.setDaemon(true);
+        t.start();
     }
 }

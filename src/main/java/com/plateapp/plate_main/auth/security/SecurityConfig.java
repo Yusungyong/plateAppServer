@@ -55,7 +55,8 @@ public class SecurityConfig {
                     "/auth/social/**",
                     "/email/**",
                     "/auth/reset-password",
-                    "/health"
+                    "/health",
+                    "/api/home/random-candidates/**"
                 ).permitAll()
 
                 .anyRequest().authenticated()

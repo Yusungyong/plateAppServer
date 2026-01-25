@@ -75,4 +75,16 @@ public class Fp400ImageFeed {
   public String getPlaceId() { return placeId; }
   public String getUseYn() { return useYn; }
   public String getThumbnail() { return thumbnail; }
+
+  public void setUsername(String username) { this.username = username; }
+  public void setContent(String content) { this.content = content; }
+  public void setImages(String images) { this.images = images; }
+  public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+  public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+  public void setFeedTitle(String feedTitle) { this.feedTitle = feedTitle; }
+  public void setLocation(String location) { this.location = location; }
+  public void setStoreName(String storeName) { this.storeName = storeName; }
+  public void setPlaceId(String placeId) { this.placeId = placeId; }
+  public void setUseYn(String useYn) { this.useYn = useYn; }
+  public void setThumbnail(String thumbnail) { this.thumbnail = thumbnail; }
 }

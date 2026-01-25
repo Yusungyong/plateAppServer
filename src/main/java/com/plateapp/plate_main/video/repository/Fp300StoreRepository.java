@@ -232,4 +232,15 @@ public interface Fp300StoreRepository extends JpaRepository<Fp300Store, Integer>
     Long nextStoreIdFallback();
 
     long countByUsernameAndUseYn(String username, String useYn);
+
+    @Query("""
+        select s
+        from Fp300Store s
+        where s.useYn = 'Y'
+          and s.openYn = 'Y'
+          and s.deletedAt is null
+          and s.fileName is not null
+        order by s.createdAt desc, s.storeId desc
+    """)
+    List<Fp300Store> findLatestForHome(Pageable pageable);
 }

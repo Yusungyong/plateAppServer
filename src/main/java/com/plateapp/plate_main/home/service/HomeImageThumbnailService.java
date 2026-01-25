@@ -30,7 +30,7 @@ public class HomeImageThumbnailService {
       Double lng,
       Double radius
   ) {
-    if (size < 1 || size > 30) {
+    if (size < 1 || size > 100) {
       throw new AppException(ErrorCode.COMMON_INVALID_INPUT);
     }
 

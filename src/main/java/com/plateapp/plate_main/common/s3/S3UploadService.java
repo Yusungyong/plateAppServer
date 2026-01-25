@@ -1,6 +1,7 @@
 package com.plateapp.plate_main.common.s3;
 
 import java.io.InputStream;
+import java.net.URI;
 import java.net.URLConnection;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -11,6 +12,7 @@ import org.springframework.util.StringUtils;
 
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 @Service
@@ -115,6 +117,18 @@ public class S3UploadService {
         return buildPublicUrl(key);
     }
 
+    public void deleteObjectByUrl(String objectUrl) {
+        String key = extractKey(objectUrl);
+        if (key == null) {
+            return;
+        }
+        DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .build();
+        s3Client.deleteObject(deleteRequest);
+    }
+
     public String getThumbnailPrefix() {
         return thumbnailPrefix;
     }
@@ -146,6 +160,25 @@ public class S3UploadService {
             return baseUrl + "/" + key;
         }
         return bucketHost + "/" + key;
+    }
+
+    private String extractKey(String objectUrl) {
+        if (objectUrl == null || objectUrl.isBlank()) {
+            return null;
+        }
+        if (!objectUrl.contains("://")) {
+            return objectUrl.startsWith("/") ? objectUrl.substring(1) : objectUrl;
+        }
+        try {
+            URI uri = URI.create(objectUrl);
+            String path = uri.getPath();
+            if (path == null || path.isBlank()) {
+                return null;
+            }
+            return path.startsWith("/") ? path.substring(1) : path;
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private String normalizePrefix(String prefix) {
