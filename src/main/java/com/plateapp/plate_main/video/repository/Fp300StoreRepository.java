@@ -233,6 +233,8 @@ public interface Fp300StoreRepository extends JpaRepository<Fp300Store, Integer>
 
     long countByUsernameAndUseYn(String username, String useYn);
 
+    List<Fp300Store> findByStoreIdIn(List<Integer> storeIds);
+
     @Query("""
         select s
         from Fp300Store s

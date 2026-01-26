@@ -1,25 +1,37 @@
 package com.plateapp.plate_main.home.service;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.plateapp.plate_main.block.repository.BlockRepository;
 import com.plateapp.plate_main.common.error.AppException;
 import com.plateapp.plate_main.common.error.ErrorCode;
 import com.plateapp.plate_main.feed.entity.Fp400Feed;
 import com.plateapp.plate_main.feed.repository.Fp400FeedRepository;
 import com.plateapp.plate_main.home.dto.HomeImageThumbnailItem;
 import com.plateapp.plate_main.home.dto.HomeImageThumbnailResponse;
+import com.plateapp.plate_main.report.repository.ReportRepository;
 
 @Service
 public class HomeImageThumbnailService {
 
   private final Fp400FeedRepository feedRepository;
+  private final BlockRepository blockRepository;
+  private final ReportRepository reportRepository;
 
-  public HomeImageThumbnailService(Fp400FeedRepository feedRepository) {
+  public HomeImageThumbnailService(
+      Fp400FeedRepository feedRepository,
+      BlockRepository blockRepository,
+      ReportRepository reportRepository
+  ) {
     this.feedRepository = feedRepository;
+    this.blockRepository = blockRepository;
+    this.reportRepository = reportRepository;
   }
 
   @Transactional(readOnly = true)
@@ -28,12 +40,14 @@ public class HomeImageThumbnailService {
       String sortType,
       Double lat,
       Double lng,
-      Double radius
+      Double radius,
+      String username
   ) {
     if (size < 1 || size > 100) {
       throw new AppException(ErrorCode.COMMON_INVALID_INPUT);
     }
 
+    Set<String> excluded = loadExcludedUsernames(username);
     List<Fp400Feed> feeds;
     if ("NEARBY".equalsIgnoreCase(sortType)) {
       if (lat == null || lng == null) {
@@ -51,6 +65,7 @@ public class HomeImageThumbnailService {
     }
 
     List<HomeImageThumbnailItem> items = feeds.stream()
+        .filter(feed -> excluded.isEmpty() || feed.getUsername() == null || !excluded.contains(feed.getUsername()))
         .map(this::toItem)
         .toList();
 
@@ -86,5 +101,21 @@ public class HomeImageThumbnailService {
         imageCount,
         feed.getCreatedAt()
     );
+  }
+
+  private Set<String> loadExcludedUsernames(String username) {
+    if (username == null || username.isBlank()) {
+      return Set.of();
+    }
+    Set<String> excluded = new HashSet<>();
+    List<String> blocked = blockRepository.findBlockedUsernames(username);
+    if (blocked != null) {
+      excluded.addAll(blocked);
+    }
+    List<String> reported = reportRepository.findReportedUsernames(username);
+    if (reported != null) {
+      excluded.addAll(reported);
+    }
+    return excluded;
   }
 }

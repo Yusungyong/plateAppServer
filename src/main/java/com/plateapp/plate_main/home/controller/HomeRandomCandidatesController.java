@@ -2,6 +2,8 @@ package com.plateapp.plate_main.home.controller;
 
 import com.plateapp.plate_main.home.dto.HomeRandomCandidatesResponse;
 import com.plateapp.plate_main.home.service.HomeRandomCandidatesService;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -20,9 +22,10 @@ public class HomeRandomCandidatesController {
     @GetMapping("/recent")
     public HomeRandomCandidatesResponse getRecent(
             @RequestParam(value = "limit", required = false, defaultValue = "50") int limit,
-            @RequestParam(value = "include", required = false, defaultValue = "all") String include
+            @RequestParam(value = "include", required = false, defaultValue = "all") String include,
+            @RequestParam(value = "username", required = false) String username
     ) {
-        return homeRandomCandidatesService.getRecent(limit, include);
+        return homeRandomCandidatesService.getRecent(limit, include, resolveUsername(username));
     }
 
     @GetMapping("/nearby")
@@ -31,8 +34,23 @@ public class HomeRandomCandidatesController {
             @RequestParam("lng") double lng,
             @RequestParam(value = "radius", required = false) Double radius,
             @RequestParam(value = "limit", required = false, defaultValue = "50") int limit,
-            @RequestParam(value = "include", required = false, defaultValue = "all") String include
+            @RequestParam(value = "include", required = false, defaultValue = "all") String include,
+            @RequestParam(value = "username", required = false) String username
     ) {
-        return homeRandomCandidatesService.getNearby(lat, lng, radius, limit, include);
+        return homeRandomCandidatesService.getNearby(lat, lng, radius, limit, include, resolveUsername(username));
+    }
+
+    private String resolveUsername(String usernameParam) {
+        if (usernameParam != null && !usernameParam.isBlank()) {
+            return usernameParam;
+        }
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated()) {
+            String name = auth.getName();
+            if (name != null && !name.isBlank() && !"anonymousUser".equalsIgnoreCase(name)) {
+                return name;
+            }
+        }
+        return null;
     }
 }

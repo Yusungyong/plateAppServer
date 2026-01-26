@@ -3,6 +3,8 @@ package com.plateapp.plate_main.home.service;
 import com.plateapp.plate_main.feed.entity.Fp400Feed;
 import com.plateapp.plate_main.feed.repository.Fp400FeedRepository;
 import com.plateapp.plate_main.home.dto.HomeRandomCandidatesResponse;
+import com.plateapp.plate_main.block.repository.BlockRepository;
+import com.plateapp.plate_main.report.repository.ReportRepository;
 import com.plateapp.plate_main.video.entity.Fp300Store;
 import com.plateapp.plate_main.video.repository.Fp300StoreRepository;
 import java.time.LocalDate;
@@ -11,7 +13,9 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,30 +31,43 @@ public class HomeRandomCandidatesService {
 
     private final Fp300StoreRepository storeRepository;
     private final Fp400FeedRepository feedRepository;
+    private final BlockRepository blockRepository;
+    private final ReportRepository reportRepository;
 
     public HomeRandomCandidatesService(
             Fp300StoreRepository storeRepository,
-            Fp400FeedRepository feedRepository
+            Fp400FeedRepository feedRepository,
+            BlockRepository blockRepository,
+            ReportRepository reportRepository
     ) {
         this.storeRepository = storeRepository;
         this.feedRepository = feedRepository;
+        this.blockRepository = blockRepository;
+        this.reportRepository = reportRepository;
     }
 
     @Transactional(readOnly = true)
-    public HomeRandomCandidatesResponse getRecent(int limit, String include) {
+    public HomeRandomCandidatesResponse getRecent(int limit, String include, String username) {
         int safeLimit = normalizeLimit(limit);
         IncludeType type = IncludeType.from(include);
+        Set<String> excluded = loadExcludedUsernames(username);
 
         List<HomeRandomCandidatesResponse.Item> items = new ArrayList<>();
         if (type.includeVideo()) {
             List<Fp300Store> videos = storeRepository.findLatestForHome(PageRequest.of(0, safeLimit));
             for (Fp300Store store : videos) {
+                if (!excluded.isEmpty() && store.getUsername() != null && excluded.contains(store.getUsername())) {
+                    continue;
+                }
                 items.add(toVideoItem(store));
             }
         }
         if (type.includeImage()) {
             List<Fp400Feed> feeds = feedRepository.findLatestForHome(PageRequest.of(0, safeLimit));
             for (Fp400Feed feed : feeds) {
+                if (!excluded.isEmpty() && feed.getUsername() != null && excluded.contains(feed.getUsername())) {
+                    continue;
+                }
                 items.add(toImageItem(feed));
             }
         }
@@ -68,11 +85,13 @@ public class HomeRandomCandidatesService {
             double lng,
             Double radius,
             int limit,
-            String include
+            String include,
+            String username
     ) {
         int safeLimit = normalizeLimit(limit);
         double safeRadius = normalizeRadius(radius);
         IncludeType type = IncludeType.from(include);
+        Set<String> excluded = loadExcludedUsernames(username);
 
         List<HomeRandomCandidatesResponse.Item> items = new ArrayList<>();
         if (type.includeVideo()) {
@@ -84,6 +103,9 @@ public class HomeRandomCandidatesService {
                     safeLimit
             );
             for (Fp300Store store : videos) {
+                if (!excluded.isEmpty() && store.getUsername() != null && excluded.contains(store.getUsername())) {
+                    continue;
+                }
                 items.add(toVideoItem(store));
             }
         }
@@ -95,6 +117,9 @@ public class HomeRandomCandidatesService {
                     PageRequest.of(0, safeLimit)
             );
             for (Fp400Feed feed : feeds) {
+                if (!excluded.isEmpty() && feed.getUsername() != null && excluded.contains(feed.getUsername())) {
+                    continue;
+                }
                 items.add(toImageItem(feed));
             }
         }
@@ -176,6 +201,22 @@ public class HomeRandomCandidatesService {
         }
         String[] arr = images.split(",");
         return arr.length > 0 ? arr[0].trim() : null;
+    }
+
+    private Set<String> loadExcludedUsernames(String username) {
+        if (username == null || username.isBlank()) {
+            return Set.of();
+        }
+        Set<String> excluded = new HashSet<>();
+        List<String> blocked = blockRepository.findBlockedUsernames(username);
+        if (blocked != null) {
+            excluded.addAll(blocked);
+        }
+        List<String> reported = reportRepository.findReportedUsernames(username);
+        if (reported != null) {
+            excluded.addAll(reported);
+        }
+        return excluded;
     }
 
     private enum IncludeType {

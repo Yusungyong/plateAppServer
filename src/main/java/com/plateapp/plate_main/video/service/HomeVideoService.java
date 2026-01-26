@@ -11,12 +11,15 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import com.plateapp.plate_main.common.error.AppException;
 import com.plateapp.plate_main.common.error.ErrorCode;
+import com.plateapp.plate_main.block.repository.BlockRepository;
+import com.plateapp.plate_main.report.repository.ReportRepository;
 import com.plateapp.plate_main.like.service.LikeService;
 import com.plateapp.plate_main.user.entity.Fp100User;
 import com.plateapp.plate_main.user.repository.MemberRepository;
@@ -52,6 +55,8 @@ public class HomeVideoService {
 
     private final Fp440CommentRepository fp440CommentRepository;
     private final MemberRepository memberRepository;
+    private final BlockRepository blockRepository;
+    private final ReportRepository reportRepository;
 
     // ??ì¶”ê?
     private final LikeService likeService;
@@ -71,6 +76,7 @@ public class HomeVideoService {
         int safePage = Math.max(0, page);
         int safeSize = Math.min(Math.max(size, 1), VIDEO_SIZE_MAX);
         Pageable pageable = PageRequest.of(safePage, safeSize);
+        Set<String> excluded = loadExcludedUsernames(username);
 
         if (isNearby(sortType)) {
             validateNearbyParams(lat, lng);
@@ -82,7 +88,14 @@ public class HomeVideoService {
                     username,
                     pageable
             );
-            return entityPage.map(this::toThumbnailDto);
+            if (excluded.isEmpty()) {
+                return entityPage.map(this::toThumbnailDto);
+            }
+            List<HomeVideoThumbnailDTO> filtered = entityPage.getContent().stream()
+                    .filter(store -> store.getUsername() == null || !excluded.contains(store.getUsername()))
+                    .map(this::toThumbnailDto)
+                    .toList();
+            return new PageImpl<>(filtered, pageable, filtered.size());
         }
 
         boolean usePlaceFilter = placeIds != null && !placeIds.isEmpty();
@@ -98,7 +111,14 @@ public class HomeVideoService {
                         pageable
                 );
 
-        return entityPage.map(this::toThumbnailDto);
+        if (excluded.isEmpty()) {
+            return entityPage.map(this::toThumbnailDto);
+        }
+        List<HomeVideoThumbnailDTO> filtered = entityPage.getContent().stream()
+                .filter(store -> store.getUsername() == null || !excluded.contains(store.getUsername()))
+                .map(this::toThumbnailDto)
+                .toList();
+        return new PageImpl<>(filtered, pageable, filtered.size());
     }
 
     private HomeVideoThumbnailDTO toThumbnailDto(Fp300Store e) {
@@ -171,7 +191,13 @@ public class HomeVideoService {
             Integer storeId,
             String placeId
     ) {
+        Set<String> excludedUsernames = loadExcludedUsernames(username);
         List<Fp300Store> resultStores = sanitizeStores(resolveFeedStores(placeId, storeId, FEED_TOTAL_LIMIT));
+        if (!excludedUsernames.isEmpty()) {
+            resultStores = resultStores.stream()
+                    .filter(store -> store.getUsername() == null || !excludedUsernames.contains(store.getUsername()))
+                    .toList();
+        }
         FeedContext context = loadFeedContext(username, resultStores);
 
         return resultStores.stream()
@@ -314,6 +340,22 @@ public class HomeVideoService {
         }
 
         return collected;
+    }
+
+    private Set<String> loadExcludedUsernames(String username) {
+        if (username == null || username.isBlank()) {
+            return Collections.emptySet();
+        }
+        Set<String> excluded = new HashSet<>();
+        List<String> blocked = blockRepository.findBlockedUsernames(username);
+        if (blocked != null) {
+            excluded.addAll(blocked);
+        }
+        List<String> reported = reportRepository.findReportedUsernames(username);
+        if (reported != null) {
+            excluded.addAll(reported);
+        }
+        return excluded;
     }
 
     private List<Fp300Store> findNearbyStores(double lat, double lng, double radius, Integer excludeStoreId, int limit) {

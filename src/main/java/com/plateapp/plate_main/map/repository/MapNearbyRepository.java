@@ -24,6 +24,7 @@ public class MapNearbyRepository {
           s.address,
           s.thumbnail,
           s.file_name AS video_file_name,
+          s.username AS store_username,
           loc.latitude  AS lat,
           loc.longitude AS lng,
           (
@@ -45,6 +46,7 @@ public class MapNearbyRepository {
               (:lng - (:radius_m / (111000.0 * cos(radians(:lat)))))
               AND
               (:lng + (:radius_m / (111000.0 * cos(radians(:lat)))))
+          AND (:excluded_count = 0 OR s.username NOT IN (:excluded_usernames))
       ),
       feed_counts AS (
         SELECT
@@ -84,12 +86,19 @@ public class MapNearbyRepository {
       LIMIT :limit
       """;
 
-  public List<NearbyStoreMarkerDto> findNearby(double lat, double lng, int radiusM, int limit) {
+  public List<NearbyStoreMarkerDto> findNearby(double lat, double lng, int radiusM, int limit, List<String> excludedUsernames) {
+    int excludedCount = (excludedUsernames == null) ? 0 : excludedUsernames.size();
+    List<String> excluded = (excludedUsernames == null) ? List.of() : excludedUsernames;
+    if (excludedCount == 0) {
+      excluded = List.of("__none__");
+    }
     MapSqlParameterSource params = new MapSqlParameterSource()
         .addValue("lat", lat)
         .addValue("lng", lng)
         .addValue("radius_m", radiusM)
-        .addValue("limit", limit);
+        .addValue("limit", limit)
+        .addValue("excluded_usernames", excluded)
+        .addValue("excluded_count", excludedCount);
 
     return jdbc.query(SQL_NEARBY_MARKERS, params, (rs, rowNum) -> {
       int feedCount = rs.getInt("feed_count");
@@ -126,7 +135,7 @@ public class MapNearbyRepository {
     return "video"; // default: map markers are video-store based
   }
 
-  public List<NearbyStoreMarkerDto> searchStores(String keyword, Double lat, Double lng, int limit) {
+  public List<NearbyStoreMarkerDto> searchStores(String keyword, Double lat, Double lng, int limit, List<String> excludedUsernames) {
     String base = """
         WITH feed_counts AS (
           SELECT place_id, COUNT(*)::int AS feed_count
@@ -161,6 +170,7 @@ public class MapNearbyRepository {
         WHERE s.use_yn = 'Y'
           AND s.open_yn = 'Y'
           AND s.deleted_at IS NULL
+          AND (:excluded_count = 0 OR s.username NOT IN (:excluded_usernames))
           AND (
             s.store_name ILIKE :kw
             OR s.address ILIKE :kw
@@ -169,9 +179,16 @@ public class MapNearbyRepository {
         LIMIT :limit
         """;
 
+    int excludedCount = (excludedUsernames == null) ? 0 : excludedUsernames.size();
+    List<String> excluded = (excludedUsernames == null) ? List.of() : excludedUsernames;
+    if (excludedCount == 0) {
+      excluded = List.of("__none__");
+    }
     MapSqlParameterSource params = new MapSqlParameterSource()
             .addValue("kw", "%" + keyword + "%")
-            .addValue("limit", limit);
+            .addValue("limit", limit)
+            .addValue("excluded_usernames", excluded)
+            .addValue("excluded_count", excludedCount);
 
     String distanceExpr = "NULL";
     String orderBy = "ORDER BY s.created_at DESC NULLS LAST, s.store_id DESC";

@@ -6,7 +6,7 @@ Auth: `Authorization: Bearer {access_token}`
 ## 1) Create Image Feed
 
 Endpoint: `POST /api/image-feeds`
-Content-Type: `multipart/form-data`
+Content-Type: `multipart/form-data`ㅇㅇㅇ
 
 Required:
 - `files` (image files, multiple)

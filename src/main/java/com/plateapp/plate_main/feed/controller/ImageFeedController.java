@@ -35,9 +35,10 @@ public class ImageFeedController {
   public ApiResponse<ImageFeedContextResponse> getImageFeedContext(
       @RequestParam("baseFeedId") Integer baseFeedId,
       @RequestParam(value = "radiusM", required = false, defaultValue = "3000") Integer radiusM,
-      @RequestParam(value = "limit", required = false, defaultValue = "50") Integer limit
+      @RequestParam(value = "limit", required = false, defaultValue = "50") Integer limit,
+      @RequestParam(name = "username", required = false) String username
   ) {
-    return ApiResponse.ok(imageFeedService.getContext(baseFeedId, radiusM, limit));
+    return ApiResponse.ok(imageFeedService.getContext(baseFeedId, radiusM, limit, resolveUsername(username)));
   }
 
   private String resolveUsername(String usernameParam) {
