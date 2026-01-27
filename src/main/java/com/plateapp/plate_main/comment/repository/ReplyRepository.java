@@ -49,6 +49,10 @@ public interface ReplyRepository extends JpaRepository<Fp450Reply, Integer> {
   @Query("DELETE FROM Fp450Reply r WHERE r.commentId = :commentId")
   void deleteByCommentId(@Param("commentId") Integer commentId);
 
+  @Modifying
+  @Query("DELETE FROM Fp450Reply r WHERE r.commentId in :commentIds")
+  int deleteByCommentIds(@Param("commentIds") List<Integer> commentIds);
+
   @Query("select r.username from Fp450Reply r where r.replyId = :replyId")
   Optional<String> findOwnerUsername(@Param("replyId") Integer replyId);
 

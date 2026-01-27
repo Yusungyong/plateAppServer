@@ -22,6 +22,7 @@ public class LikedContentDtos {
             String thumbnail,
             String placeId,
             String storeName,
+            String groupId,
             LocalDateTime likedAt
     ) {}
 }

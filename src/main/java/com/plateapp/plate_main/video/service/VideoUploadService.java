@@ -3,13 +3,21 @@ package com.plateapp.plate_main.video.service;
 import com.plateapp.plate_main.common.image.ImageProcessingService;
 import com.plateapp.plate_main.common.s3.S3UploadService;
 import com.plateapp.plate_main.common.video.FfmpegService;
+import com.plateapp.plate_main.comment.repository.CommentRepository;
+import com.plateapp.plate_main.comment.repository.ReplyRepository;
+import com.plateapp.plate_main.friend.repository.Fp200VisitRepository;
+import com.plateapp.plate_main.like.repository.Fp50LikeRepository;
+import com.plateapp.plate_main.menu.repository.Fp320MenuRepository;
 import com.plateapp.plate_main.video.dto.VideoUploadResponse;
 import com.plateapp.plate_main.video.entity.Fp300Store;
 import com.plateapp.plate_main.video.repository.Fp300StoreRepository;
+import com.plateapp.plate_main.video.repository.Fp303WatchHistoryRepository;
+import com.plateapp.plate_main.video.repository.Fp305WatchHistoryRepository;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +41,13 @@ public class VideoUploadService {
 
     private final S3UploadService s3UploadService;
     private final Fp300StoreRepository fp300StoreRepository;
+    private final CommentRepository commentRepository;
+    private final ReplyRepository replyRepository;
+    private final Fp50LikeRepository fp50LikeRepository;
+    private final Fp303WatchHistoryRepository fp303WatchHistoryRepository;
+    private final Fp305WatchHistoryRepository fp305WatchHistoryRepository;
+    private final Fp200VisitRepository fp200VisitRepository;
+    private final Fp320MenuRepository fp320MenuRepository;
     private final ImageProcessingService imageProcessingService;
     private final FfmpegService ffmpegService;
     private final PlaceService placeService;
@@ -175,10 +190,18 @@ public class VideoUploadService {
         s3UploadService.deleteObjectByUrl(store.getFileName());
         s3UploadService.deleteObjectByUrl(store.getThumbnail());
 
-        store.setUseYn("N");
-        store.setDeletedAt(LocalDate.now());
-        store.setUpdatedAt(LocalDate.now());
-        fp300StoreRepository.save(store);
+        List<Integer> commentIds = commentRepository.findIdsByStoreId(storeId);
+        if (!commentIds.isEmpty()) {
+            replyRepository.deleteByCommentIds(commentIds);
+        }
+        commentRepository.hardDeleteByStoreId(storeId);
+        fp50LikeRepository.deleteByStoreId(storeId);
+        fp303WatchHistoryRepository.deleteByStoreId(storeId.longValue());
+        fp305WatchHistoryRepository.deleteByStoreId(storeId);
+        fp200VisitRepository.deleteByStoreId(storeId);
+        fp320MenuRepository.deleteByStoreId(storeId);
+
+        fp300StoreRepository.delete(store);
     }
 
     private Fp300Store findOwnedStore(Integer storeId, String username) {

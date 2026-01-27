@@ -68,21 +68,23 @@ public class ProfileActivityDetailService {
             String sort,
             LocalDate from,
             LocalDate to,
-            String region
+            String region,
+            String groupId
     ) {
         int safeLimit = clampLimit(limit);
         int safeOffset = Math.max(0, offset);
         LocalDateTime fromTs = toStartOfDay(from);
         LocalDateTime toTs = toEndExclusive(to);
         String regionValue = normalizeRegion(region);
+        GroupKey groupKey = parseGroupId(groupId);
 
         MapSqlParameterSource params = baseParams(username, safeLimit, safeOffset);
-        List<Integer> feedIds = fetchUserImageIds(params, isPopular(sort), fromTs, toTs, regionValue);
+        List<Integer> feedIds = fetchUserImageIds(params, isPopular(sort), fromTs, toTs, regionValue, groupKey);
         List<ImageItem> items = feedIds.isEmpty()
                 ? Collections.emptyList()
                 : buildImageItems(feedIds, loadImageDetails(feedIds), loadImageLikeCounts(feedIds), loadImageCommentCounts(feedIds));
 
-        long total = countUserImages(username, fromTs, toTs, regionValue);
+        long total = countUserImages(username, fromTs, toTs, regionValue, groupKey);
         return ProfileActivityDetailResponse.<ImageItem>builder()
                 .items(items)
                 .limit(safeLimit)
@@ -130,21 +132,23 @@ public class ProfileActivityDetailService {
             String sort,
             LocalDate from,
             LocalDate to,
-            String region
+            String region,
+            String groupId
     ) {
         int safeLimit = clampLimit(limit);
         int safeOffset = Math.max(0, offset);
         LocalDateTime fromTs = toStartOfDay(from);
         LocalDateTime toTs = toEndExclusive(to);
         String regionValue = normalizeRegion(region);
+        GroupKey groupKey = parseGroupId(groupId);
 
         MapSqlParameterSource params = baseParams(username, safeLimit, safeOffset);
-        List<LikedEntry> likedEntries = fetchLikedImageEntries(params, isPopular(sort), fromTs, toTs, regionValue);
+        List<LikedEntry> likedEntries = fetchLikedImageEntries(params, isPopular(sort), fromTs, toTs, regionValue, groupKey);
         List<LikedImageItem> items = likedEntries.isEmpty()
                 ? Collections.emptyList()
                 : buildLikedImageItems(likedEntries, loadImageDetails(idsFromLiked(likedEntries)));
 
-        long total = countLikedImages(username, fromTs, toTs, regionValue);
+        long total = countLikedImages(username, fromTs, toTs, regionValue, groupKey);
         return ProfileActivityDetailResponse.<LikedImageItem>builder()
                 .items(items)
                 .limit(safeLimit)
@@ -200,7 +204,8 @@ public class ProfileActivityDetailService {
             boolean popular,
             LocalDateTime fromTs,
             LocalDateTime toTs,
-            String regionValue
+            String regionValue,
+            GroupKey groupKey
     ) {
         String orderBy = popular
                 ? "ORDER BY COALESCE(l.like_count, 0) DESC, COALESCE(c.comment_count, 0) DESC, f.created_at DESC, f.feed_no DESC"
@@ -230,6 +235,7 @@ public class ProfileActivityDetailService {
             """);
         appendDateFilter(sql, params, "f.created_at", fromTs, toTs);
         appendImageRegionFilter(sql, params, regionValue);
+        appendImageGroupFilter(sql, params, groupKey);
         sql.append("\n").append(orderBy).append("\nLIMIT :limit OFFSET :offset");
 
         return jdbcTemplate.query(sql.toString(), params, (rs, rowNum) -> rs.getInt("feed_id"));
@@ -282,7 +288,8 @@ public class ProfileActivityDetailService {
             boolean popular,
             LocalDateTime fromTs,
             LocalDateTime toTs,
-            String regionValue
+            String regionValue,
+            GroupKey groupKey
     ) {
         String orderBy = popular
                 ? "ORDER BY COALESCE(lc.like_count, 0) DESC, l.created_at DESC, f.feed_no DESC"
@@ -309,6 +316,7 @@ public class ProfileActivityDetailService {
             """);
         appendDateFilter(sql, params, "l.created_at", fromTs, toTs);
         appendImageRegionFilter(sql, params, regionValue);
+        appendImageGroupFilter(sql, params, groupKey);
         sql.append("\n").append(orderBy).append("\nLIMIT :limit OFFSET :offset");
 
         return jdbcTemplate.query(sql.toString(), params, (rs, rowNum) -> new LikedEntry(
@@ -397,6 +405,7 @@ public class ProfileActivityDetailService {
                     thumbnail,
                     rs.getString("place_id"),
                     rs.getString("store_name"),
+                    buildGroupId(rs.getString("place_id"), rs.getString("store_name")),
                     rs.getString("location"),
                     toLocalDateTime(rs.getTimestamp("created_at")),
                     toLocalDateTime(rs.getTimestamp("updated_at")),
@@ -494,6 +503,7 @@ public class ProfileActivityDetailService {
                     base.thumbnail(),
                     base.placeId(),
                     base.storeName(),
+                    base.groupId(),
                     base.address(),
                     base.createdAt(),
                     base.updatedAt(),
@@ -546,6 +556,7 @@ public class ProfileActivityDetailService {
                     base.thumbnail(),
                     base.placeId(),
                     base.storeName(),
+                    base.groupId(),
                     entry.likedAt()
             ));
         }
@@ -567,7 +578,7 @@ public class ProfileActivityDetailService {
         return jdbcTemplate.queryForObject(sql.toString(), params, Long.class);
     }
 
-    private long countUserImages(String username, LocalDateTime fromTs, LocalDateTime toTs, String regionValue) {
+    private long countUserImages(String username, LocalDateTime fromTs, LocalDateTime toTs, String regionValue, GroupKey groupKey) {
         MapSqlParameterSource params = new MapSqlParameterSource("username", username);
         StringBuilder sql = new StringBuilder("""
             SELECT COUNT(*)
@@ -577,6 +588,7 @@ public class ProfileActivityDetailService {
             """);
         appendDateFilter(sql, params, "f.created_at", fromTs, toTs);
         appendImageRegionFilter(sql, params, regionValue);
+        appendImageGroupFilter(sql, params, groupKey);
         return jdbcTemplate.queryForObject(sql.toString(), params, Long.class);
     }
 
@@ -598,7 +610,7 @@ public class ProfileActivityDetailService {
         return jdbcTemplate.queryForObject(sql.toString(), params, Long.class);
     }
 
-    private long countLikedImages(String username, LocalDateTime fromTs, LocalDateTime toTs, String regionValue) {
+    private long countLikedImages(String username, LocalDateTime fromTs, LocalDateTime toTs, String regionValue, GroupKey groupKey) {
         MapSqlParameterSource params = new MapSqlParameterSource("username", username);
         StringBuilder sql = new StringBuilder("""
             SELECT COUNT(*)
@@ -611,6 +623,7 @@ public class ProfileActivityDetailService {
             """);
         appendDateFilter(sql, params, "l.created_at", fromTs, toTs);
         appendImageRegionFilter(sql, params, regionValue);
+        appendImageGroupFilter(sql, params, groupKey);
         return jdbcTemplate.queryForObject(sql.toString(), params, Long.class);
     }
 
@@ -652,6 +665,25 @@ public class ProfileActivityDetailService {
             sql.append(" AND (COALESCE(f.location, '') ILIKE CONCAT('%', :region, '%')")
                .append(" OR COALESCE(f.store_name, '') ILIKE CONCAT('%', :region, '%'))");
             params.addValue("region", regionValue);
+        }
+    }
+
+    private static void appendImageGroupFilter(
+            StringBuilder sql,
+            MapSqlParameterSource params,
+            GroupKey groupKey
+    ) {
+        if (groupKey == null) {
+            return;
+        }
+        if (groupKey.placeId != null) {
+            sql.append(" AND f.place_id = :groupPlaceId");
+            params.addValue("groupPlaceId", groupKey.placeId);
+            return;
+        }
+        if (groupKey.storeName != null) {
+            sql.append(" AND f.place_id IS NULL AND f.store_name = :groupStoreName");
+            params.addValue("groupStoreName", groupKey.storeName);
         }
     }
 
@@ -699,4 +731,34 @@ public class ProfileActivityDetailService {
     private static LocalDateTime toLocalDateTime(Timestamp ts) {
         return ts != null ? ts.toLocalDateTime() : null;
     }
+
+    private GroupKey parseGroupId(String groupId) {
+        if (groupId == null || groupId.isBlank()) {
+            return new GroupKey(null, null);
+        }
+        if (groupId.startsWith("place:")) {
+            String placeId = groupId.substring("place:".length()).trim();
+            if (!placeId.isEmpty()) {
+                return new GroupKey(placeId, null);
+            }
+        } else if (groupId.startsWith("store:")) {
+            String storeName = groupId.substring("store:".length()).trim();
+            if (!storeName.isEmpty()) {
+                return new GroupKey(null, storeName);
+            }
+        }
+        return new GroupKey(null, null);
+    }
+
+    private String buildGroupId(String placeId, String storeName) {
+        if (placeId != null && !placeId.isBlank()) {
+            return "place:" + placeId;
+        }
+        if (storeName != null && !storeName.isBlank()) {
+            return "store:" + storeName;
+        }
+        return null;
+    }
+
+    private record GroupKey(String placeId, String storeName) {}
 }

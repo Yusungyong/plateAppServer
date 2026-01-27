@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.sql.Types;
 import com.plateapp.plate_main.map.dto.MapSearchSuggestionDto;
 
 @Repository
@@ -47,6 +48,8 @@ public class MapNearbyRepository {
               AND
               (:lng + (:radius_m / (111000.0 * cos(radians(:lat)))))
           AND (:excluded_count = 0 OR s.username NOT IN (:excluded_usernames))
+          AND (:group_place_id IS NULL OR s.place_id = :group_place_id)
+          AND (:group_store_name IS NULL OR (s.place_id IS NULL AND s.store_name = :group_store_name))
       ),
       feed_counts AS (
         SELECT
@@ -86,7 +89,15 @@ public class MapNearbyRepository {
       LIMIT :limit
       """;
 
-  public List<NearbyStoreMarkerDto> findNearby(double lat, double lng, int radiusM, int limit, List<String> excludedUsernames) {
+  public List<NearbyStoreMarkerDto> findNearby(
+      double lat,
+      double lng,
+      int radiusM,
+      int limit,
+      List<String> excludedUsernames,
+      String groupPlaceId,
+      String groupStoreName
+  ) {
     int excludedCount = (excludedUsernames == null) ? 0 : excludedUsernames.size();
     List<String> excluded = (excludedUsernames == null) ? List.of() : excludedUsernames;
     if (excludedCount == 0) {
@@ -98,7 +109,9 @@ public class MapNearbyRepository {
         .addValue("radius_m", radiusM)
         .addValue("limit", limit)
         .addValue("excluded_usernames", excluded)
-        .addValue("excluded_count", excludedCount);
+        .addValue("excluded_count", excludedCount)
+        .addValue("group_place_id", groupPlaceId, Types.VARCHAR)
+        .addValue("group_store_name", groupStoreName, Types.VARCHAR);
 
     return jdbc.query(SQL_NEARBY_MARKERS, params, (rs, rowNum) -> {
       int feedCount = rs.getInt("feed_count");
@@ -112,6 +125,7 @@ public class MapNearbyRepository {
           rs.getString("store_name"),
           rs.getString("address"),
           rs.getString("thumbnail"),
+          buildGroupId(rs.getString("place_id"), rs.getString("store_name")),
           rs.getObject("lat", Double.class),
           rs.getObject("lng", Double.class),
           (int) Math.round(rs.getDouble("distance_m")),
@@ -120,6 +134,16 @@ public class MapNearbyRepository {
           representativeFeedId
       );
     });
+  }
+
+  private String buildGroupId(String placeId, String storeName) {
+    if (placeId != null && !placeId.isBlank()) {
+      return "place:" + placeId;
+    }
+    if (storeName != null && !storeName.isBlank()) {
+      return "store:" + storeName;
+    }
+    return null;
   }
 
   private String determineContentType(boolean hasVideo, int feedCount) {
@@ -229,6 +253,7 @@ public class MapNearbyRepository {
               rs.getString("store_name"),
               rs.getString("address"),
               rs.getString("thumbnail"),
+              buildGroupId(rs.getString("place_id"), rs.getString("store_name")),
               dLat,
               dLng,
               distance,

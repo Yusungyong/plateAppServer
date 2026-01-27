@@ -41,27 +41,38 @@ public class HomeImageThumbnailService {
       Double lat,
       Double lng,
       Double radius,
-      String username
+      String username,
+      String groupId
   ) {
     if (size < 1 || size > 100) {
       throw new AppException(ErrorCode.COMMON_INVALID_INPUT);
     }
 
     Set<String> excluded = loadExcludedUsernames(username);
+    GroupKey groupKey = parseGroupId(groupId);
     List<Fp400Feed> feeds;
     if ("NEARBY".equalsIgnoreCase(sortType)) {
       if (lat == null || lng == null) {
         throw new AppException(ErrorCode.COMMON_MISSING_PARAMETER);
       }
+      if (groupKey.storeName != null && groupKey.placeId == null) {
+        return new HomeImageThumbnailResponse(List.of());
+      }
       double safeRadius = normalizeRadius(radius);
-      feeds = feedRepository.findNearbyForHome(
+      feeds = feedRepository.findNearbyForHomeByGroup(
           lat,
           lng,
           safeRadius,
+          groupKey.placeId,
+          groupKey.storeName,
           PageRequest.of(0, size)
       );
     } else {
-      feeds = feedRepository.findLatestForHome(PageRequest.of(0, size));
+      feeds = feedRepository.findLatestForHomeByGroup(
+          groupKey.placeId,
+          groupKey.storeName,
+          PageRequest.of(0, size)
+      );
     }
 
     List<HomeImageThumbnailItem> items = feeds.stream()
@@ -98,6 +109,7 @@ public class HomeImageThumbnailService {
         thumb,
         feed.getStoreName(),
         feed.getPlaceId(),
+        buildGroupId(feed.getPlaceId(), feed.getStoreName()),
         imageCount,
         feed.getCreatedAt()
     );
@@ -118,4 +130,37 @@ public class HomeImageThumbnailService {
     }
     return excluded;
   }
+
+  private GroupKey parseGroupId(String groupId) {
+    if (groupId == null || groupId.isBlank()) {
+      return new GroupKey(null, null);
+    }
+    if (groupId.startsWith("place:")) {
+      String placeId = groupId.substring("place:".length()).trim();
+      if (placeId.isEmpty()) {
+        throw new AppException(ErrorCode.COMMON_INVALID_INPUT);
+      }
+      return new GroupKey(placeId, null);
+    }
+    if (groupId.startsWith("store:")) {
+      String storeName = groupId.substring("store:".length()).trim();
+      if (storeName.isEmpty()) {
+        throw new AppException(ErrorCode.COMMON_INVALID_INPUT);
+      }
+      return new GroupKey(null, storeName);
+    }
+    throw new AppException(ErrorCode.COMMON_INVALID_INPUT);
+  }
+
+  private String buildGroupId(String placeId, String storeName) {
+    if (placeId != null && !placeId.isBlank()) {
+      return "place:" + placeId;
+    }
+    if (storeName != null && !storeName.isBlank()) {
+      return "store:" + storeName;
+    }
+    return null;
+  }
+
+  private record GroupKey(String placeId, String storeName) {}
 }

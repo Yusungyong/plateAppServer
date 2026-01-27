@@ -88,7 +88,18 @@ public class LikedContentService {
                 rs.getString("thumbnail"),
                 rs.getString("place_id"),
                 rs.getString("store_name"),
+                buildGroupId(rs.getString("place_id"), rs.getString("store_name")),
                 rs.getTimestamp("liked_at") != null ? rs.getTimestamp("liked_at").toLocalDateTime() : null
         ));
+    }
+
+    private String buildGroupId(String placeId, String storeName) {
+        if (placeId != null && !placeId.isBlank()) {
+            return "place:" + placeId;
+        }
+        if (storeName != null && !storeName.isBlank()) {
+            return "store:" + storeName;
+        }
+        return null;
     }
 }

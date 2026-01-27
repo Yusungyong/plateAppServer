@@ -25,6 +25,7 @@ public class ProfileActivityDetailItems {
             String thumbnail,
             String placeId,
             String storeName,
+            String groupId,
             String address,
             LocalDateTime createdAt,
             LocalDateTime updatedAt,

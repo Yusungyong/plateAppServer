@@ -26,9 +26,10 @@ public class MapNearbyController {
       @RequestParam("lng") double lng,
       @RequestParam(value = "radius", defaultValue = "1500") int radius,
       @RequestParam(value = "limit", defaultValue = "60") int limit,
-      @RequestParam(value = "username", required = false) String username
+      @RequestParam(value = "username", required = false) String username,
+      @RequestParam(value = "groupId", required = false) String groupId
   ) {
-    return ResponseEntity.ok(mapNearbyService.findNearby(lat, lng, radius, limit, resolveUsername(username)));
+    return ResponseEntity.ok(mapNearbyService.findNearby(lat, lng, radius, limit, resolveUsername(username), groupId));
   }
 
   @GetMapping("/stores/search")

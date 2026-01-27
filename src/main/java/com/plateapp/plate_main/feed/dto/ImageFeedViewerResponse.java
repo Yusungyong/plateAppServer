@@ -16,6 +16,7 @@ public record ImageFeedViewerResponse(
         String storeName,
         String location,
         String placeId,
+        String groupId,
 
         String thumbnail,
 

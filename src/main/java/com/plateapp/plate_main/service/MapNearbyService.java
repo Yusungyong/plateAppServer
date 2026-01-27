@@ -19,12 +19,24 @@ public class MapNearbyService {
     private final BlockRepository blockRepository;
     private final ReportRepository reportRepository;
 
-    public NearbyStoreMarkersResponse findNearby(double lat, double lng, int radiusM, int limit, String username) {
+    public NearbyStoreMarkersResponse findNearby(double lat, double lng, int radiusM, int limit, String username, String groupId) {
         int safeRadius = clamp(radiusM, 100, 50_000); // 100m ~ 50km
         int safeLimit = clamp(limit, 1, 200);         // avoid flooding map with markers
 
         List<String> excluded = List.copyOf(loadExcludedUsernames(username));
-        List<NearbyStoreMarkerDto> items = mapNearbyRepository.findNearby(lat, lng, safeRadius, safeLimit, excluded);
+        GroupKey groupKey = parseGroupId(groupId);
+        if (groupKey.storeName != null && groupKey.placeId == null) {
+            return new NearbyStoreMarkersResponse(List.of());
+        }
+        List<NearbyStoreMarkerDto> items = mapNearbyRepository.findNearby(
+                lat,
+                lng,
+                safeRadius,
+                safeLimit,
+                excluded,
+                groupKey.placeId,
+                groupKey.storeName
+        );
         return new NearbyStoreMarkersResponse(items);
     }
 
@@ -65,4 +77,24 @@ public class MapNearbyService {
         }
         return excluded;
     }
+
+    private GroupKey parseGroupId(String groupId) {
+        if (groupId == null || groupId.isBlank()) {
+            return new GroupKey(null, null);
+        }
+        if (groupId.startsWith("place:")) {
+            String placeId = groupId.substring("place:".length()).trim();
+            if (!placeId.isEmpty()) {
+                return new GroupKey(placeId, null);
+            }
+        } else if (groupId.startsWith("store:")) {
+            String storeName = groupId.substring("store:".length()).trim();
+            if (!storeName.isEmpty()) {
+                return new GroupKey(null, storeName);
+            }
+        }
+        return new GroupKey(null, null);
+    }
+
+    private record GroupKey(String placeId, String storeName) {}
 }

@@ -61,6 +61,10 @@ public interface Fp305WatchHistoryRepository extends JpaRepository<Fp305WatchHis
     Double getAverageDurationByStoreId(@Param("storeId") Integer storeId);
 
     @Modifying
+    @Query("delete from Fp305WatchHistory w where w.storeId = :storeId")
+    int deleteByStoreId(@Param("storeId") Integer storeId);
+
+    @Modifying
     @Query("""
         UPDATE Fp305WatchHistory w
         SET w.durationWatched = :durationWatched,

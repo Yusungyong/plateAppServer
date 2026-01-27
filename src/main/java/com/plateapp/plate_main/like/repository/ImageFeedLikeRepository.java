@@ -4,6 +4,7 @@ import com.plateapp.plate_main.like.entity.ImageFeedLike;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -19,4 +20,8 @@ public interface ImageFeedLikeRepository extends JpaRepository<ImageFeedLike, Im
 
     @Query("SELECT l FROM ImageFeedLike l WHERE l.imageFeedId = :imageFeedId ORDER BY l.createdAt DESC")
     Page<ImageFeedLike> findByImageFeedIdOrderByCreatedAtDesc(@Param("imageFeedId") Integer imageFeedId, Pageable pageable);
+
+    @Modifying
+    @Query("delete from ImageFeedLike l where l.imageFeedId = :feedId")
+    int deleteByFeedId(@Param("feedId") Integer feedId);
 }

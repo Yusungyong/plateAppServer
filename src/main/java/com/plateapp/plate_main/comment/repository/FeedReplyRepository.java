@@ -54,6 +54,10 @@ public interface FeedReplyRepository extends JpaRepository<Fp470FeedReply, Integ
   """)
   int hardDeleteByCommentId(@Param("commentId") Integer commentId);
 
+  @Modifying
+  @Query("delete from Fp470FeedReply r where r.commentId in :commentIds")
+  int deleteByCommentIds(@Param("commentIds") List<Integer> commentIds);
+
   // ✅ feedId 기준 대댓글 수 (fp_470 -> fp_460 join)
   @Query(value = """
     select count(*)

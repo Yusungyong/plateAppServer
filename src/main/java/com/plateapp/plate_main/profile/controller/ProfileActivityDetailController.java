@@ -47,10 +47,11 @@ public class ProfileActivityDetailController {
             @RequestParam(defaultValue = "recent") String sort,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(required = false) String region
+            @RequestParam(required = false) String region,
+            @RequestParam(required = false) String groupId
     ) {
         return ApiResponse.success(
-                profileActivityDetailService.getUserImages(username, limit, offset, sort, from, to, region)
+                profileActivityDetailService.getUserImages(username, limit, offset, sort, from, to, region, groupId)
         );
     }
 
@@ -77,10 +78,11 @@ public class ProfileActivityDetailController {
             @RequestParam(defaultValue = "recent") String sort,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(required = false) String region
+            @RequestParam(required = false) String region,
+            @RequestParam(required = false) String groupId
     ) {
         return ApiResponse.success(
-                profileActivityDetailService.getLikedImages(username, limit, offset, sort, from, to, region)
+                profileActivityDetailService.getLikedImages(username, limit, offset, sort, from, to, region, groupId)
         );
     }
 
@@ -108,11 +110,12 @@ public class ProfileActivityDetailController {
             @RequestParam(defaultValue = "recent") String sort,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(required = false) String region
+            @RequestParam(required = false) String region,
+            @RequestParam(required = false) String groupId
     ) {
         String username = authentication.getName();
         return ApiResponse.success(
-                profileActivityDetailService.getUserImages(username, limit, offset, sort, from, to, region)
+                profileActivityDetailService.getUserImages(username, limit, offset, sort, from, to, region, groupId)
         );
     }
 
@@ -140,11 +143,12 @@ public class ProfileActivityDetailController {
             @RequestParam(defaultValue = "recent") String sort,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(required = false) String region
+            @RequestParam(required = false) String region,
+            @RequestParam(required = false) String groupId
     ) {
         String username = authentication.getName();
         return ApiResponse.success(
-                profileActivityDetailService.getLikedImages(username, limit, offset, sort, from, to, region)
+                profileActivityDetailService.getLikedImages(username, limit, offset, sort, from, to, region, groupId)
         );
     }
 }

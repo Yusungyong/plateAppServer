@@ -63,7 +63,7 @@ public class HomeRandomCandidatesService {
             }
         }
         if (type.includeImage()) {
-            List<Fp400Feed> feeds = feedRepository.findLatestForHome(PageRequest.of(0, safeLimit));
+            List<Fp400Feed> feeds = feedRepository.findLatestForHomeByGroup(null, null, PageRequest.of(0, safeLimit));
             for (Fp400Feed feed : feeds) {
                 if (!excluded.isEmpty() && feed.getUsername() != null && excluded.contains(feed.getUsername())) {
                     continue;
@@ -110,11 +110,13 @@ public class HomeRandomCandidatesService {
             }
         }
         if (type.includeImage()) {
-            List<Fp400Feed> feeds = feedRepository.findNearbyForHome(
-                    lat,
-                    lng,
-                    safeRadius,
-                    PageRequest.of(0, safeLimit)
+            List<Fp400Feed> feeds = feedRepository.findNearbyForHomeByGroup(
+                lat,
+                lng,
+                safeRadius,
+                null,
+                null,
+                PageRequest.of(0, safeLimit)
             );
             for (Fp400Feed feed : feeds) {
                 if (!excluded.isEmpty() && feed.getUsername() != null && excluded.contains(feed.getUsername())) {

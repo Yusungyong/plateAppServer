@@ -6,6 +6,7 @@ public record NearbyStoreMarkerDto(
     String storeName,
     String address,
     String thumbnail,
+    String groupId,
     Double lat,
     Double lng,
     Integer distanceM,

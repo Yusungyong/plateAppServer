@@ -3,6 +3,7 @@ package com.plateapp.plate_main.menu.repository;
 import com.plateapp.plate_main.menu.entity.Fp320Menu;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -21,4 +22,12 @@ public interface Fp320MenuRepository extends JpaRepository<Fp320Menu, String> {
             @Param("placeId") String placeId,
             @Param("storeName") String storeName
     );
+
+    @Modifying
+    @Query("delete from Fp320Menu m where m.storeId = :storeId")
+    int deleteByStoreId(@Param("storeId") Integer storeId);
+
+    @Modifying
+    @Query("delete from Fp320Menu m where m.feedId = :feedId")
+    int deleteByFeedId(@Param("feedId") Integer feedId);
 }

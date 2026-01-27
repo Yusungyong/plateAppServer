@@ -95,6 +95,7 @@ public class ImageFeedService {
       feed.getStoreName(),
       feed.getLocation(),
       feed.getPlaceId(),
+      buildGroupId(feed.getPlaceId(), feed.getStoreName()),
 
       feed.getThumbnail(),
 
@@ -227,5 +228,15 @@ public class ImageFeedService {
       excluded.addAll(reported);
     }
     return excluded;
+  }
+
+  private String buildGroupId(String placeId, String storeName) {
+    if (placeId != null && !placeId.isBlank()) {
+      return "place:" + placeId;
+    }
+    if (storeName != null && !storeName.isBlank()) {
+      return "store:" + storeName;
+    }
+    return null;
   }
 }

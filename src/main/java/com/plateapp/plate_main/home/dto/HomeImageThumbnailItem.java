@@ -14,6 +14,7 @@ public class HomeImageThumbnailItem {
   private String thumbFileName;
   private String storeName;
   private String placeId;
+  private String groupId;
   private Integer imageCount;
   private LocalDateTime createdAt;
 }

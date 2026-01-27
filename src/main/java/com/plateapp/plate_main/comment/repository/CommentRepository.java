@@ -2,6 +2,7 @@ package com.plateapp.plate_main.comment.repository;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -23,6 +24,13 @@ public interface CommentRepository extends JpaRepository<Fp440Comment, Integer> 
 
   @Query("select c.username from Fp440Comment c where c.commentId = :commentId")
   Optional<String> findOwnerUsername(@Param("commentId") Integer commentId);
+
+  @Query("select c.commentId from Fp440Comment c where c.storeId = :storeId")
+  List<Integer> findIdsByStoreId(@Param("storeId") Integer storeId);
+
+  @Modifying
+  @Query("delete from Fp440Comment c where c.storeId = :storeId")
+  int hardDeleteByStoreId(@Param("storeId") Integer storeId);
 
   @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query("""

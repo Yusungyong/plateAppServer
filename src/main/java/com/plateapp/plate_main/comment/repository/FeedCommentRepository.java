@@ -1,6 +1,7 @@
 package com.plateapp.plate_main.comment.repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -19,6 +20,9 @@ public interface FeedCommentRepository extends JpaRepository<Fp460FeedComment, I
   @Query("select c.username from Fp460FeedComment c where c.commentId = :commentId")
   Optional<String> findOwnerUsername(@Param("commentId") Integer commentId);
 
+  @Query("select c.commentId from Fp460FeedComment c where c.feedId = :feedId")
+  List<Integer> findIdsByFeedId(@Param("feedId") Integer feedId);
+
   @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query("""
       update Fp460FeedComment c
@@ -31,6 +35,10 @@ public interface FeedCommentRepository extends JpaRepository<Fp460FeedComment, I
   int updateContent(@Param("commentId") Integer commentId,
                     @Param("content") String content,
                     @Param("now") LocalDateTime now);
+
+  @Modifying
+  @Query("delete from Fp460FeedComment c where c.feedId = :feedId")
+  int hardDeleteByFeedId(@Param("feedId") Integer feedId);
 
   @Query("""
     select count(c)

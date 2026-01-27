@@ -2,9 +2,14 @@ package com.plateapp.plate_main.feed.service;
 
 import com.plateapp.plate_main.common.image.ImageProcessingService;
 import com.plateapp.plate_main.common.s3.S3UploadService;
+import com.plateapp.plate_main.comment.repository.FeedCommentRepository;
+import com.plateapp.plate_main.comment.repository.FeedReplyRepository;
 import com.plateapp.plate_main.feed.dto.ImageFeedUploadResponse;
 import com.plateapp.plate_main.feed.entity.Fp400ImageFeed;
 import com.plateapp.plate_main.feed.repository.ImageFeedRepository;
+import com.plateapp.plate_main.friend.repository.Fp200VisitRepository;
+import com.plateapp.plate_main.like.repository.ImageFeedLikeRepository;
+import com.plateapp.plate_main.menu.repository.Fp320MenuRepository;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -25,6 +30,11 @@ import org.springframework.web.multipart.MultipartFile;
 public class ImageFeedUploadService {
 
     private final ImageFeedRepository imageFeedRepository;
+    private final FeedCommentRepository feedCommentRepository;
+    private final FeedReplyRepository feedReplyRepository;
+    private final ImageFeedLikeRepository imageFeedLikeRepository;
+    private final Fp200VisitRepository fp200VisitRepository;
+    private final Fp320MenuRepository fp320MenuRepository;
     private final S3UploadService s3UploadService;
     private final ImageProcessingService imageProcessingService;
 
@@ -234,9 +244,16 @@ public class ImageFeedUploadService {
         }
         s3UploadService.deleteObjectByUrl(feed.getThumbnail());
 
-        feed.setUseYn("N");
-        feed.setUpdatedAt(LocalDateTime.now());
-        imageFeedRepository.save(feed);
+        List<Integer> commentIds = feedCommentRepository.findIdsByFeedId(feedId);
+        if (!commentIds.isEmpty()) {
+            feedReplyRepository.deleteByCommentIds(commentIds);
+        }
+        feedCommentRepository.hardDeleteByFeedId(feedId);
+        imageFeedLikeRepository.deleteByFeedId(feedId);
+        fp200VisitRepository.deleteByFeedId(feedId.longValue());
+        fp320MenuRepository.deleteByFeedId(feedId);
+
+        imageFeedRepository.delete(feed);
     }
 
     private List<ImageFeedUploadResponse.ImageItem> buildImageItems(List<String> urls) {
