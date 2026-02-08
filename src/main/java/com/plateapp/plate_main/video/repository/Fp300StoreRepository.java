@@ -120,16 +120,20 @@ public interface Fp300StoreRepository extends JpaRepository<Fp300Store, Integer>
               )
               AND (
                 6371000 * acos(
-                    cos(radians(:centerLat)) * cos(radians(loc.latitude))
-                  * cos(radians(loc.longitude) - radians(:centerLng))
-                  + sin(radians(:centerLat)) * sin(radians(loc.latitude))
+                    LEAST(1.0, GREATEST(-1.0,
+                        cos(radians(:centerLat)) * cos(radians(loc.latitude))
+                      * cos(radians(loc.longitude) - radians(:centerLng))
+                      + sin(radians(:centerLat)) * sin(radians(loc.latitude))
+                    ))
                 )
               ) <= :radiusMeters
             ORDER BY
               6371000 * acos(
-                  cos(radians(:centerLat)) * cos(radians(loc.latitude))
-                * cos(radians(loc.longitude) - radians(:centerLng))
-                + sin(radians(:centerLat)) * sin(radians(loc.latitude))
+                  LEAST(1.0, GREATEST(-1.0,
+                      cos(radians(:centerLat)) * cos(radians(loc.latitude))
+                    * cos(radians(loc.longitude) - radians(:centerLng))
+                    + sin(radians(:centerLat)) * sin(radians(loc.latitude))
+                  ))
               ) ASC,
               s.created_at DESC
             """,
@@ -153,9 +157,11 @@ public interface Fp300StoreRepository extends JpaRepository<Fp300Store, Integer>
               )
               AND (
                 6371000 * acos(
-                    cos(radians(:centerLat)) * cos(radians(loc.latitude))
-                  * cos(radians(loc.longitude) - radians(:centerLng))
-                  + sin(radians(:centerLat)) * sin(radians(loc.latitude))
+                    LEAST(1.0, GREATEST(-1.0,
+                        cos(radians(:centerLat)) * cos(radians(loc.latitude))
+                      * cos(radians(loc.longitude) - radians(:centerLng))
+                      + sin(radians(:centerLat)) * sin(radians(loc.latitude))
+                    ))
                 )
               ) <= :radiusMeters
             """,
@@ -205,16 +211,20 @@ public interface Fp300StoreRepository extends JpaRepository<Fp300Store, Integer>
               AND (:excludeStoreId IS NULL OR s.store_id <> :excludeStoreId)
               AND (
                 6371000 * acos(
-                    cos(radians(:centerLat)) * cos(radians(loc.latitude))
-                  * cos(radians(loc.longitude) - radians(:centerLng))
-                  + sin(radians(:centerLat)) * sin(radians(loc.latitude))
+                    LEAST(1.0, GREATEST(-1.0,
+                        cos(radians(:centerLat)) * cos(radians(loc.latitude))
+                      * cos(radians(loc.longitude) - radians(:centerLng))
+                      + sin(radians(:centerLat)) * sin(radians(loc.latitude))
+                    ))
                 )
               ) <= :radiusMeters
             ORDER BY
               6371000 * acos(
-                  cos(radians(:centerLat)) * cos(radians(loc.latitude))
-                * cos(radians(loc.longitude) - radians(:centerLng))
-                + sin(radians(:centerLat)) * sin(radians(loc.latitude))
+                  LEAST(1.0, GREATEST(-1.0,
+                      cos(radians(:centerLat)) * cos(radians(loc.latitude))
+                    * cos(radians(loc.longitude) - radians(:centerLng))
+                    + sin(radians(:centerLat)) * sin(radians(loc.latitude))
+                  ))
               )
             LIMIT :limit
             """,

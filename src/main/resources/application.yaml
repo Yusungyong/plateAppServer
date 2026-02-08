@@ -66,8 +66,15 @@ mybatis:
 
 server:
   port: ${SERVER_PORT:8090}
+  tomcat:
+    uri-encoding: UTF-8
   error:
     include-stacktrace: always
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+      enabled: true
 
 jwt:
   access-expire: 3600000        # 1 hour in ms
