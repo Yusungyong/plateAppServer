@@ -49,13 +49,13 @@ public class SecurityConfig {
 
                 // ✅ 공개 엔드포인트
                 .requestMatchers(
-                    "/auth/signup",
-                    "/auth/login",
-                    "/auth/refresh",
-                    "/auth/social/**",
-                    "/email/**",
-                    "/auth/reset-password",
-                    "/health",
+                    "/api/auth/signup",
+                    "/api/auth/login",
+                    "/api/auth/refresh",
+                    "/api/auth/social/**",
+                    "/api/email/**",
+                    "/api/auth/reset-password",
+                    "/api/health",
                     "/api/home/random-candidates/**"
                 ).permitAll()
 

@@ -24,6 +24,7 @@ public class S3UploadService {
     private final String bucketHost;
     private final String videoPrefix;
     private final String imagePrefix;
+    private final String feedImagePrefix;
     private final String profilePrefix;
     private final String thumbnailPrefix;
 
@@ -33,6 +34,7 @@ public class S3UploadService {
             @Value("${aws.s3.base-url:https://s3.amazonaws.com}") String baseUrl,
             @Value("${aws.s3.videoFilePath:}") String videoPrefix,
             @Value("${aws.s3.imageFilePath:}") String imagePrefix,
+            @Value("${aws.s3.feedImagePath:}") String feedImagePrefix,
             @Value("${aws.s3.profileImagePath:}") String profilePrefix,
             @Value("${aws.s3.thumbnailPath:thumbnail/}") String thumbnailPrefix,
             @Value("${aws.s3.region}") String region
@@ -43,6 +45,7 @@ public class S3UploadService {
         this.bucketHost = "https://" + bucket + ".s3." + region + ".amazonaws.com";
         this.videoPrefix = normalizePrefix(videoPrefix);
         this.imagePrefix = normalizePrefix(imagePrefix);
+        this.feedImagePrefix = normalizePrefix(feedImagePrefix);
         this.profilePrefix = normalizePrefix(profilePrefix);
         this.thumbnailPrefix = normalizePrefix(thumbnailPrefix);
     }
@@ -117,6 +120,18 @@ public class S3UploadService {
         return buildPublicUrl(key);
     }
 
+    public String uploadBytesWithPrefixAndPath(String prefix, String relativePath, byte[] data, String contentType) {
+        String key = buildKeyWithPath(normalizePrefix(prefix), relativePath);
+        PutObjectRequest putRequest = PutObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .contentLength((long) data.length)
+                .contentType(resolveContentType(relativePath, contentType))
+                .build();
+        s3Client.putObject(putRequest, RequestBody.fromBytes(data));
+        return key;
+    }
+
     public void deleteObjectByUrl(String objectUrl) {
         String key = extractKey(objectUrl);
         if (key == null) {
@@ -127,6 +142,21 @@ public class S3UploadService {
                 .key(key)
                 .build();
         s3Client.deleteObject(deleteRequest);
+    }
+
+    public void deleteObjectByKey(String key) {
+        if (key == null || key.isBlank()) {
+            return;
+        }
+        DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .build();
+        s3Client.deleteObject(deleteRequest);
+    }
+
+    public String getFeedImagePrefix() {
+        return feedImagePrefix.isEmpty() ? imagePrefix : feedImagePrefix;
     }
 
     public String getThumbnailPrefix() {
@@ -145,6 +175,14 @@ public class S3UploadService {
         String datePrefix = LocalDate.now().toString();
         String uuid = UUID.randomUUID().toString().replace("-", "");
         return prefix + datePrefix + "/" + uuid + "/" + filename;
+    }
+
+    private String buildKeyWithPath(String prefix, String relativePath) {
+        String cleaned = relativePath == null ? "" : relativePath;
+        if (cleaned.startsWith("/")) {
+            cleaned = cleaned.substring(1);
+        }
+        return prefix + cleaned;
     }
 
     private String resolveContentType(String filename, String contentType) {

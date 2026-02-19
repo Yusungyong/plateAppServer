@@ -11,6 +11,7 @@ import com.plateapp.plate_main.friend.repository.Fp200VisitRepository;
 import com.plateapp.plate_main.like.repository.ImageFeedLikeRepository;
 import com.plateapp.plate_main.menu.repository.Fp320MenuRepository;
 import java.io.IOException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -69,6 +70,8 @@ public class ImageFeedUploadService {
                 continue;
             }
             String originalName = safeFileName(file.getOriginalFilename(), "image.jpg");
+            String relativePath = buildRelativePath(originalName);
+            String thumbRelativePath = buildThumbnailRelativePath(relativePath);
             byte[] rawBytes;
             try {
                 rawBytes = file.getBytes();
@@ -83,13 +86,14 @@ public class ImageFeedUploadService {
                 throw new IllegalStateException("Failed to process image", e);
             }
 
-            String uploadedUrl = s3UploadService.uploadBytesWithPrefix(
-                    s3UploadService.getImagePrefix(),
-                    originalName,
+            s3UploadService.uploadBytesWithPrefixAndPath(
+                    s3UploadService.getFeedImagePrefix(),
+                    relativePath,
                     optimized,
                     "image/jpeg"
             );
-            imageUrls.add(uploadedUrl);
+            uploadThumbnail(rawBytes, thumbRelativePath);
+            imageUrls.add(relativePath);
         }
 
         if (imageUrls.isEmpty()) {
@@ -107,7 +111,6 @@ public class ImageFeedUploadService {
         feed.setStoreName(storeName);
         feed.setPlaceId(placeId);
         feed.setUseYn(safeUseYn);
-        feed.setThumbnail(imageUrls.get(0));
 
         Fp400ImageFeed saved = imageFeedRepository.save(feed);
 
@@ -181,6 +184,8 @@ public class ImageFeedUploadService {
                 continue;
             }
             String originalName = safeFileName(file.getOriginalFilename(), "image.jpg");
+            String relativePath = buildRelativePath(originalName);
+            String thumbRelativePath = buildThumbnailRelativePath(relativePath);
             byte[] rawBytes;
             try {
                 rawBytes = file.getBytes();
@@ -195,13 +200,14 @@ public class ImageFeedUploadService {
                 throw new IllegalStateException("Failed to process image", e);
             }
 
-            String uploadedUrl = s3UploadService.uploadBytesWithPrefix(
-                    s3UploadService.getImagePrefix(),
-                    originalName,
+            s3UploadService.uploadBytesWithPrefixAndPath(
+                    s3UploadService.getFeedImagePrefix(),
+                    relativePath,
                     optimized,
                     "image/jpeg"
             );
-            newUrls.add(uploadedUrl);
+            uploadThumbnail(rawBytes, thumbRelativePath);
+            newUrls.add(relativePath);
         }
 
         if (newUrls.isEmpty()) {
@@ -211,9 +217,6 @@ public class ImageFeedUploadService {
         List<String> currentUrls = parseImages(feed.getImages());
         currentUrls.addAll(newUrls);
         feed.setImages(String.join(",", currentUrls));
-        if (feed.getThumbnail() == null || feed.getThumbnail().isBlank()) {
-            feed.setThumbnail(currentUrls.get(0));
-        }
         feed.setUpdatedAt(LocalDateTime.now());
         imageFeedRepository.save(feed);
 
@@ -240,9 +243,11 @@ public class ImageFeedUploadService {
         }
 
         for (String url : parseImages(feed.getImages())) {
-            s3UploadService.deleteObjectByUrl(url);
+            deleteImageObjects(url);
         }
-        s3UploadService.deleteObjectByUrl(feed.getThumbnail());
+        if (feed.getThumbnail() != null && !feed.getThumbnail().isBlank()) {
+            s3UploadService.deleteObjectByUrl(feed.getThumbnail());
+        }
 
         List<Integer> commentIds = feedCommentRepository.findIdsByFeedId(feedId);
         if (!commentIds.isEmpty()) {
@@ -298,5 +303,61 @@ public class ImageFeedUploadService {
             return fallback;
         }
         return original;
+    }
+
+    private String buildRelativePath(String filename) {
+        String datePrefix = LocalDate.now().toString().replace("-", "");
+        return datePrefix + "/" + filename;
+    }
+
+    private String buildThumbnailRelativePath(String relativePath) {
+        if (relativePath == null || relativePath.isBlank()) {
+            return null;
+        }
+        int slash = relativePath.indexOf('/');
+        if (slash <= 0 || slash == relativePath.length() - 1) {
+            return null;
+        }
+        String datePrefix = relativePath.substring(0, slash);
+        String filename = relativePath.substring(slash + 1);
+        return datePrefix + "/thumbnails/300x300/" + filename;
+    }
+
+    private void uploadThumbnail(byte[] rawBytes, String thumbRelativePath) {
+        if (rawBytes == null || rawBytes.length == 0 || thumbRelativePath == null) {
+            return;
+        }
+        byte[] thumbBytes;
+        try {
+            thumbBytes = imageProcessingService.resizeCropCenter(rawBytes, 300, 300, "jpg");
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to generate thumbnail", e);
+        }
+        s3UploadService.uploadBytesWithPrefixAndPath(
+                s3UploadService.getFeedImagePrefix(),
+                thumbRelativePath,
+                thumbBytes,
+                "image/jpeg"
+        );
+    }
+
+    private void deleteImageObjects(String relativePath) {
+        if (relativePath == null || relativePath.isBlank()) {
+            return;
+        }
+        String baseKey = s3UploadService.getFeedImagePrefix() + trimLeadingSlash(relativePath);
+        s3UploadService.deleteObjectByKey(baseKey);
+        String thumbRelativePath = buildThumbnailRelativePath(relativePath);
+        if (thumbRelativePath != null) {
+            String thumbKey = s3UploadService.getFeedImagePrefix() + trimLeadingSlash(thumbRelativePath);
+            s3UploadService.deleteObjectByKey(thumbKey);
+        }
+    }
+
+    private String trimLeadingSlash(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.startsWith("/") ? value.substring(1) : value;
     }
 }

@@ -18,7 +18,7 @@ import com.plateapp.plate_main.common.email.service.EmailVerifyService;
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/email") // prefix 살짝 명시
+@RequestMapping("/api/email") // prefix 살짝 명시
 @RequiredArgsConstructor
 public class EmailVerifyController {
 

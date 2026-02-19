@@ -3,6 +3,7 @@ package com.plateapp.plate_main.auth.controller;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.plateapp.plate_main.auth.domain.User;
@@ -15,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @RestController
+@RequestMapping("/api")
 @RequiredArgsConstructor
 @Slf4j
 public class UserController {
