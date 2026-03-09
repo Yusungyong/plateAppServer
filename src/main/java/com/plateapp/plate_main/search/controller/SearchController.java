@@ -33,7 +33,9 @@ public class SearchController {
     public ResponseEntity<SearchSuggestionResponse> suggest(
         @RequestParam("q") String q,
         @RequestParam(value = "limit", defaultValue = "10") int limit,
-        @RequestParam(value = "scope", required = false) String scope
+        @RequestParam(value = "scope", required = false) String scope,
+        @RequestParam(value = "isGuest", required = false) Boolean isGuest,
+        @RequestParam(value = "guestId", required = false) String guestId
     ) {
         SearchScope safeScope = parseScope(scope);
         return ResponseEntity.ok(searchService.suggest(q, limit, safeScope));
@@ -50,7 +52,9 @@ public class SearchController {
         @RequestParam(value = "radius", required = false) Integer radius,
         @RequestParam(value = "lat", required = false) Double lat,
         @RequestParam(value = "lng", required = false) Double lng,
-        @RequestParam(value = "sort", required = false) String sort
+        @RequestParam(value = "sort", required = false) String sort,
+        @RequestParam(value = "isGuest", required = false) Boolean isGuest,
+        @RequestParam(value = "guestId", required = false) String guestId
     ) {
         SearchType safeType = parseType(type);
         SearchSort safeSort = parseSort(sort);

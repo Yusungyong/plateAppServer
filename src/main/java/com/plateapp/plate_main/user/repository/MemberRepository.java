@@ -12,6 +12,7 @@ import com.plateapp.plate_main.user.entity.Fp100User;
 
 public interface MemberRepository extends JpaRepository<Fp100User, String> {
   List<Fp100User> findByUsernameIn(Collection<String> usernames);
+  List<Fp100User> findByUserIdIn(Collection<Integer> userIds);
 
   @Query("""
       select u

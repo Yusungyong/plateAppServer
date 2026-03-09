@@ -1,4 +1,4 @@
-// src/main/java/com/plateapp/plate_main/video/controller/HomeVideoController.java
+﻿// src/main/java/com/plateapp/plate_main/video/controller/HomeVideoController.java
 package com.plateapp.plate_main.video.controller;
 
 import java.util.List;
@@ -30,9 +30,9 @@ public class HomeVideoController {
 
     private final HomeVideoService homeVideoService;
 
-    // 예시:
-    //  - 기본 홈:  /api/home/video-thumbnails?page=0&size=5&username=yoou&isGuest=false
-    //  - 장소 필터: /api/home/video-thumbnails?...&placeIds=PID1&placeIds=PID2
+    // ??
+    //  - ??  /api/home/video-thumbnails?page=0&size=5&username=yoou&isGuest=false
+    //  - ?? ?: /api/home/video-thumbnails?...&placeIds=PID1&placeIds=PID2
     @GetMapping("/video-thumbnails")
     public Page<HomeVideoThumbnailDTO> getHomeVideoThumbnails(
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -60,7 +60,7 @@ public class HomeVideoController {
         );
     }
 
-    // 🔹 썸네일 시청 이력 생성 API
+    // ?? ?? ??? ??? API
     @PostMapping("/video-watch-history")
     public ResponseEntity<Void> createVideoWatchHistory(
             @RequestBody @Valid VideoWatchHistoryCreateRequest request
@@ -69,16 +69,25 @@ public class HomeVideoController {
         return ResponseEntity.ok().build();
     }
 
-    // 🔹 위치 기반 동영상 피드 API (풀스크린 릴스용)
+    // ?? ?? ?? ??? API (???)
     @GetMapping("/feed")
     public ResponseEntity<List<VideoFeedItemDTO>> getVideoFeed(
-            @RequestParam("username") String username,
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "isGuest", required = false) Boolean isGuest,
+            @RequestParam(value = "guestId", required = false) String guestId,
             @RequestParam(value = "storeId", required = false) Integer storeId,
             @RequestParam("placeId") String placeId
     ) {
         List<VideoFeedItemDTO> result =
-                homeVideoService.getVideoFeed(username, storeId, placeId); // ✅ 여기 homeVideoService 사용
+                homeVideoService.getVideoFeed(resolveUsername(username, isGuest, guestId), storeId, placeId);
 
         return ResponseEntity.ok(result);
+    }
+
+    private String resolveUsername(String usernameParam, Boolean isGuest, String guestId) {
+        if (Boolean.TRUE.equals(isGuest)) {
+            return null;
+        }
+        return usernameParam;
     }
 }

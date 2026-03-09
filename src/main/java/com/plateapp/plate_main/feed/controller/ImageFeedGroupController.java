@@ -28,7 +28,9 @@ public class ImageFeedGroupController {
             @RequestParam(value = "sort", required = false) String sort,
             @RequestParam(value = "lat", required = false) Double lat,
             @RequestParam(value = "lng", required = false) Double lng,
-            @RequestParam(value = "radius", required = false) Integer radius
+            @RequestParam(value = "radius", required = false) Integer radius,
+            @RequestParam(value = "isGuest", required = false) Boolean isGuest,
+            @RequestParam(value = "guestId", required = false) String guestId
     ) {
         return ApiResponse.ok(groupService.getGroups(limit, cursor, sort, lat, lng, radius));
     }
@@ -37,7 +39,9 @@ public class ImageFeedGroupController {
     public ApiResponse<ImageFeedGroupImagesResponse> listGroupImages(
             @PathVariable("groupId") String groupId,
             @RequestParam(value = "limit", required = false) Integer limit,
-            @RequestParam(value = "cursor", required = false) String cursor
+            @RequestParam(value = "cursor", required = false) String cursor,
+            @RequestParam(value = "isGuest", required = false) Boolean isGuest,
+            @RequestParam(value = "guestId", required = false) String guestId
     ) {
         return ApiResponse.ok(groupService.getGroupImages(groupId, limit, cursor));
     }

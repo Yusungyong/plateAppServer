@@ -27,9 +27,18 @@ public class MapNearbyController {
       @RequestParam(value = "radius", defaultValue = "1500") int radius,
       @RequestParam(value = "limit", defaultValue = "60") int limit,
       @RequestParam(value = "username", required = false) String username,
+      @RequestParam(value = "isGuest", required = false) Boolean isGuest,
+      @RequestParam(value = "guestId", required = false) String guestId,
       @RequestParam(value = "groupId", required = false) String groupId
   ) {
-    return ResponseEntity.ok(mapNearbyService.findNearby(lat, lng, radius, limit, resolveUsername(username), groupId));
+    return ResponseEntity.ok(mapNearbyService.findNearby(
+        lat,
+        lng,
+        radius,
+        limit,
+        resolveUsername(username, isGuest, guestId),
+        groupId
+    ));
   }
 
   @GetMapping("/stores/search")
@@ -38,20 +47,33 @@ public class MapNearbyController {
       @RequestParam(value = "lat", required = false) Double lat,
       @RequestParam(value = "lng", required = false) Double lng,
       @RequestParam(value = "limit", defaultValue = "20") int limit,
-      @RequestParam(value = "username", required = false) String username
+      @RequestParam(value = "username", required = false) String username,
+      @RequestParam(value = "isGuest", required = false) Boolean isGuest,
+      @RequestParam(value = "guestId", required = false) String guestId
   ) {
-    return ResponseEntity.ok(mapNearbyService.search(keyword, lat, lng, limit, resolveUsername(username)));
+    return ResponseEntity.ok(mapNearbyService.search(
+        keyword,
+        lat,
+        lng,
+        limit,
+        resolveUsername(username, isGuest, guestId)
+    ));
   }
 
   @GetMapping("/stores/suggest")
   public ResponseEntity<java.util.List<com.plateapp.plate_main.map.dto.MapSearchSuggestionDto>> suggestStores(
       @RequestParam("keyword") String keyword,
-      @RequestParam(value = "limit", defaultValue = "10") int limit
+      @RequestParam(value = "limit", defaultValue = "10") int limit,
+      @RequestParam(value = "isGuest", required = false) Boolean isGuest,
+      @RequestParam(value = "guestId", required = false) String guestId
   ) {
     return ResponseEntity.ok(mapNearbyService.suggest(keyword, limit));
   }
 
-  private String resolveUsername(String usernameParam) {
+  private String resolveUsername(String usernameParam, Boolean isGuest, String guestId) {
+    if (Boolean.TRUE.equals(isGuest)) {
+      return null;
+    }
     if (usernameParam != null && !usernameParam.isBlank()) {
       return usernameParam;
     }

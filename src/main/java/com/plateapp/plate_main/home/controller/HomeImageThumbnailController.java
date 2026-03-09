@@ -29,6 +29,8 @@ public class HomeImageThumbnailController {
       @RequestParam(name = "lng", required = false) Double lng,
       @RequestParam(name = "radius", required = false) Double radius,
       @RequestParam(name = "username", required = false) String username,
+      @RequestParam(name = "isGuest", required = false) Boolean isGuest,
+      @RequestParam(name = "guestId", required = false) String guestId,
       @RequestParam(name = "groupId", required = false) String groupId
   ) {
     return ApiResponse.ok(homeService.getLatestThumbs(
@@ -37,12 +39,15 @@ public class HomeImageThumbnailController {
         lat,
         lng,
         radius,
-        resolveUsername(username),
+        resolveUsername(username, isGuest, guestId),
         groupId
     ));
   }
 
-  private String resolveUsername(String usernameParam) {
+  private String resolveUsername(String usernameParam, Boolean isGuest, String guestId) {
+    if (Boolean.TRUE.equals(isGuest)) {
+      return null;
+    }
     if (usernameParam != null && !usernameParam.isBlank()) {
       return usernameParam;
     }

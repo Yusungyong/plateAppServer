@@ -27,9 +27,11 @@ public class ImageFeedController {
   @GetMapping("/image-feeds/{feedId}")
   public ApiResponse<ImageFeedViewerResponse> getImageFeedViewer(
           @PathVariable("feedId") Integer feedId,
-          @RequestParam(name = "username", required = false) String username
+          @RequestParam(name = "username", required = false) String username,
+          @RequestParam(name = "isGuest", required = false) Boolean isGuest,
+          @RequestParam(name = "guestId", required = false) String guestId
   ) {
-    return ApiResponse.ok(imageFeedService.getViewer(feedId, resolveUsername(username)));
+    return ApiResponse.ok(imageFeedService.getViewer(feedId, resolveUsername(username, isGuest, guestId)));
   }
 
   // ✅ 추가: 선택한 피드 기준 위치 반경 내 피드ID 스트립
@@ -38,12 +40,17 @@ public class ImageFeedController {
       @RequestParam("baseFeedId") Integer baseFeedId,
       @RequestParam(value = "radiusM", required = false, defaultValue = "3000") Integer radiusM,
       @RequestParam(value = "limit", required = false, defaultValue = "50") Integer limit,
-      @RequestParam(name = "username", required = false) String username
+      @RequestParam(name = "username", required = false) String username,
+      @RequestParam(name = "isGuest", required = false) Boolean isGuest,
+      @RequestParam(name = "guestId", required = false) String guestId
   ) {
-    return ApiResponse.ok(imageFeedService.getContext(baseFeedId, radiusM, limit, resolveUsername(username)));
+    return ApiResponse.ok(imageFeedService.getContext(baseFeedId, radiusM, limit, resolveUsername(username, isGuest, guestId)));
   }
 
-  private String resolveUsername(String usernameParam) {
+  private String resolveUsername(String usernameParam, Boolean isGuest, String guestId) {
+    if (Boolean.TRUE.equals(isGuest)) {
+      return null;
+    }
     if (usernameParam != null && !usernameParam.isBlank()) {
       return usernameParam;
     }

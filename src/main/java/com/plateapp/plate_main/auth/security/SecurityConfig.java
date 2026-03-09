@@ -56,7 +56,19 @@ public class SecurityConfig {
                     "/api/email/**",
                     "/api/auth/reset-password",
                     "/api/health",
-                    "/api/home/random-candidates/**"
+                    "/api/home/random-candidates/**",
+                    "/api/map/stores/**"
+                ).permitAll()
+                .requestMatchers(HttpMethod.GET,
+                    "/api/home/video-thumbnails",
+                    "/api/home/image-thumbnails",
+                    "/api/home/feed",
+                    "/api/search",
+                    "/api/search/suggest",
+                    "/api/image-feeds/*",
+                    "/api/image-feeds/context",
+                    "/api/image-feeds/groups",
+                    "/api/image-feeds/groups/*/images"
                 ).permitAll()
 
                 .anyRequest().authenticated()
