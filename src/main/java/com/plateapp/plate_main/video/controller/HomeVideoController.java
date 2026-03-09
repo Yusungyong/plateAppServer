@@ -1,4 +1,4 @@
-﻿// src/main/java/com/plateapp/plate_main/video/controller/HomeVideoController.java
+// src/main/java/com/plateapp/plate_main/video/controller/HomeVideoController.java
 package com.plateapp.plate_main.video.controller;
 
 import java.util.List;
@@ -30,9 +30,9 @@ public class HomeVideoController {
 
     private final HomeVideoService homeVideoService;
 
-    // ??
-    //  - ??  /api/home/video-thumbnails?page=0&size=5&username=yoou&isGuest=false
-    //  - ?? ?: /api/home/video-thumbnails?...&placeIds=PID1&placeIds=PID2
+    // Home video thumbnails
+    // - example: /api/home/video-thumbnails?page=0&size=5&username=yoou&isGuest=false
+    // - example: /api/home/video-thumbnails?...&placeIds=PID1&placeIds=PID2
     @GetMapping("/video-thumbnails")
     public Page<HomeVideoThumbnailDTO> getHomeVideoThumbnails(
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -60,7 +60,7 @@ public class HomeVideoController {
         );
     }
 
-    // ?? ?? ??? ??? API
+    // Video watch history API
     @PostMapping("/video-watch-history")
     public ResponseEntity<Void> createVideoWatchHistory(
             @RequestBody @Valid VideoWatchHistoryCreateRequest request
@@ -69,7 +69,7 @@ public class HomeVideoController {
         return ResponseEntity.ok().build();
     }
 
-    // ?? ?? ?? ??? API (???)
+    // Video feed API
     @GetMapping("/feed")
     public ResponseEntity<List<VideoFeedItemDTO>> getVideoFeed(
             @RequestParam(value = "username", required = false) String username,

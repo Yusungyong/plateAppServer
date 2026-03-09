@@ -16,7 +16,7 @@ public class FriendManagementController {
 
     private final FriendManagementService friendService;
 
-    // 친구 목록 조회
+    // Friend list
     @GetMapping
     public ApiResponse<PagedResponse<FriendDto>> getFriends(
             @RequestParam(defaultValue = "50") int limit,
@@ -38,7 +38,7 @@ public class FriendManagementController {
         return ApiResponse.success(results);
     }
 
-    // 친구 ??��
+    // Delete friend
     @DeleteMapping("/{userId}")
     public ApiResponse<Void> deleteFriend(
             @PathVariable Integer userId,
@@ -48,7 +48,7 @@ public class FriendManagementController {
         return ApiResponse.success(null);
     }
 
-    // 보낸 친구 ?�청 목록
+    // Sent friend requests
     @GetMapping("/requests/sent")
     public ApiResponse<PagedResponse<FriendRequestDTO>> getSentRequests(
             @RequestParam(defaultValue = "20") int limit,
@@ -59,7 +59,7 @@ public class FriendManagementController {
         return ApiResponse.success(requests);
     }
 
-    // 받�? 친구 ?�청 목록
+    // Received friend requests
     @GetMapping("/requests/received")
     public ApiResponse<PagedResponse<FriendRequestDTO>> getReceivedRequests(
             @RequestParam(defaultValue = "20") int limit,
@@ -79,7 +79,7 @@ public class FriendManagementController {
         return ApiResponse.success(friendRequest);
     }
 
-    // 친구 ?�청 취소
+    // Cancel friend request
     @DeleteMapping("/requests/{requestId}")
     public ApiResponse<Void> cancelFriendRequest(
             @PathVariable Integer requestId,
@@ -89,7 +89,7 @@ public class FriendManagementController {
         return ApiResponse.success(null);
     }
 
-    // 친구 ?�청 ?�락
+    // Accept friend request
     @PutMapping("/requests/{requestId}/accept")
     public ApiResponse<Void> acceptFriendRequest(
             @PathVariable Integer requestId,
@@ -99,7 +99,7 @@ public class FriendManagementController {
         return ApiResponse.success(null);
     }
 
-    // 친구 ?�청 거절
+    // Reject friend request
     @PutMapping("/requests/{requestId}/reject")
     public ApiResponse<Void> rejectFriendRequest(
             @PathVariable Integer requestId,
