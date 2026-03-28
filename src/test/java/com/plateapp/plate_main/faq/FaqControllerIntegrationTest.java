@@ -13,8 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
@@ -26,9 +26,6 @@ class FaqControllerIntegrationTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private JdbcTemplate jdbcTemplate;
-
-    @Autowired
     private FaqRepository faqRepository;
 
     @BeforeEach
@@ -38,27 +35,27 @@ class FaqControllerIntegrationTest {
 
     @Test
     void listFaqsReturnsOnlyPublishedAndAppliesRequestedSort() throws Exception {
-        insertFaq("authorA", "계정", "일반 글", "본문", false, 20, 2, "published", now(), now());
-        insertFaq("authorB", "공지", "고정 글", "본문", true, 30, 5, "published", now(), now());
-        insertFaq("authorC", "계정", "비공개 글", "본문", true, 40, 1, "draft", now(), now());
-        insertFaq("authorD", "계정", "같은 순서 최신 글", "본문", false, 50, 2, "published", now(), now());
+        insertFaq("authorA", "account", "normal post", "content", false, 20, 2, "published", now(), now());
+        insertFaq("authorB", "notice", "pinned post", "content", true, 30, 5, "published", now(), now());
+        insertFaq("authorC", "account", "draft post", "content", true, 40, 1, "draft", now(), now());
+        insertFaq("authorD", "account", "same order newer post", "content", false, 50, 2, "published", now(), now());
 
         mockMvc.perform(get("/api/faqs")
-                .param("category", "계정")
+                .param("category", "account")
                 .param("page", "0")
                 .param("size", "10"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.content", hasSize(2)))
-            .andExpect(jsonPath("$.content[0].title").value("같은 순서 최신 글"))
+            .andExpect(jsonPath("$.content[0].title").value("same order newer post"))
             .andExpect(jsonPath("$.content[0].isPinned").value(false))
-            .andExpect(jsonPath("$.content[1].title").value("일반 글"))
+            .andExpect(jsonPath("$.content[1].title").value("normal post"))
             .andExpect(jsonPath("$.totalElements").value(2))
             .andExpect(jsonPath("$.hasNext").value(false));
     }
 
     @Test
     void getFaqIncrementsViewCountAndAllowsAnonymousAccess() throws Exception {
-        Integer faqId = insertFaq("admin", "공지", "이용 안내", "FAQ 본문", true, 7, 1, "published", now(), now());
+        Integer faqId = insertFaq("admin", "notice", "usage guide", "FAQ body", true, 7, 1, "published", now(), now());
 
         mockMvc.perform(get("/api/faqs/{faqId}", faqId))
             .andExpect(status().isOk())
@@ -79,25 +76,19 @@ class FaqControllerIntegrationTest {
         LocalDateTime createdAt,
         LocalDateTime updatedAt
     ) {
-        return jdbcTemplate.queryForObject(
-            """
-                insert into fp_900
-                    (username, category, title, answer, is_pinned, view_count, display_order, status_code, created_at, updated_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                returning faq_id
-            """,
-            Integer.class,
+        Fp900Faq faq = Fp900Faq.create(
             username,
             category,
             title,
             answer,
             isPinned,
-            viewCount,
             displayOrder,
-            statusCode,
-            createdAt,
-            updatedAt
+            statusCode
         );
+        ReflectionTestUtils.setField(faq, "viewCount", viewCount);
+        ReflectionTestUtils.setField(faq, "createdAt", createdAt);
+        ReflectionTestUtils.setField(faq, "updatedAt", updatedAt);
+        return faqRepository.save(faq).getFaqId();
     }
 
     private LocalDateTime now() {
