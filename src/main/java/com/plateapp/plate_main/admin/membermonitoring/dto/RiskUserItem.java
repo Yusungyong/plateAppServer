@@ -1,4 +1,4 @@
-﻿package com.plateapp.plate_main.admin.membermonitoring.dto;
+package com.plateapp.plate_main.admin.membermonitoring.dto;
 
 public record RiskUserItem(
     String username,

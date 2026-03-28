@@ -37,17 +37,17 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                // ??Swagger/OpenAPI (springdoc)
+                // Swagger/OpenAPI (springdoc)
                 .requestMatchers(
                     "/v3/api-docs/**",
                     "/swagger-ui/**",
                     "/swagger-ui.html",
                     "/swagger-ui/index.html"
-                    // ?„ìš”?˜ë©´ ?„ë˜??ì¶”ê? (?˜ê²½???°ë¼)
+                    // Add more paths here if needed for your environment
                     // "/webjars/**"
                 ).permitAll()
 
-                // ??ê³µê°œ ?”ë“œ?¬ì¸??
+                // Public endpoints
                 .requestMatchers(
                     "/api/auth/signup",
                     "/api/auth/login",

@@ -1,4 +1,4 @@
-﻿package com.plateapp.plate_main.admin.membermonitoring.service;
+package com.plateapp.plate_main.admin.membermonitoring.service;
 
 import com.plateapp.plate_main.admin.membermonitoring.dto.LoginRiskItem;
 import com.plateapp.plate_main.admin.membermonitoring.dto.LoginRiskResponse;
