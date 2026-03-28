@@ -37,17 +37,17 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                // ✅ Swagger/OpenAPI (springdoc)
+                // ??Swagger/OpenAPI (springdoc)
                 .requestMatchers(
                     "/v3/api-docs/**",
                     "/swagger-ui/**",
                     "/swagger-ui.html",
                     "/swagger-ui/index.html"
-                    // 필요하면 아래도 추가 (환경에 따라)
+                    // ?�요?�면 ?�래??추�? (?�경???�라)
                     // "/webjars/**"
                 ).permitAll()
 
-                // ✅ 공개 엔드포인트
+                // ??공개 ?�드?�인??
                 .requestMatchers(
                     "/api/auth/signup",
                     "/api/auth/login",
@@ -63,6 +63,10 @@ public class SecurityConfig {
                     "/api/home/video-thumbnails",
                     "/api/home/image-thumbnails",
                     "/api/home/feed",
+                    "/api/faqs",
+                    "/api/faqs/*",
+                    "/api/qna",
+                    "/api/qna/*",
                     "/api/search",
                     "/api/search/suggest",
                     "/api/image-feeds/*",
@@ -70,6 +74,7 @@ public class SecurityConfig {
                     "/api/image-feeds/groups",
                     "/api/image-feeds/groups/*/images"
                 ).permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/qna").permitAll()
 
                 .anyRequest().authenticated()
             )
@@ -85,3 +90,5 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 }
+
+

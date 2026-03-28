@@ -25,7 +25,7 @@ public class MyProfileService {
         boolean includeStats = Boolean.TRUE.equals(request.includeStats());
 
         User user = userRepository.findById(username)
-                .orElseThrow(() -> new IllegalArgumentException("ì¡´ìž¬?˜ì? ?ŠëŠ” ?¬ìš©?? " + username));
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자: " + username));
 
         Stats stats = includeStats ? fetchStats(username) : new Stats(0, 0, 0, 0, 0);
         Settings settings = defaultSettings();
@@ -45,8 +45,7 @@ public class MyProfileService {
     }
 
     private Settings defaultSettings() {
-        // 기본 설정 (푸시 알림 허용, 마케팅 알림 미허용, 기본 언어 ko)
-        return new Settings(true, false, "ko");
+                return new Settings(true, false, "ko");
     }
 
     private Stats fetchStats(String username) {

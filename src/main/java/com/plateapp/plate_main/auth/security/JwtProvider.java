@@ -1,23 +1,22 @@
 // src/main/java/com/plateapp/plate_main/auth/security/JwtProvider.java
 package com.plateapp.plate_main.auth.security;
 
-import java.nio.charset.StandardCharsets;
-import java.security.Key;
-import java.util.Date;
-
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import java.nio.charset.StandardCharsets;
+import java.security.Key;
+import java.util.Date;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 @Component
 public class JwtProvider {
 
     private static final String CLAIM_TOKEN_TYPE = "typ";
+    private static final String CLAIM_ROLE = "role";
     private static final String TYPE_ACCESS = "access";
     private static final String TYPE_REFRESH = "refresh";
 
@@ -31,19 +30,18 @@ public class JwtProvider {
 
     public JwtProvider(@Value("${jwt.secret}") String secret) {
         if (secret == null || secret.isBlank()) {
-            throw new IllegalStateException("jwt.secret 값이 비어있습니다. (최소 32바이트 이상 권장)");
+            throw new IllegalStateException("jwt.secret is empty");
         }
 
-        // HS256은 256bit(32바이트) 이상 키가 사실상 필요함. 짧으면 Keys.hmacShaKeyFor가 예외 던짐.
         byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
         if (bytes.length < 32) {
-            throw new IllegalStateException("jwt.secret 길이가 너무 짧습니다. HS256은 최소 32바이트 이상을 권장합니다.");
+            throw new IllegalStateException("jwt.secret must be at least 32 bytes for HS256");
         }
 
         this.key = Keys.hmacShaKeyFor(bytes);
     }
 
-    public String createAccessToken(String username) {
+    public String createAccessToken(String username, String role) {
         Date now = new Date();
         Date exp = new Date(now.getTime() + accessExpire);
 
@@ -52,7 +50,7 @@ public class JwtProvider {
                 .setIssuedAt(now)
                 .setExpiration(exp)
                 .claim(CLAIM_TOKEN_TYPE, TYPE_ACCESS)
-                // 보통 이 형태가 업데이트에도 안전함
+                .claim(CLAIM_ROLE, role)
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }
@@ -70,7 +68,6 @@ public class JwtProvider {
                 .compact();
     }
 
-    /** ✅ 토큰 파싱: 만료/서명불일치/형식오류 등을 예외로 구분 */
     public Claims parseClaims(String token) throws JwtException, IllegalArgumentException {
         return Jwts.parserBuilder()
                 .setSigningKey(key)
@@ -79,17 +76,16 @@ public class JwtProvider {
                 .getBody();
     }
 
-    /** ✅ access 토큰인지 확인까지 포함 */
     public String getUsernameFromAccessToken(String token) {
-        Claims claims = parseClaims(token);
-        String typ = claims.get(CLAIM_TOKEN_TYPE, String.class);
-        if (!TYPE_ACCESS.equals(typ)) {
-            throw new JwtException("Invalid token type (access required)");
-        }
+        Claims claims = parseAccessClaims(token);
         return claims.getSubject();
     }
 
-    /** ✅ refresh 토큰인지 확인까지 포함 */
+    public String getRoleFromAccessToken(String token) {
+        Claims claims = parseAccessClaims(token);
+        return claims.get(CLAIM_ROLE, String.class);
+    }
+
     public String getUsernameFromRefreshToken(String token) {
         Claims claims = parseClaims(token);
         String typ = claims.get(CLAIM_TOKEN_TYPE, String.class);
@@ -103,7 +99,6 @@ public class JwtProvider {
         return parseClaims(token).getExpiration();
     }
 
-    /** (선택) 단순 boolean이 필요하면 유지해도 됨 */
     public boolean validate(String token) {
         try {
             parseClaims(token);
@@ -115,5 +110,14 @@ public class JwtProvider {
 
     public Key getKey() {
         return key;
+    }
+
+    private Claims parseAccessClaims(String token) {
+        Claims claims = parseClaims(token);
+        String typ = claims.get(CLAIM_TOKEN_TYPE, String.class);
+        if (!TYPE_ACCESS.equals(typ)) {
+            throw new JwtException("Invalid token type (access required)");
+        }
+        return claims;
     }
 }

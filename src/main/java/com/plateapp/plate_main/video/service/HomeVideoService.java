@@ -58,7 +58,6 @@ public class HomeVideoService {
     private final BlockRepository blockRepository;
     private final ReportRepository reportRepository;
 
-    // ??ì¶”ê?
     private final LikeService likeService;
 
     public Page<HomeVideoThumbnailDTO> getHomeVideoThumbnails(
@@ -162,7 +161,7 @@ public class HomeVideoService {
 
     public void saveWatchHistory(VideoWatchHistoryCreateRequest req) {
         if (req.getStoreId() == null) {
-            throw new IllegalArgumentException("storeId???„ìˆ˜?…ë‹ˆ??");
+            throw new IllegalArgumentException("storeId???꾩닔?낅땲??");
         }
 
         String username = req.getUsername();
@@ -183,8 +182,7 @@ public class HomeVideoService {
     }
 
     /**
-     * ?”¹ ?„ì¹˜ ê¸°ë°˜ ?™ì˜???¼ë“œ ì¡°íšŒ (ë°˜ê²½ ê²€??ë²„ì „)
-     * + ?“ê? ??/ ?…ë¡œ???„ë¡œ???´ë?ì§€ / ??ì¢‹ì•„????& ?´ê? ì¢‹ì•„???¬ë? ?¬í•¨
+     * Returns the video feed around the requested place/store context.
      */
     public List<VideoFeedItemDTO> getVideoFeed(
             String username,
@@ -278,7 +276,6 @@ public class HomeVideoService {
                 .commentCount(commentCount)
                 .profileImageUrl(profileImageUrl)
 
-                // ??ì¢‹ì•„??ì£¼ìž…
                 .likeCount(likeCount)
                 .likedByMe(likedByMe)
                 .build();
@@ -287,10 +284,10 @@ public class HomeVideoService {
     private Fp310Place findCenterPlace(String placeId) {
         Fp310Place centerPlace = fp310PlaceRepository
                 .findByPlaceIdAndUseYnAndDeletedAtIsNull(placeId, FLAG_Y)
-                .orElseThrow(() -> new IllegalArgumentException("ì¢Œí‘œ ?•ë³´ë¥?ì°¾ì„ ???†ëŠ” placeId: " + placeId));
+                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 placeId: " + placeId));
 
         if (centerPlace.getLatitude() == null || centerPlace.getLongitude() == null) {
-            throw new IllegalStateException("placeId???„ë„/ê²½ë„ ?•ë³´ê°€ ?†ìŠµ?ˆë‹¤: " + placeId);
+            throw new IllegalStateException("placeId???꾨룄/寃쎈룄 ?뺣낫媛 ?놁뒿?덈떎: " + placeId);
         }
         return centerPlace;
     }
@@ -298,7 +295,7 @@ public class HomeVideoService {
     private Fp300Store findMainStore(Integer storeId) {
         return fp300StoreRepository
                 .findByStoreIdAndUseYnAndOpenYnAndDeletedAtIsNull(storeId, FLAG_Y, FLAG_Y)
-                .orElseThrow(() -> new IllegalArgumentException("ì¡´ìž¬?˜ì? ?ŠëŠ” storeId: " + storeId));
+                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 storeId: " + storeId));
     }
 
     private List<Fp300Store> expandRadiusUntilFilled(Fp310Place centerPlace, Integer excludeStoreId, int limit) {
@@ -331,7 +328,7 @@ public class HomeVideoService {
                 break;
             }
 
-            // 더 이상 새 결과가 없으면 루프 종료
+            // ???댁긽 ??寃곌낵媛 ?놁쑝硫?猷⑦봽 醫낅즺
             if (collected.size() == beforeAdd) {
                 break;
             }

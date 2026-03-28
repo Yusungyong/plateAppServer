@@ -69,25 +69,28 @@ public class AuthController {
 
     @PostMapping("/social/apple")
     public ResponseEntity<ApiResponse<TokenResponse>> appleLogin(
-            @Valid @RequestBody AppleLoginRequest request
+            @Valid @RequestBody AppleLoginRequest request,
+            HttpServletRequest httpRequest
     ) {
-        TokenResponse tokenResponse = socialAuthService.loginWithApple(request);
+        TokenResponse tokenResponse = socialAuthService.loginWithApple(request, extractClientIp(httpRequest));
         return ResponseEntity.ok(ApiResponse.ok(tokenResponse));
     }
 
     @PostMapping("/social/kakao")
     public ResponseEntity<ApiResponse<TokenResponse>> kakaoLogin(
-            @Valid @RequestBody KakaoLoginRequest request
+            @Valid @RequestBody KakaoLoginRequest request,
+            HttpServletRequest httpRequest
     ) {
-        TokenResponse tokenResponse = socialAuthService.loginWithKakao(request);
+        TokenResponse tokenResponse = socialAuthService.loginWithKakao(request, extractClientIp(httpRequest));
         return ResponseEntity.ok(ApiResponse.ok(tokenResponse));
     }
 
     @PostMapping("/social/google")
     public ResponseEntity<ApiResponse<TokenResponse>> googleLogin(
-            @Valid @RequestBody GoogleLoginRequest request
+            @Valid @RequestBody GoogleLoginRequest request,
+            HttpServletRequest httpRequest
     ) {
-        TokenResponse tokenResponse = socialAuthService.loginWithGoogle(request);
+        TokenResponse tokenResponse = socialAuthService.loginWithGoogle(request, extractClientIp(httpRequest));
         return ResponseEntity.ok(ApiResponse.ok(tokenResponse));
     }
 

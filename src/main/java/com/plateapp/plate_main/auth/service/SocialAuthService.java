@@ -33,7 +33,6 @@ import com.plateapp.plate_main.auth.dto.GoogleLoginRequest;
 import com.plateapp.plate_main.auth.dto.KakaoLoginRequest;
 import com.plateapp.plate_main.auth.dto.KakaoUserResponse;
 import com.plateapp.plate_main.auth.dto.TokenResponse;
-import com.plateapp.plate_main.auth.repository.LoginHistoryRepository;
 import com.plateapp.plate_main.auth.repository.SocialAccountRepository;
 import com.plateapp.plate_main.auth.repository.UserRepository;
 import com.plateapp.plate_main.auth.security.JwtProvider;
@@ -56,7 +55,7 @@ public class SocialAuthService {
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
-    private final LoginHistoryRepository loginHistoryRepository;
+    private final LoginHistoryService loginHistoryService;
 
     private volatile AppleJwkSet cachedAppleKeys;
     private volatile Instant appleKeysFetchedAt;
@@ -67,44 +66,48 @@ public class SocialAuthService {
     @Value("${google.client-id}")
     private String googleClientId;
 
-    public TokenResponse loginWithApple(AppleLoginRequest request) {
-        AppleIdTokenPayload payload = parseAndValidateAppleToken(request.getIdentityToken());
-
+    public TokenResponse loginWithApple(AppleLoginRequest request, String ipAddress) {
         String provider = "APPLE";
-        String providerUserId = payload.getSub();
+        try {
+            AppleIdTokenPayload payload = parseAndValidateAppleToken(request.getIdentityToken());
+            String providerUserId = payload.getSub();
 
-        Optional<SocialAccount> socialOpt =
-                socialAccountRepository.findByProviderAndProviderUserId(provider, providerUserId);
+            Optional<SocialAccount> socialOpt =
+                    socialAccountRepository.findByProviderAndProviderUserId(provider, providerUserId);
 
-        User user;
+            User user;
 
-        if (socialOpt.isPresent()) {
-            Integer userId = socialOpt.get().getUserId();
-            user = userRepository.findByUserId(userId)
-                    .orElseThrow(() -> new IllegalStateException("User not found by user_id."));
-        } else {
-            user = createUserForApple(payload);
+            if (socialOpt.isPresent()) {
+                Integer userId = socialOpt.get().getUserId();
+                user = userRepository.findByUserId(userId)
+                        .orElseThrow(() -> new IllegalStateException("User not found by user_id."));
+            } else {
+                user = createUserForApple(payload);
 
-            Integer userId = userRepository.findUserIdByUsername(user.getUsername());
-            if (userId == null) {
-                throw new IllegalStateException("User id not found after create.");
+                Integer userId = userRepository.findUserIdByUsername(user.getUsername());
+                if (userId == null) {
+                    throw new IllegalStateException("User id not found after create.");
+                }
+
+                SocialAccount social = SocialAccount.builder()
+                        .userId(userId)
+                        .provider(provider)
+                        .providerUserId(providerUserId)
+                        .email(payload.getEmail())
+                        .displayName(user.getNickname())
+                        .build();
+
+                socialAccountRepository.save(social);
             }
 
-            SocialAccount social = SocialAccount.builder()
-                    .userId(userId)
-                    .provider(provider)
-                    .providerUserId(providerUserId)
-                    .email(payload.getEmail())
-                    .displayName(user.getNickname())
-                    .build();
-
-            socialAccountRepository.save(social);
+            String accessToken = jwtProvider.createAccessToken(user.getUsername(), normalizeRole(user.getRole()));
+            String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
+            logSocialLogin(user.getUsername(), "SUCCESS", null, ipAddress);
+            return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
+        } catch (RuntimeException e) {
+            logSocialLogin(extractSocialUsername(request.getUser(), provider), "FAIL", provider + "_LOGIN_FAILED", ipAddress);
+            throw e;
         }
-
-        String accessToken = jwtProvider.createAccessToken(user.getUsername());
-        String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
-
-        return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
     }
 
     private AppleIdTokenPayload parseAndValidateAppleToken(String identityToken) {
@@ -237,56 +240,60 @@ public class SocialAuthService {
         );
     }
 
-    public TokenResponse loginWithKakao(KakaoLoginRequest request) {
-        if (request.getAccessToken() == null || request.getAccessToken().isBlank()) {
-            throw new IllegalArgumentException("accessToken is empty.");
-        }
-
-        KakaoUserResponse kakaoUser = getKakaoUserInfo(request.getAccessToken());
-
+    public TokenResponse loginWithKakao(KakaoLoginRequest request, String ipAddress) {
         String provider = "KAKAO";
-        String providerUserId = String.valueOf(kakaoUser.getId());
-
-        var socialOpt =
-                socialAccountRepository.findByProviderAndProviderUserId(provider, providerUserId);
-
-        User user;
-
-        if (socialOpt.isPresent()) {
-            Integer userId = socialOpt.get().getUserId();
-            user = userRepository.findByUserId(userId)
-                    .orElseThrow(() -> new IllegalStateException("User not found by user_id."));
-        } else {
-            user = createUserForKakao(kakaoUser);
-
-            Integer userId = userRepository.findUserIdByUsername(user.getUsername());
-            if (userId == null) {
-                throw new IllegalStateException("User id not found after create.");
+        try {
+            if (request.getAccessToken() == null || request.getAccessToken().isBlank()) {
+                throw new IllegalArgumentException("accessToken is empty.");
             }
 
-            String email = kakaoUser.getKakaoAccount() != null
-                    ? kakaoUser.getKakaoAccount().getEmail()
-                    : null;
-            String nickname = (kakaoUser.getKakaoAccount() != null &&
-                    kakaoUser.getKakaoAccount().getProfile() != null)
-                    ? kakaoUser.getKakaoAccount().getProfile().getNickname()
-                    : null;
+            KakaoUserResponse kakaoUser = getKakaoUserInfo(request.getAccessToken());
+            String providerUserId = String.valueOf(kakaoUser.getId());
 
-            SocialAccount social = SocialAccount.builder()
-                    .userId(userId)
-                    .provider(provider)
-                    .providerUserId(providerUserId)
-                    .email(email)
-                    .displayName(nickname)
-                    .build();
+            var socialOpt =
+                    socialAccountRepository.findByProviderAndProviderUserId(provider, providerUserId);
 
-            socialAccountRepository.save(social);
+            User user;
+
+            if (socialOpt.isPresent()) {
+                Integer userId = socialOpt.get().getUserId();
+                user = userRepository.findByUserId(userId)
+                        .orElseThrow(() -> new IllegalStateException("User not found by user_id."));
+            } else {
+                user = createUserForKakao(kakaoUser);
+
+                Integer userId = userRepository.findUserIdByUsername(user.getUsername());
+                if (userId == null) {
+                    throw new IllegalStateException("User id not found after create.");
+                }
+
+                String email = kakaoUser.getKakaoAccount() != null
+                        ? kakaoUser.getKakaoAccount().getEmail()
+                        : null;
+                String nickname = (kakaoUser.getKakaoAccount() != null &&
+                        kakaoUser.getKakaoAccount().getProfile() != null)
+                        ? kakaoUser.getKakaoAccount().getProfile().getNickname()
+                        : null;
+
+                SocialAccount social = SocialAccount.builder()
+                        .userId(userId)
+                        .provider(provider)
+                        .providerUserId(providerUserId)
+                        .email(email)
+                        .displayName(nickname)
+                        .build();
+
+                socialAccountRepository.save(social);
+            }
+
+            String accessToken = jwtProvider.createAccessToken(user.getUsername(), normalizeRole(user.getRole()));
+            String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
+            logSocialLogin(user.getUsername(), "SUCCESS", null, ipAddress);
+            return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
+        } catch (RuntimeException e) {
+            logSocialLogin(null, "FAIL", provider + "_LOGIN_FAILED", ipAddress);
+            throw e;
         }
-
-        String accessToken = jwtProvider.createAccessToken(user.getUsername());
-        String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
-
-        return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
     }
 
     private KakaoUserResponse getKakaoUserInfo(String accessToken) {
@@ -339,54 +346,79 @@ public class SocialAuthService {
         );
     }
 
-    public TokenResponse loginWithGoogle(GoogleLoginRequest request) {
-        if (request.getIdToken() == null || request.getIdToken().isBlank()) {
-            throw new IllegalArgumentException("Google idToken is empty.");
-        }
-        if (googleClientId == null || googleClientId.isBlank()) {
-            throw new IllegalStateException("google.client-id is not configured.");
-        }
-
-        GoogleIdTokenPayload payload = parseAndValidateGoogleToken(request.getIdToken());
-
+    public TokenResponse loginWithGoogle(GoogleLoginRequest request, String ipAddress) {
         String provider = "GOOGLE";
-        String providerUserId = payload.getSub();
-
-        var socialOpt =
-                socialAccountRepository.findByProviderAndProviderUserId(provider, providerUserId);
-
-        User user;
-
-        if (socialOpt.isPresent()) {
-            Integer userId = socialOpt.get().getUserId();
-            user = userRepository.findByUserId(userId)
-                    .orElseThrow(() -> new IllegalStateException("User not found by user_id."));
-        } else {
-            user = createUserForGoogle(payload);
-
-            Integer userId = userRepository.findUserIdByUsername(user.getUsername());
-            if (userId == null) {
-                throw new IllegalStateException("User id not found after create.");
+        try {
+            if (request.getIdToken() == null || request.getIdToken().isBlank()) {
+                throw new IllegalArgumentException("Google idToken is empty.");
+            }
+            if (googleClientId == null || googleClientId.isBlank()) {
+                throw new IllegalStateException("google.client-id is not configured.");
             }
 
-            String email = payload.getEmail();
-            String name = payload.getName();
+            GoogleIdTokenPayload payload = parseAndValidateGoogleToken(request.getIdToken());
+            String providerUserId = payload.getSub();
 
-            SocialAccount social = SocialAccount.builder()
-                    .userId(userId)
-                    .provider(provider)
-                    .providerUserId(providerUserId)
-                    .email(email)
-                    .displayName(name)
-                    .build();
+            var socialOpt =
+                    socialAccountRepository.findByProviderAndProviderUserId(provider, providerUserId);
 
-            socialAccountRepository.save(social);
+            User user;
+
+            if (socialOpt.isPresent()) {
+                Integer userId = socialOpt.get().getUserId();
+                user = userRepository.findByUserId(userId)
+                        .orElseThrow(() -> new IllegalStateException("User not found by user_id."));
+            } else {
+                user = createUserForGoogle(payload);
+
+                Integer userId = userRepository.findUserIdByUsername(user.getUsername());
+                if (userId == null) {
+                    throw new IllegalStateException("User id not found after create.");
+                }
+
+                String email = payload.getEmail();
+                String name = payload.getName();
+
+                SocialAccount social = SocialAccount.builder()
+                        .userId(userId)
+                        .provider(provider)
+                        .providerUserId(providerUserId)
+                        .email(email)
+                        .displayName(name)
+                        .build();
+
+                socialAccountRepository.save(social);
+            }
+
+            String accessToken = jwtProvider.createAccessToken(user.getUsername(), normalizeRole(user.getRole()));
+            String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
+            logSocialLogin(user.getUsername(), "SUCCESS", null, ipAddress);
+            return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
+        } catch (RuntimeException e) {
+            logSocialLogin(null, "FAIL", provider + "_LOGIN_FAILED", ipAddress);
+            throw e;
         }
+    }
 
-        String accessToken = jwtProvider.createAccessToken(user.getUsername());
-        String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
+    private void logSocialLogin(String username, String status, String failReason, String ipAddress) {
+        loginHistoryService.log(
+                username != null && !username.isBlank() ? username : "social-user",
+                status,
+                failReason,
+                ipAddress,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+    }
 
-        return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
+    private String extractSocialUsername(String socialUser, String provider) {
+        if (socialUser != null && !socialUser.isBlank()) {
+            return socialUser;
+        }
+        return provider.toLowerCase() + "-social-user";
     }
 
     private GoogleIdTokenPayload parseAndValidateGoogleToken(String idToken) {
@@ -458,6 +490,13 @@ public class SocialAuthService {
             candidate = trimmedBase + s;
         }
         return candidate;
+    }
+
+    private String normalizeRole(String role) {
+        if (role == null || role.isBlank()) {
+            return "USR";
+        }
+        return role.trim().toUpperCase();
     }
 
     private static class AppleJwkSet {

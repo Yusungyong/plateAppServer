@@ -35,8 +35,7 @@ public class ImageFeedService {
   private final BlockRepository blockRepository;
   private final ReportRepository reportRepository;
 
-  // ✅ 추가
-  private final ImageFeedContextQueryRepository contextQueryRepository;
+    private final ImageFeedContextQueryRepository contextQueryRepository;
 
   public ImageFeedService(
     ImageFeedRepository imageFeedRepository,
@@ -63,7 +62,7 @@ public class ImageFeedService {
 
     Set<String> excluded = loadExcludedUsernames(username);
     if (feed.getUsername() != null && excluded.contains(feed.getUsername())) {
-      throw new AppException(ErrorCode.COMMON_NOT_FOUND, "?¼ë“œë¥?ì°¾ì„ ???†ìŠµ?ˆë‹¤.");
+      throw new AppException(ErrorCode.COMMON_NOT_FOUND, "피드를 찾을 수 없습니다.");
     }
 
     Fp100User writer = feed.getWriter();
@@ -110,8 +109,7 @@ public class ImageFeedService {
     );
   }
 
-  // ✅ 추가: 주변 피드ID 스트립
-  @Transactional(readOnly = true)
+    @Transactional(readOnly = true)
   public ImageFeedContextResponse getContext(Integer baseFeedId, Integer radiusM, Integer limit, String username) {
     if (baseFeedId == null || baseFeedId <= 0) {
       throw new AppException(ErrorCode.COMMON_INVALID_INPUT, "baseFeedId가 올바르지 않습니다.");
@@ -128,11 +126,11 @@ public class ImageFeedService {
     }
 
     Fp400ImageFeed baseFeed = imageFeedRepository.findByFeedIdAndUseYn(baseFeedId, "Y")
-      .orElseThrow(() -> new AppException(ErrorCode.COMMON_NOT_FOUND, "?¼ë“œë¥?ì°¾ì„ ???†ìŠµ?ˆë‹¤."));
+      .orElseThrow(() -> new AppException(ErrorCode.COMMON_NOT_FOUND, "피드를 찾을 수 없습니다."));
 
     Set<String> excluded = loadExcludedUsernames(username);
     if (baseFeed.getUsername() != null && excluded.contains(baseFeed.getUsername())) {
-      throw new AppException(ErrorCode.COMMON_NOT_FOUND, "?¼ë“œë¥?ì°¾ì„ ???†ìŠµ?ˆë‹¤.");
+      throw new AppException(ErrorCode.COMMON_NOT_FOUND, "피드를 찾을 수 없습니다.");
     }
 
     ImageFeedContextQueryRepository.LatLng base = contextQueryRepository.findBaseLatLng(baseFeedId)

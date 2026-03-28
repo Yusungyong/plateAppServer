@@ -1,4 +1,4 @@
-# PlateApp Frontend API Endpoints
+﻿# PlateApp Frontend API Endpoints
 
 All endpoints are relative to `API_BASE_URL` and already include the `/api` prefix.
 
@@ -37,6 +37,8 @@ async function api(path, options = {}) {
 - POST `/api/auth/reset-password`
 - GET `/api/me`
 
+See also: [docs/web-login-guide.md](/workspace/plate-main/docs/web-login-guide.md)
+
 ## Blocks
 
 - POST `/api/blocks`
@@ -52,6 +54,245 @@ async function api(path, options = {}) {
 ## Health
 
 - GET `/api/health`
+
+## FAQs
+
+- GET `/api/faqs`
+- GET `/api/faqs/{faqId}`
+- POST `/api/faqs`
+- PATCH `/api/faqs/{faqId}`
+- DELETE `/api/faqs/{faqId}`
+
+### FAQ list
+
+`GET /api/faqs`
+
+Query params
+- `category` (string, optional)
+- `keyword` (string, optional, title search)
+- `page` (number, optional, default 0)
+- `size` (number, optional, default 10)
+
+Example request
+```js
+export async function fetchFaqs({ category, keyword, page = 0, size = 10 } = {}) {
+  const params = new URLSearchParams();
+  if (category) params.set("category", category);
+  if (keyword) params.set("keyword", keyword);
+  params.set("page", String(page));
+  params.set("size", String(size));
+
+  return api(`/api/faqs?${params.toString()}`);
+}
+```
+
+Example response
+```json
+{
+  "content": [
+    {
+      "faqId": 12,
+      "category": "account",
+      "title": "How do I reset my password?",
+      "answer": "Use the password reset menu from the login screen.",
+      "username": "admin",
+      "isPinned": true,
+      "viewCount": 128,
+      "displayOrder": 1,
+      "statusCode": "published",
+      "createdAt": "2026-03-22T10:00:00",
+      "updatedAt": "2026-03-22T10:00:00"
+    }
+  ],
+  "page": 0,
+  "size": 10,
+  "totalElements": 25,
+  "totalPages": 3,
+  "hasNext": true
+}
+```
+
+Frontend usage
+```js
+const faqPage = await fetchFaqs({ category: "account", keyword: "password" });
+
+faqPage.content.forEach((faq) => {
+  console.log(faq.title);
+  console.log(faq.answer);
+});
+```
+
+### FAQ detail
+
+`GET /api/faqs/{faqId}`
+
+Notes
+- Detail response shape is the same as a single FAQ item in the list.
+- `viewCount` is increased when this API is called.
+
+Example request
+```js
+export async function fetchFaqDetail(faqId) {
+  return api(`/api/faqs/${faqId}`);
+}
+```
+
+Example response
+```json
+{
+  "faqId": 12,
+  "category": "account",
+  "title": "How do I reset my password?",
+  "answer": "Use the password reset menu from the login screen.",
+  "username": "admin",
+  "isPinned": true,
+  "viewCount": 129,
+  "displayOrder": 1,
+  "statusCode": "published",
+  "createdAt": "2026-03-22T10:00:00",
+  "updatedAt": "2026-03-22T10:00:00"
+}
+```
+
+Accordion-style example
+```js
+const faqList = await fetchFaqs({ page: 0, size: 10 });
+
+const items = faqList.content.map((faq) => ({
+  id: faq.faqId,
+  label: `[${faq.category}] ${faq.title}`,
+  content: faq.answer,
+  meta: {
+    username: faq.username,
+    viewCount: faq.viewCount,
+    updatedAt: faq.updatedAt,
+    isPinned: faq.isPinned
+  }
+}));
+```
+
+### FAQ create
+
+`POST /api/faqs`
+
+Headers
+- `Authorization: Bearer {accessToken}`
+- admin token required
+
+Request body
+```json
+{
+  "category": "notice",
+  "title": "Service usage guide",
+  "answer": "FAQ content goes here.",
+  "isPinned": true,
+  "displayOrder": 1,
+  "statusCode": "published"
+}
+```
+
+Example request
+```js
+export async function createFaq(payload, accessToken) {
+  return api("/api/faqs", {
+    method: "POST",
+    token: accessToken,
+    body: JSON.stringify(payload)
+  });
+}
+```
+
+Example response
+```json
+{
+  "faqId": 101,
+  "category": "notice",
+  "title": "Service usage guide",
+  "answer": "FAQ content goes here.",
+  "username": "admin",
+  "isPinned": true,
+  "viewCount": 0,
+  "displayOrder": 1,
+  "statusCode": "published",
+  "createdAt": "2026-03-28T18:00:00",
+  "updatedAt": "2026-03-28T18:00:00"
+}
+```
+
+### FAQ update
+
+`PATCH /api/faqs/{faqId}`
+
+Headers
+- `Authorization: Bearer {accessToken}`
+- admin token required
+
+Request body
+```json
+{
+  "category": "notice",
+  "title": "Updated guide title",
+  "answer": "Updated FAQ content.",
+  "isPinned": false,
+  "displayOrder": 2,
+  "statusCode": "published"
+}
+```
+
+Example request
+```js
+export async function updateFaq(faqId, payload, accessToken) {
+  return api(`/api/faqs/${faqId}`, {
+    method: "PATCH",
+    token: accessToken,
+    body: JSON.stringify(payload)
+  });
+}
+```
+
+Example response
+```json
+{
+  "faqId": 101,
+  "category": "notice",
+  "title": "Updated guide title",
+  "answer": "Updated FAQ content.",
+  "username": "admin",
+  "isPinned": false,
+  "viewCount": 15,
+  "displayOrder": 2,
+  "statusCode": "published",
+  "createdAt": "2026-03-28T18:00:00",
+  "updatedAt": "2026-03-28T18:30:00"
+}
+```
+
+### FAQ delete
+
+`DELETE /api/faqs/{faqId}`
+
+Headers
+- `Authorization: Bearer {accessToken}`
+- admin token required
+
+Example request
+```js
+export async function deleteFaq(faqId, accessToken) {
+  const res = await fetch(`${API_BASE_URL}/api/faqs/${faqId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+}
+```
+
+Response
+- `204 No Content`
 
 ## Search
 
@@ -178,8 +419,8 @@ Response (list)
       "notificationId": 123,
       "userId": 45,
       "type": "COMMENT",
-      "title": "새 댓글",
-      "message": "홍길동님이 댓글을 남겼습니다.",
+      "title": "???볤?",
+      "message": "?띻만?숇떂???볤????④꼈?듬땲??",
       "targetType": "post",
       "targetId": 987,
       "isRead": false,
@@ -337,3 +578,300 @@ Notification `type` (string enum)
 - GET `/api/watch-history`
 - GET `/api/videos/{storeId}/watch-info`
 - GET `/api/videos/{storeId}/watch-stats`
+
+## QnA
+
+- GET `/api/qna`
+- GET `/api/qna/{qnaId}`
+- POST `/api/qna`
+- PATCH `/api/qna/{qnaId}`
+
+### QnA list
+
+`GET /api/qna`
+
+Query params
+- `category` (string, optional)
+- `statusCode` (string, optional, admin only)
+- `page` (number, optional, default 0)
+- `size` (number, optional, default 10)
+
+Example request
+```js
+export async function fetchQna({ category, page = 0, size = 10 } = {}) {
+  const params = new URLSearchParams();
+  if (category) params.set("category", category);
+  params.set("page", String(page));
+  params.set("size", String(size));
+
+  return api(`/api/qna?${params.toString()}`);
+}
+```
+
+Example response
+```json
+{
+  "content": [
+    {
+      "qnaId": 21,
+      "username": null,
+      "guestName": "홍길동",
+      "guestEmail": null,
+      "category": "이용문의",
+      "question": "콘텐츠 검수 결과는 어디에서 확인할 수 있나요?",
+      "answer": "현재는 고객지원 메뉴 안에서 검수 흐름을 확인할 수 있습니다.",
+      "statusCode": "answered",
+      "isPublic": true,
+      "createdAt": "2026-03-28T13:00:00",
+      "updatedAt": "2026-03-28T15:00:00",
+      "answeredAt": "2026-03-28T15:00:00"
+    }
+  ],
+  "page": 0,
+  "size": 10,
+  "totalElements": 12,
+  "totalPages": 2,
+  "hasNext": true
+}
+```
+
+### QnA detail
+
+`GET /api/qna/{qnaId}`
+
+Notes
+- detail shape is the same as a single list item
+- public response hides `guestEmail`
+- admin can receive full detail including `guestEmail`
+
+Example request
+```js
+export async function fetchQnaDetail(qnaId) {
+  return api(`/api/qna/${qnaId}`);
+}
+```
+
+### QnA create
+
+`POST /api/qna`
+
+Notes
+- login is not required
+- if logged in, backend fills `username` from token
+- if not logged in, frontend should send `guestName` or `guestEmail`
+
+Request body
+```json
+{
+  "guestName": "홍길동",
+  "guestEmail": "guest@example.com",
+  "category": "이용문의",
+  "question": "문의하실 내용을 자세히 남겨 주세요.",
+  "isPublic": true
+}
+```
+
+Example request
+```js
+export async function createQna(payload, accessToken) {
+  return api("/api/qna", {
+    method: "POST",
+    token: accessToken,
+    body: JSON.stringify(payload)
+  });
+}
+```
+
+Example response
+```json
+{
+  "qnaId": 21,
+  "username": null,
+  "guestName": "홍길동",
+  "guestEmail": "guest@example.com",
+  "category": "이용문의",
+  "question": "문의하실 내용을 자세히 남겨 주세요.",
+  "answer": null,
+  "statusCode": "received",
+  "isPublic": true,
+  "createdAt": "2026-03-28T13:00:00",
+  "updatedAt": "2026-03-28T13:00:00",
+  "answeredAt": null
+}
+```
+
+### QnA answer/update
+
+`PATCH /api/qna/{qnaId}`
+
+Notes
+- admin only
+
+Request body
+```json
+{
+  "answer": "현재는 고객지원 메뉴 안에서 검수 흐름을 확인할 수 있습니다.",
+  "statusCode": "answered",
+  "isPublic": true
+}
+```
+
+Example request
+```js
+export async function updateQna(qnaId, payload, accessToken) {
+  return api(`/api/qna/${qnaId}`, {
+    method: "PATCH",
+    token: accessToken,
+    body: JSON.stringify(payload)
+  });
+}
+```
+
+## Member Monitoring
+
+Admin-only endpoints
+- GET `/api/admin/member-monitoring/summary`
+- GET `/api/admin/member-monitoring/login-risks`
+- GET `/api/admin/member-monitoring/profile-changes`
+- GET `/api/admin/member-monitoring/risk-users`
+
+Headers
+- `Authorization: Bearer {accessToken}`
+- admin token required (`ROLE_ADMIN`)
+
+### Summary
+
+`GET /api/admin/member-monitoring/summary`
+
+Example request
+```js
+export async function fetchMemberMonitoringSummary(accessToken) {
+  return api("/api/admin/member-monitoring/summary", {
+    token: accessToken
+  });
+}
+```
+
+Example response
+```json
+{
+  "totalUsers": 148320,
+  "newUsersToday": 126,
+  "activeUsers7d": 24981,
+  "loginFailureRateToday": 3.8,
+  "pendingRoleChanges": 7,
+  "riskUsers24h": 12
+}
+```
+
+### Login risks
+
+`GET /api/admin/member-monitoring/login-risks`
+
+Query params
+- `limit` (number, optional, default 20)
+
+Example request
+```js
+export async function fetchMemberLoginRisks(accessToken, { limit = 20 } = {}) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  return api(`/api/admin/member-monitoring/login-risks?${params.toString()}`, {
+    token: accessToken
+  });
+}
+```
+
+Example response
+```json
+{
+  "items": [
+    {
+      "username": "guest_8821",
+      "riskType": "LOGIN_FAILURE_BURST",
+      "riskLabel": "Repeated login failures",
+      "detail": "11 failed attempts in the last 24 hours, same IP 203.241.10.7",
+      "ipAddress": "203.241.10.7",
+      "deviceId": "web-browser",
+      "score": 91,
+      "lastOccurredAt": "2026-03-28T15:48:00"
+    }
+  ]
+}
+```
+
+### Profile changes
+
+`GET /api/admin/member-monitoring/profile-changes`
+
+Query params
+- `limit` (number, optional, default 20)
+
+Example request
+```js
+export async function fetchMemberProfileChanges(accessToken, { limit = 20 } = {}) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  return api(`/api/admin/member-monitoring/profile-changes?${params.toString()}`, {
+    token: accessToken
+  });
+}
+```
+
+Example response
+```json
+{
+  "items": [
+    {
+      "historyId": 991,
+      "username": "review_manager",
+      "changedField": "권한",
+      "actor": "system",
+      "createdAt": "2026-03-28T15:42:00"
+    }
+  ]
+}
+```
+
+### Risk users
+
+`GET /api/admin/member-monitoring/risk-users`
+
+Query params
+- `limit` (number, optional, default 20)
+
+Example request
+```js
+export async function fetchMemberRiskUsers(accessToken, { limit = 20 } = {}) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  return api(`/api/admin/member-monitoring/risk-users?${params.toString()}`, {
+    token: accessToken
+  });
+}
+```
+
+Example response
+```json
+{
+  "items": [
+    {
+      "username": "spam_guest_1",
+      "reportCount": 6,
+      "blockedCount": 14,
+      "recentActivityLabel": "18 image feed posts in the last 24 hours",
+      "recommendedAction": "Immediate account review",
+      "score": 94
+    }
+  ]
+}
+```
+
+Frontend usage
+```js
+const [summary, loginRisks, profileChanges, riskUsers] = await Promise.all([
+  fetchMemberMonitoringSummary(accessToken),
+  fetchMemberLoginRisks(accessToken, { limit: 20 }),
+  fetchMemberProfileChanges(accessToken, { limit: 20 }),
+  fetchMemberRiskUsers(accessToken, { limit: 20 })
+]);
+```
+
+

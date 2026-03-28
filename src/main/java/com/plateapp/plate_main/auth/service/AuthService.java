@@ -86,7 +86,7 @@ public class AuthService {
                 throw new AuthException(ErrorCode.AUTH_UNAUTHORIZED, loginFailMessage);
             }
 
-            String accessToken = jwtProvider.createAccessToken(username);
+            String accessToken = jwtProvider.createAccessToken(username, normalizeRole(user.getRole()));
             String refreshToken = jwtProvider.createRefreshToken(username);
 
             Date refreshExpDate = jwtProvider.getExpiration(refreshToken);
@@ -153,7 +153,10 @@ public class AuthService {
             throw new AuthException(ErrorCode.AUTH_REFRESH_INVALID);
         }
 
-        String newAccess = jwtProvider.createAccessToken(username);
+        User user = userRepository.findById(username)
+                .orElseThrow(() -> new AuthException(ErrorCode.USER_NOT_FOUND));
+
+        String newAccess = jwtProvider.createAccessToken(username, normalizeRole(user.getRole()));
         String newRefresh = jwtProvider.createRefreshToken(username);
 
         Date refreshExpDate = jwtProvider.getExpiration(newRefresh);
@@ -167,4 +170,11 @@ public class AuthService {
     }
 
     public record AuthTokens(String accessToken, String refreshToken) {}
+
+    private String normalizeRole(String role) {
+        if (role == null || role.isBlank()) {
+            return "USR";
+        }
+        return role.trim().toUpperCase();
+    }
 }

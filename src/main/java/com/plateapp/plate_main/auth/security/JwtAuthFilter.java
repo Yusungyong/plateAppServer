@@ -1,9 +1,15 @@
 // src/main/java/com/plateapp/plate_main/auth/security/JwtAuthFilter.java
 package com.plateapp.plate_main.auth.security;
 
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Collections;
-
+import java.util.Locale;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -12,13 +18,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
-
-import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.JwtException;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 
 @Component
@@ -34,27 +33,25 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     public static final String AUTH_ERROR_INVALID = "TOKEN_INVALID";
 
     private static final String[] PUBLIC_PATHS = {
-            // 공개 API
             "/auth/**",
             "/email/**",
-
-            // Swagger/OpenAPI (permitAll과 일치시키는 게 안전)
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
             "/swagger-ui/index.html"
-            // 필요시
-            // "/webjars/**"
     };
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        // ✅ 프리플라이트는 JWT 로직을 타지 않게 (깔끔)
-        if (HttpMethod.OPTIONS.matches(request.getMethod())) return true;
+        if (HttpMethod.OPTIONS.matches(request.getMethod())) {
+            return true;
+        }
 
         String path = request.getServletPath();
         for (String pattern : PUBLIC_PATHS) {
-            if (PATH_MATCHER.match(pattern, path)) return true;
+            if (PATH_MATCHER.match(pattern, path)) {
+                return true;
+            }
         }
         return false;
     }
@@ -75,7 +72,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         String token = auth.substring(7).trim();
         if (token.isEmpty()) {
-            // 빈 토큰은 무효로 처리
             SecurityContextHolder.clearContext();
             request.setAttribute(AUTH_ERROR_ATTR, AUTH_ERROR_INVALID);
             filterChain.doFilter(request, response);
@@ -83,14 +79,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         try {
-        	String username = jwtProvider.getUsernameFromAccessToken(token);
+            String username = jwtProvider.getUsernameFromAccessToken(token);
+            String role = jwtProvider.getRoleFromAccessToken(token);
 
-            // ✅ 권한은 ROLE_ prefix 권장 (추후 @PreAuthorize/hasRole 대비)
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(
                             username,
                             null,
-                            Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"))
+                            Collections.singletonList(new SimpleGrantedAuthority(toAuthority(role)))
                     );
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -104,5 +100,22 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private String toAuthority(String role) {
+        if (role == null || role.isBlank()) {
+            return "ROLE_USER";
+        }
+
+        String normalized = role.trim().toUpperCase(Locale.ROOT);
+        if (normalized.startsWith("ROLE_")) {
+            return normalized;
+        }
+
+        return switch (normalized) {
+            case "ADM", "ADMIN", "993" -> "ROLE_ADMIN";
+            case "USR", "USER" -> "ROLE_USER";
+            default -> "ROLE_" + normalized;
+        };
     }
 }
