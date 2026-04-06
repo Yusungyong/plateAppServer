@@ -171,6 +171,40 @@ public class S3UploadService {
         return imagePrefix;
     }
 
+    public String toStoredVideoPath(String objectUrlOrKey) {
+        String key = extractKey(objectUrlOrKey);
+        if (key == null || key.isBlank()) {
+            return objectUrlOrKey;
+        }
+        if (key.startsWith(videoPrefix)) {
+            return key.substring(videoPrefix.length());
+        }
+        return key;
+    }
+
+    public String toVideoUrl(String storedPath) {
+        if (storedPath == null || storedPath.isBlank()) {
+            return storedPath;
+        }
+        if (storedPath.contains("://")) {
+            return storedPath;
+        }
+        String key = storedPath.startsWith(videoPrefix) ? storedPath : videoPrefix + storedPath;
+        return buildPublicUrl(key);
+    }
+
+    public void deleteVideoObject(String storedPath) {
+        if (storedPath == null || storedPath.isBlank()) {
+            return;
+        }
+        if (storedPath.contains("://")) {
+            deleteObjectByUrl(storedPath);
+            return;
+        }
+        String key = storedPath.startsWith(videoPrefix) ? storedPath : videoPrefix + storedPath;
+        deleteObjectByKey(key);
+    }
+
     private String buildKeyWithPrefix(String prefix, String filename) {
         String datePrefix = LocalDate.now().toString();
         String uuid = UUID.randomUUID().toString().replace("-", "");

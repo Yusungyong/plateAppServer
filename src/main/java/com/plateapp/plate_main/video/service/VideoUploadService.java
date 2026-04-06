@@ -76,7 +76,7 @@ public class VideoUploadService {
             store.setStoreId(newId.intValue());
         }
         store.setTitle(storeName);
-        store.setFileName(media.fileUrl);
+        store.setFileName(s3UploadService.toStoredVideoPath(media.fileUrl));
         store.setAddress(address);
         store.setUsername(username);
         store.setCreatedAt(LocalDate.now());
@@ -94,7 +94,7 @@ public class VideoUploadService {
 
         return VideoUploadResponse.builder()
                 .storeId(saved.getStoreId())
-                .fileName(saved.getFileName())
+                .fileName(s3UploadService.toVideoUrl(saved.getFileName()))
                 .thumbnail(saved.getThumbnail())
                 .videoDuration(saved.getVideoDuration())
                 .videoSize(saved.getVideoSize() != null ? saved.getVideoSize().longValue() : null)
@@ -133,20 +133,20 @@ public class VideoUploadService {
         store.setOpenYn(nextOpenYn);
         store.setUseYn(nextUseYn);
         store.setMuteYn(nextMuteYn);
-        store.setFileName(media.fileUrl);
+        store.setFileName(s3UploadService.toStoredVideoPath(media.fileUrl));
         store.setThumbnail(media.thumbnailUrl);
         store.setVideoDuration(media.durationSeconds);
         store.setVideoSize(java.math.BigDecimal.valueOf(media.size));
         store.setUpdatedAt(LocalDate.now());
 
         fp300StoreRepository.save(store);
-        s3UploadService.deleteObjectByUrl(oldFile);
+        s3UploadService.deleteVideoObject(oldFile);
         s3UploadService.deleteObjectByUrl(oldThumb);
         upsertPlace(placeId, address, lat, lng);
 
         return VideoUpdateResponse.builder()
                 .storeId(store.getStoreId())
-                .fileName(store.getFileName())
+                .fileName(s3UploadService.toVideoUrl(store.getFileName()))
                 .thumbnail(store.getThumbnail())
                 .videoDuration(store.getVideoDuration())
                 .videoSize(store.getVideoSize() != null ? store.getVideoSize().longValue() : null)
@@ -187,7 +187,7 @@ public class VideoUploadService {
     public void deleteVideo(Integer storeId, String username) {
         Fp300Store store = findOwnedStore(storeId, username);
 
-        s3UploadService.deleteObjectByUrl(store.getFileName());
+        s3UploadService.deleteVideoObject(store.getFileName());
         s3UploadService.deleteObjectByUrl(store.getThumbnail());
 
         List<Integer> commentIds = commentRepository.findIdsByStoreId(storeId);

@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 
 import com.plateapp.plate_main.common.error.AppException;
 import com.plateapp.plate_main.common.error.ErrorCode;
+import com.plateapp.plate_main.common.s3.S3UploadService;
 import com.plateapp.plate_main.block.repository.BlockRepository;
 import com.plateapp.plate_main.report.repository.ReportRepository;
 import com.plateapp.plate_main.like.service.LikeService;
@@ -59,6 +60,7 @@ public class HomeVideoService {
     private final ReportRepository reportRepository;
 
     private final LikeService likeService;
+    private final S3UploadService s3UploadService;
 
     public Page<HomeVideoThumbnailDTO> getHomeVideoThumbnails(
             int page,
@@ -124,7 +126,7 @@ public class HomeVideoService {
         return HomeVideoThumbnailDTO.builder()
                 .storeId(e.getStoreId())
                 .title(e.getTitle())
-                .fileName(e.getFileName())
+                .fileName(s3UploadService.toVideoUrl(e.getFileName()))
                 .thumbnail(e.getThumbnail())
                 .videoDuration(e.getVideoDuration())
                 .muteYn(e.getMuteYn())
@@ -267,7 +269,7 @@ public class HomeVideoService {
                 .title(title)
                 .storeName(store.getStoreName())
                 .address(store.getAddress())
-                .fileName(store.getFileName())
+                .fileName(s3UploadService.toVideoUrl(store.getFileName()))
                 .thumbnail(store.getThumbnail())
                 .videoDuration(store.getVideoDuration())
                 .createdAt(store.getCreatedAt())

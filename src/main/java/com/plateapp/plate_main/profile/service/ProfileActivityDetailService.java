@@ -1,5 +1,6 @@
 package com.plateapp.plate_main.profile.service;
 
+import com.plateapp.plate_main.common.s3.S3UploadService;
 import com.plateapp.plate_main.profile.dto.LikedContentDtos.LikedImageItem;
 import com.plateapp.plate_main.profile.dto.LikedContentDtos.LikedVideoItem;
 import com.plateapp.plate_main.profile.dto.ProfileActivityDetailItems.ImageItem;
@@ -26,6 +27,7 @@ public class ProfileActivityDetailService {
     private static final int LIMIT_MAX = 100;
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
+    private final S3UploadService s3UploadService;
 
     private record LikedEntry(Integer id, LocalDateTime likedAt) {}
 
@@ -351,7 +353,7 @@ public class ProfileActivityDetailService {
                     rs.getInt("store_id"),
                     rs.getString("title"),
                     rs.getString("thumbnail"),
-                    rs.getString("file_name"),
+                    s3UploadService.toVideoUrl(rs.getString("file_name")),
                     (Integer) rs.getObject("video_duration"),
                     rs.getString("place_id"),
                     rs.getString("store_name"),

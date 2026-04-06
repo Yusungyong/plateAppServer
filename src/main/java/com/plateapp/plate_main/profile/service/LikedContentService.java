@@ -1,5 +1,6 @@
 package com.plateapp.plate_main.profile.service;
 
+import com.plateapp.plate_main.common.s3.S3UploadService;
 import com.plateapp.plate_main.profile.dto.LikedContentDtos.LikedImageItem;
 import com.plateapp.plate_main.profile.dto.LikedContentDtos.LikedVideoItem;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ import java.util.List;
 public class LikedContentService {
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
+    private final S3UploadService s3UploadService;
 
     @Transactional(readOnly = true)
     public List<LikedVideoItem> findLikedVideos(String username, int limit, int offset) {
@@ -49,7 +51,7 @@ public class LikedContentService {
                 rs.getInt("store_id"),
                 rs.getString("title"),
                 rs.getString("thumbnail"),
-                rs.getString("file_name"),
+                s3UploadService.toVideoUrl(rs.getString("file_name")),
                 (Integer) rs.getObject("video_duration"),
                 rs.getString("place_id"),
                 rs.getString("store_name"),
