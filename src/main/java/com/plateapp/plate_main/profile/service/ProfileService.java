@@ -1,16 +1,33 @@
 package com.plateapp.plate_main.profile.service;
 
 import com.plateapp.plate_main.auth.domain.User;
+import com.plateapp.plate_main.auth.domain.SocialAccount;
+import com.plateapp.plate_main.auth.dto.ProfileHistoryRequest;
+import com.plateapp.plate_main.auth.service.ProfileHistoryService;
+import com.plateapp.plate_main.auth.service.SocialAuthService;
+import com.plateapp.plate_main.auth.repository.RefreshTokenRepository;
+import com.plateapp.plate_main.auth.repository.SocialAccountRepository;
 import com.plateapp.plate_main.auth.repository.UserRepository;
 import com.plateapp.plate_main.common.s3.S3UploadService;
 import com.plateapp.plate_main.feed.repository.ImageFeedRepository;
 import com.plateapp.plate_main.friend.repository.Fp150FriendRepository;
-import com.plateapp.plate_main.profile.dto.*;
+import com.plateapp.plate_main.profile.dto.ChangePasswordRequest;
+import com.plateapp.plate_main.profile.dto.DeleteSocialAccountRequest;
+import com.plateapp.plate_main.profile.dto.ProfileImageUploadResponse;
+import com.plateapp.plate_main.profile.dto.PublicProfileResponse;
+import com.plateapp.plate_main.profile.dto.UpdateProfileRequest;
+import com.plateapp.plate_main.profile.dto.UserProfileDTO;
+import com.plateapp.plate_main.profile.dto.UserStatsDTO;
+import com.plateapp.plate_main.video.repository.Fp305WatchHistoryRepository;
+import com.plateapp.plate_main.video.repository.Fp440CommentRepository;
 import com.plateapp.plate_main.video.repository.Fp300StoreRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -20,7 +37,14 @@ public class ProfileService {
     private final Fp150FriendRepository friendRepository;
     private final ImageFeedRepository imageFeedRepository;
     private final Fp300StoreRepository storeRepository;
+    private final Fp305WatchHistoryRepository watchHistoryRepository;
+    private final Fp440CommentRepository commentRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final SocialAccountRepository socialAccountRepository;
     private final S3UploadService s3UploadService;
+    private final BCryptPasswordEncoder passwordEncoder;
+    private final ProfileHistoryService profileHistoryService;
+    private final SocialAuthService socialAuthService;
 
     @Transactional(readOnly = true)
     public UserProfileDTO getMyProfile(String username) {
@@ -79,18 +103,12 @@ public class ProfileService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
         try {
-            // S3에 업로드
             String imageUrl = s3UploadService.uploadProfileImage(
                     file.getOriginalFilename(),
                     file.getInputStream(),
                     file.getSize(),
                     file.getContentType()
             );
-
-            // 기존 이미지 삭제 (선택적)
-            if (user.getProfileImageUrl() != null && !user.getProfileImageUrl().isEmpty()) {
-                // s3UploadService.deleteFile(user.getProfileImageUrl());
-            }
 
             user.setProfileImageUrl(imageUrl);
             userRepository.save(user);
@@ -107,8 +125,7 @@ public class ProfileService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
         if (user.getProfileImageUrl() != null && !user.getProfileImageUrl().isEmpty()) {
-            // S3에서 이미지 삭제
-            // s3UploadService.deleteFile(user.getProfileImageUrl());
+            s3UploadService.deleteObjectByUrl(user.getProfileImageUrl());
         }
 
         user.setProfileImageUrl(null);
@@ -117,7 +134,6 @@ public class ProfileService {
 
     @Transactional
     public void changePassword(String username, ChangePasswordRequest request) {
-        // TODO: Implement password change with PasswordEncoder
         throw new UnsupportedOperationException("Password change is not yet implemented. Please configure PasswordEncoder bean.");
     }
 
@@ -130,11 +146,8 @@ public class ProfileService {
 
         long friendsCount = friendRepository.countByUsernameAndStatus(username, "accepted");
         long postsCount = imageFeedRepository.countByUsernameAndUseYn(username, "Y") +
-                          storeRepository.countByUsernameAndUseYn(username, "Y");
-
-        // 받은 좋아요 총합 (간단히 이미지 피드만 계산)
-        long likesCount = 0; // TODO: 구현 필요
-
+                storeRepository.countByUsernameAndUseYn(username, "Y");
+        long likesCount = 0;
         long visitedStoresCount = storeRepository.countByUsernameAndUseYn(username, "Y");
 
         return UserStatsDTO.builder()
@@ -146,9 +159,164 @@ public class ProfileService {
     }
 
     @Transactional
-    public void deleteAccount(String username, String password) {
-        // TODO: Implement account deletion with password verification
-        throw new UnsupportedOperationException("Account deletion is not yet implemented. Please configure PasswordEncoder bean.");
+    public void deleteAccount(String username, String password, String reason) {
+        if (password == null || password.isBlank()) {
+            throw new InvalidPasswordException("Password is required");
+        }
+
+        User user = userRepository.findById(username)
+                .orElseThrow(() -> new AccountUnavailableException("User not found"));
+
+        Integer userId = user.getUserId();
+        if (userId != null && socialAccountRepository.existsByUserId(userId)) {
+            throw new UnsupportedAccountDeletionException("Use social account deletion API for social accounts");
+        }
+
+        if (user.getPassword() == null || user.getPassword().isBlank()) {
+            throw new UnsupportedAccountDeletionException("Password-based account deletion is only available for normal accounts");
+        }
+
+        if (!passwordEncoder.matches(password, user.getPassword())) {
+            throw new InvalidPasswordException("Password does not match");
+        }
+
+        profileHistoryService.record(
+                username,
+                ProfileHistoryRequest.builder()
+                        .changeType("CD_007")
+                        .before(buildDeleteBeforeSnapshot(user))
+                        .after(buildDeleteAfterSnapshot(user, reason))
+                        .memo(buildDeleteMemo(reason))
+                        .build()
+        );
+
+        if (user.getProfileImageUrl() != null && !user.getProfileImageUrl().isBlank()) {
+            s3UploadService.deleteObjectByUrl(user.getProfileImageUrl());
+        }
+
+        detachUserIdReferences(userId);
+        refreshTokenRepository.deleteByUsername(username);
+        userRepository.delete(user);
+    }
+
+    @Transactional
+    public void deleteSocialAccount(String username, DeleteSocialAccountRequest request) {
+        if (request == null || request.provider() == null || request.provider().isBlank()) {
+            throw new InvalidSocialDeleteRequestException("provider is required");
+        }
+
+        User user = userRepository.findById(username)
+                .orElseThrow(() -> new AccountUnavailableException("User not found"));
+
+        Integer userId = user.getUserId();
+        if (userId == null) {
+            throw new AccountUnavailableException("User not found");
+        }
+
+        SocialAccount socialAccount = socialAccountRepository.findFirstByUserIdOrderByCreatedAtDesc(userId)
+                .orElseThrow(() -> new UnsupportedAccountDeletionException("Current account is not a social account"));
+
+        String provider = normalizeProvider(request.provider());
+        if (!socialAccount.getProvider().equalsIgnoreCase(provider)) {
+            throw new SocialReauthenticationException("Provider does not match current social account", "SOCIAL_PROVIDER_MISMATCH");
+        }
+
+        String providerUserId = verifySocialDeleteRequest(provider, request);
+        if (!socialAccount.getProviderUserId().equals(providerUserId)) {
+            throw new SocialReauthenticationException("Social re-authentication failed", "SOCIAL_REAUTH_FAILED");
+        }
+
+        profileHistoryService.record(
+                username,
+                ProfileHistoryRequest.builder()
+                        .changeType("CD_007")
+                        .before(buildDeleteBeforeSnapshot(user))
+                        .after(buildSocialDeleteAfterSnapshot(user, socialAccount, request.reason()))
+                        .memo(buildSocialDeleteMemo(provider, request.reason()))
+                        .build()
+        );
+
+        if (user.getProfileImageUrl() != null && !user.getProfileImageUrl().isBlank()) {
+            s3UploadService.deleteObjectByUrl(user.getProfileImageUrl());
+        }
+
+        detachUserIdReferences(userId);
+        refreshTokenRepository.deleteByUsername(username);
+        socialAccountRepository.deleteByUserId(userId);
+        userRepository.delete(user);
+    }
+
+    private void detachUserIdReferences(Integer userId) {
+        if (userId == null) {
+            return;
+        }
+        commentRepository.clearUserIdByUserId(userId);
+        watchHistoryRepository.clearUserIdByUserId(userId);
+    }
+
+    private Map<String, Object> buildDeleteBeforeSnapshot(User user) {
+        Map<String, Object> before = new LinkedHashMap<>();
+        before.put("username", user.getUsername());
+        before.put("email", user.getEmail());
+        before.put("phone", user.getPhone());
+        before.put("role", user.getRole());
+        before.put("activeRegion", user.getActiveRegion());
+        before.put("profileImageUrl", user.getProfileImageUrl());
+        before.put("nickname", user.getNickname());
+        before.put("code", user.getCode());
+        before.put("isPrivate", user.getIsPrivate());
+        return before;
+    }
+
+    private Map<String, Object> buildDeleteAfterSnapshot(User user, String reason) {
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("username", user.getUsername());
+        after.put("deleted", true);
+        after.put("status", "deleted");
+        if (reason != null && !reason.isBlank()) {
+            after.put("reason", reason.trim());
+        }
+        return after;
+    }
+
+    private Map<String, Object> buildSocialDeleteAfterSnapshot(User user, SocialAccount socialAccount, String reason) {
+        Map<String, Object> after = buildDeleteAfterSnapshot(user, reason);
+        after.put("provider", normalizeProvider(socialAccount.getProvider()));
+        after.put("socialDeleted", true);
+        return after;
+    }
+
+    private String buildDeleteMemo(String reason) {
+        if (reason == null || reason.isBlank()) {
+            return "normal account delete";
+        }
+        return "normal account delete: " + reason.trim();
+    }
+
+    private String buildSocialDeleteMemo(String provider, String reason) {
+        if (reason == null || reason.isBlank()) {
+            return "social account delete: " + provider;
+        }
+        return "social account delete: " + provider + " - " + reason.trim();
+    }
+
+    private String verifySocialDeleteRequest(String provider, DeleteSocialAccountRequest request) {
+        try {
+            return switch (provider) {
+                case "APPLE" -> socialAuthService.verifyAppleReauthentication(request.identityToken());
+                case "GOOGLE" -> socialAuthService.verifyGoogleReauthentication(request.idToken());
+                case "KAKAO" -> socialAuthService.verifyKakaoReauthentication(request.accessToken());
+                default -> throw new InvalidSocialDeleteRequestException("Unsupported provider");
+            };
+        } catch (InvalidSocialDeleteRequestException e) {
+            throw e;
+        } catch (IllegalArgumentException e) {
+            throw new SocialReauthenticationException("Social re-authentication failed", "SOCIAL_REAUTH_FAILED");
+        }
+    }
+
+    private String normalizeProvider(String provider) {
+        return provider == null ? "" : provider.trim().toUpperCase();
     }
 
     private UserProfileDTO toProfileDTO(User user, boolean includePrivateInfo) {
@@ -167,5 +335,42 @@ public class ProfileService {
         }
 
         return builder.build();
+    }
+
+    public static class InvalidPasswordException extends RuntimeException {
+        public InvalidPasswordException(String message) {
+            super(message);
+        }
+    }
+
+    public static class AccountUnavailableException extends RuntimeException {
+        public AccountUnavailableException(String message) {
+            super(message);
+        }
+    }
+
+    public static class UnsupportedAccountDeletionException extends RuntimeException {
+        public UnsupportedAccountDeletionException(String message) {
+            super(message);
+        }
+    }
+
+    public static class InvalidSocialDeleteRequestException extends RuntimeException {
+        public InvalidSocialDeleteRequestException(String message) {
+            super(message);
+        }
+    }
+
+    public static class SocialReauthenticationException extends RuntimeException {
+        private final String errorCode;
+
+        public SocialReauthenticationException(String message, String errorCode) {
+            super(message);
+            this.errorCode = errorCode;
+        }
+
+        public String getErrorCode() {
+            return errorCode;
+        }
     }
 }

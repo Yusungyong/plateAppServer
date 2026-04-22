@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -26,4 +27,12 @@ public interface Fp440CommentRepository extends JpaRepository<Fp440Comment, Inte
         GROUP BY c.storeId
     """)
     List<StoreCommentCount> countActiveByStoreIds(@Param("storeIds") Collection<Integer> storeIds);
+
+    @Modifying
+    @Query("""
+        UPDATE Fp440Comment c
+        SET c.userId = null
+        WHERE c.userId = :userId
+    """)
+    int clearUserIdByUserId(@Param("userId") Integer userId);
 }

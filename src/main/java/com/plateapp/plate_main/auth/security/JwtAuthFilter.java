@@ -1,6 +1,6 @@
-// src/main/java/com/plateapp/plate_main/auth/security/JwtAuthFilter.java
 package com.plateapp.plate_main.auth.security;
 
+import com.plateapp.plate_main.auth.repository.UserRepository;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Locale;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -18,13 +19,13 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
-import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtProvider jwtProvider;
+    private final UserRepository userRepository;
 
     private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
 
@@ -81,6 +82,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         try {
             String username = jwtProvider.getUsernameFromAccessToken(token);
             String role = jwtProvider.getRoleFromAccessToken(token);
+
+            if (!userRepository.existsById(username)) {
+                SecurityContextHolder.clearContext();
+                request.setAttribute(AUTH_ERROR_ATTR, AUTH_ERROR_INVALID);
+                filterChain.doFilter(request, response);
+                return;
+            }
 
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(

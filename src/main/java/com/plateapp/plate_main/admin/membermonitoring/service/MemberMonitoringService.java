@@ -153,7 +153,7 @@ public class MemberMonitoringService {
                 usernames,
                 "MULTI_ACCOUNT_IP",
                 "동일 IP 다계정 접근",
-                String.format("최근 24시간 동안 동일 IP에서 %d개 계정 로그인/시도", userCount),
+                String.format("최근 24시간 동안 동일 IP에서 %d개 계정 로그인 시도", userCount),
                 rs.getString("ip_address"),
                 null,
                 Math.min(100, 45 + (userCount * 8)),
@@ -349,7 +349,10 @@ public class MemberMonitoringService {
         if ("CD_006".equals(normalized) || normalized.contains("PROFILE") || normalized.contains("IMAGE")) {
             return "프로필 이미지";
         }
-        if ("CD_007".equals(normalized) || normalized.contains("WITHDRAW") || normalized.contains("STATUS")) {
+        if ("CD_007".equals(normalized) || normalized.contains("WITHDRAW") || normalized.contains("DELETE") || normalized.contains("DELETED")) {
+            return "회원 탈퇴";
+        }
+        if (normalized.contains("STATUS")) {
             return "회원 상태";
         }
         if ("CD_008".equals(normalized) || normalized.contains("NICK")) {
@@ -359,20 +362,26 @@ public class MemberMonitoringService {
             return "비공개 설정";
         }
         if ("CD_010".equals(normalized) || normalized.contains("SIGNUP") || normalized.contains("REGISTER")) {
-            return "회원 상태";
+            return "회원가입";
         }
         return fallbackChangedField(beforeEx, afterEx, normalized);
     }
 
     private String fallbackChangedField(String beforeEx, String afterEx, String normalized) {
+        String compactBefore = compact(beforeEx);
+        String compactAfter = compact(afterEx);
         if (containsRole(beforeEx) || containsRole(afterEx)) {
             return "권한";
         }
-        if (compact(beforeEx).contains("@") || compact(afterEx).contains("@")) {
+        if (compactBefore.contains("@") || compactAfter.contains("@")) {
             return "이메일";
+        }
+        if (compactAfter.contains("\"deleted\":true") || compactAfter.contains("deleted=true") || compactAfter.contains("status=deleted")) {
+            return "회원 탈퇴";
         }
         return normalized.isBlank() ? "회원 정보" : normalized;
     }
+
     private boolean containsRole(String value) {
         return normalizeToken(value).contains("ROLE");
     }
@@ -389,13 +398,6 @@ public class MemberMonitoringService {
             return "";
         }
         return value.replaceAll("\\s+", " ").trim();
-    }
-
-    private String truncate(String value, int maxLength) {
-        if (value.length() <= maxLength) {
-            return value;
-        }
-        return value.substring(0, maxLength - 1) + "...";
     }
 
     private String summarizeUsernames(String usernames) {
@@ -451,7 +453,7 @@ public class MemberMonitoringService {
             return "콘텐츠 숨김 검토";
         }
         if (totalActivity >= 15) {
-            return "도배 여부 확인";
+            return "활동 여부 확인";
         }
         return "모니터링 유지";
     }
@@ -468,7 +470,3 @@ public class MemberMonitoringService {
     ) {
     }
 }
-
-
-
-

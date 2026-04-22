@@ -110,6 +110,12 @@ public class SocialAuthService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public String verifyAppleReauthentication(String identityToken) {
+        AppleIdTokenPayload payload = parseAndValidateAppleToken(identityToken);
+        return payload.getSub();
+    }
+
     private AppleIdTokenPayload parseAndValidateAppleToken(String identityToken) {
         if (identityToken == null || identityToken.isBlank()) {
             throw new IllegalArgumentException("identityToken is empty.");
@@ -296,6 +302,15 @@ public class SocialAuthService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public String verifyKakaoReauthentication(String accessToken) {
+        if (accessToken == null || accessToken.isBlank()) {
+            throw new IllegalArgumentException("accessToken is empty.");
+        }
+        KakaoUserResponse kakaoUser = getKakaoUserInfo(accessToken);
+        return String.valueOf(kakaoUser.getId());
+    }
+
     private KakaoUserResponse getKakaoUserInfo(String accessToken) {
         try {
             var headers = new org.springframework.http.HttpHeaders();
@@ -398,6 +413,15 @@ public class SocialAuthService {
             logSocialLogin(null, "FAIL", provider + "_LOGIN_FAILED", ipAddress);
             throw e;
         }
+    }
+
+    @Transactional(readOnly = true)
+    public String verifyGoogleReauthentication(String idToken) {
+        if (idToken == null || idToken.isBlank()) {
+            throw new IllegalArgumentException("Google idToken is empty.");
+        }
+        GoogleIdTokenPayload payload = parseAndValidateGoogleToken(idToken);
+        return payload.getSub();
     }
 
     private void logSocialLogin(String username, String status, String failReason, String ipAddress) {

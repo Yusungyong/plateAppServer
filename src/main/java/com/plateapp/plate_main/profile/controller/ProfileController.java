@@ -1,15 +1,30 @@
 package com.plateapp.plate_main.profile.controller;
 
 import com.plateapp.plate_main.common.dto.ApiResponse;
-import com.plateapp.plate_main.profile.dto.*;
+import com.plateapp.plate_main.profile.dto.ChangePasswordRequest;
+import com.plateapp.plate_main.profile.dto.DeleteAccountRequest;
+import com.plateapp.plate_main.profile.dto.DeleteAccountResponse;
+import com.plateapp.plate_main.profile.dto.DeleteSocialAccountRequest;
+import com.plateapp.plate_main.profile.dto.ProfileImageUploadResponse;
+import com.plateapp.plate_main.profile.dto.UpdateProfileRequest;
+import com.plateapp.plate_main.profile.dto.UserProfileDTO;
+import com.plateapp.plate_main.profile.dto.UserStatsDTO;
 import com.plateapp.plate_main.profile.service.ProfileService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/users")
@@ -18,7 +33,6 @@ public class ProfileController {
 
     private final ProfileService profileService;
 
-    // 내 프로필 조회
     @GetMapping("/me")
     public ApiResponse<UserProfileDTO> getMyProfile(Authentication authentication) {
         String username = authentication.getName();
@@ -26,15 +40,12 @@ public class ProfileController {
         return ApiResponse.success(profile);
     }
 
-    // 다른 사용자 프로필 조회
     @GetMapping("/{username}")
     public ApiResponse<UserProfileDTO> getUserProfile(@PathVariable String username) {
         UserProfileDTO profile = profileService.getUserProfile(username);
         return ApiResponse.success(profile);
     }
 
-
-    // 프로필 수정
     @PutMapping("/me")
     public ApiResponse<UserProfileDTO> updateProfile(
             @Valid @RequestBody UpdateProfileRequest request,
@@ -44,7 +55,6 @@ public class ProfileController {
         return ApiResponse.success(profile);
     }
 
-    // 프로필 이미지 업로드
     @PostMapping("/me/profile-image")
     public ApiResponse<ProfileImageUploadResponse> uploadProfileImage(
             @RequestParam("file") MultipartFile file,
@@ -54,7 +64,6 @@ public class ProfileController {
         return ApiResponse.success(response);
     }
 
-    // 프로필 이미지 삭제
     @DeleteMapping("/me/profile-image")
     public ApiResponse<Void> deleteProfileImage(Authentication authentication) {
         String username = authentication.getName();
@@ -62,7 +71,6 @@ public class ProfileController {
         return ApiResponse.success(null);
     }
 
-    // 비밀번호 변경
     @PutMapping("/me/password")
     public ApiResponse<Void> changePassword(
             @Valid @RequestBody ChangePasswordRequest request,
@@ -72,7 +80,6 @@ public class ProfileController {
         return ApiResponse.success(null);
     }
 
-    // 사용자 통계 조회
     @GetMapping("/me/stats")
     public ApiResponse<UserStatsDTO> getMyStats(Authentication authentication) {
         String username = authentication.getName();
@@ -80,21 +87,52 @@ public class ProfileController {
         return ApiResponse.success(stats);
     }
 
-    // 다른 사용자 통계 조회
     @GetMapping("/{username}/stats")
     public ApiResponse<UserStatsDTO> getUserStats(@PathVariable String username) {
         UserStatsDTO stats = profileService.getUserStats(username);
         return ApiResponse.success(stats);
     }
 
-    // 계정 삭제
     @DeleteMapping("/me")
-    public ApiResponse<Void> deleteAccount(
-            @RequestBody Map<String, String> request,
+    public ResponseEntity<DeleteAccountResponse> deleteAccount(
+            @Valid @RequestBody DeleteAccountRequest request,
             Authentication authentication) {
         String username = authentication.getName();
-        String password = request.get("password");
-        profileService.deleteAccount(username, password);
-        return ApiResponse.success(null);
+        try {
+            profileService.deleteAccount(username, request.password(), request.reason());
+            return ResponseEntity.ok(DeleteAccountResponse.success("Account deleted successfully"));
+        } catch (ProfileService.InvalidPasswordException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(DeleteAccountResponse.fail("INVALID_PASSWORD", e.getMessage()));
+        } catch (ProfileService.AccountUnavailableException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(DeleteAccountResponse.fail("USER_NOT_FOUND", e.getMessage()));
+        } catch (ProfileService.UnsupportedAccountDeletionException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(DeleteAccountResponse.fail("UNSUPPORTED_ACCOUNT_TYPE", e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/me/social")
+    public ResponseEntity<DeleteAccountResponse> deleteSocialAccount(
+            @RequestBody DeleteSocialAccountRequest request,
+            Authentication authentication) {
+        String username = authentication.getName();
+        try {
+            profileService.deleteSocialAccount(username, request);
+            return ResponseEntity.ok(DeleteAccountResponse.success("Social account deleted successfully"));
+        } catch (ProfileService.InvalidSocialDeleteRequestException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(DeleteAccountResponse.fail("INVALID_REQUEST", e.getMessage()));
+        } catch (ProfileService.SocialReauthenticationException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(DeleteAccountResponse.fail(e.getErrorCode(), e.getMessage()));
+        } catch (ProfileService.AccountUnavailableException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(DeleteAccountResponse.fail("USER_NOT_FOUND", e.getMessage()));
+        } catch (ProfileService.UnsupportedAccountDeletionException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(DeleteAccountResponse.fail("UNSUPPORTED_ACCOUNT_TYPE", e.getMessage()));
+        }
     }
 }

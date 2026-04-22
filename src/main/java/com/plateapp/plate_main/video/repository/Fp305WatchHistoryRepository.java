@@ -67,6 +67,14 @@ public interface Fp305WatchHistoryRepository extends JpaRepository<Fp305WatchHis
     @Modifying
     @Query("""
         UPDATE Fp305WatchHistory w
+        SET w.userId = null
+        WHERE w.userId = :userId
+    """)
+    int clearUserIdByUserId(@Param("userId") Integer userId);
+
+    @Modifying
+    @Query("""
+        UPDATE Fp305WatchHistory w
         SET w.durationWatched = :durationWatched,
             w.videoQuality = :videoQuality,
             w.timestamp = CURRENT_TIMESTAMP

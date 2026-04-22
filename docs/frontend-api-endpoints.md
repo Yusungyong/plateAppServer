@@ -1,4 +1,4 @@
-﻿# PlateApp Frontend API Endpoints
+# PlateApp Frontend API Endpoints
 
 All endpoints are relative to `API_BASE_URL` and already include the `/api` prefix.
 
@@ -538,6 +538,108 @@ Notification `type` (string enum)
 - GET `/api/users/me/stats`
 - GET `/api/users/{username}/stats`
 - DELETE `/api/users/me`
+- DELETE `/api/users/me/social`
+
+### Delete account
+
+`DELETE /api/users/me`
+
+See also
+- [Account Delete Frontend Guide](/c:/workspace/plate-main/docs/account-delete-frontend-guide.md)
+
+Headers
+- `Authorization: Bearer {accessToken}`
+
+Request body
+- `password` (string, required)
+- `reason` (string, optional)
+
+Example request
+```js
+export async function deleteMyAccount(password, reason, accessToken) {
+  return api("/api/users/me", {
+    method: "DELETE",
+    token: accessToken,
+    body: JSON.stringify({
+      password,
+      reason
+    })
+  });
+}
+```
+
+Example response
+```json
+{
+  "success": true,
+  "message": "Account deleted successfully",
+  "errorCode": null
+}
+```
+
+### Delete social account
+
+`DELETE /api/users/me/social`
+
+See also
+- [Account Delete Frontend Guide](/c:/workspace/plate-main/docs/account-delete-frontend-guide.md)
+
+Headers
+- `Authorization: Bearer {accessToken}`
+
+Request body
+- `provider` (string, required): `apple`, `google`, `kakao`
+- `identityToken` (string, Apple only)
+- `authorizationCode` (string, Apple optional)
+- `idToken` (string, Google only)
+- `accessToken` (string, Kakao only)
+- `reason` (string, optional)
+
+Example request
+```js
+export async function deleteMySocialAccount(payload, accessToken) {
+  return api("/api/users/me/social", {
+    method: "DELETE",
+    token: accessToken,
+    body: JSON.stringify(payload)
+  });
+}
+```
+
+Apple example
+```json
+{
+  "provider": "apple",
+  "identityToken": "apple-identity-token",
+  "authorizationCode": "apple-authorization-code",
+  "reason": "no longer using the service"
+}
+```
+
+Google example
+```json
+{
+  "provider": "google",
+  "idToken": "google-id-token"
+}
+```
+
+Kakao example
+```json
+{
+  "provider": "kakao",
+  "accessToken": "kakao-access-token"
+}
+```
+
+Example response
+```json
+{
+  "success": true,
+  "message": "Social account deleted successfully",
+  "errorCode": null
+}
+```
 
 ### User Detail (Admin/Extended)
 - GET `/api/users/detail/{username}`
