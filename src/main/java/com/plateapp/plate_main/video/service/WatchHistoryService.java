@@ -1,6 +1,7 @@
 package com.plateapp.plate_main.video.service;
 
 import com.plateapp.plate_main.user.repository.MemberRepository;
+import com.plateapp.plate_main.common.s3.S3UploadService;
 import com.plateapp.plate_main.video.dto.WatchHistoryDto;
 import com.plateapp.plate_main.video.entity.Fp300Store;
 import com.plateapp.plate_main.video.entity.Fp305WatchHistory;
@@ -25,6 +26,7 @@ public class WatchHistoryService {
     private final Fp305WatchHistoryRepository watchHistoryRepository;
     private final Fp300StoreRepository storeRepository;
     private final MemberRepository memberRepository;
+    private final S3UploadService s3UploadService;
 
     @Transactional
     public WatchHistoryDto.StartWatchResponse startWatch(
@@ -263,7 +265,7 @@ public class WatchHistoryService {
 
         if (store != null) {
             storeName = store.getStoreName();
-            thumbnail = store.getThumbnail();
+            thumbnail = s3UploadService.toImageUrl(store.getThumbnail());
             videoDuration = store.getVideoDuration();
         }
 

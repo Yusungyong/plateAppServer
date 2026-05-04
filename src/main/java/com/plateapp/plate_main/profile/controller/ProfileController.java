@@ -72,12 +72,23 @@ public class ProfileController {
     }
 
     @PutMapping("/me/password")
-    public ApiResponse<Void> changePassword(
+    public ResponseEntity<ApiResponse<Void>> changePassword(
             @Valid @RequestBody ChangePasswordRequest request,
             Authentication authentication) {
         String username = authentication.getName();
-        profileService.changePassword(username, request);
-        return ApiResponse.success(null);
+        try {
+            profileService.changePassword(username, request);
+            return ResponseEntity.ok(ApiResponse.success(null));
+        } catch (ProfileService.InvalidPasswordException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error("INVALID_PASSWORD", e.getMessage()));
+        } catch (ProfileService.AccountUnavailableException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error("USER_NOT_FOUND", e.getMessage()));
+        } catch (ProfileService.UnsupportedAccountDeletionException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("UNSUPPORTED_ACCOUNT_TYPE", e.getMessage()));
+        }
     }
 
     @GetMapping("/me/stats")

@@ -81,7 +81,7 @@ public class VideoUploadService {
         store.setUsername(username);
         store.setCreatedAt(LocalDate.now());
         store.setUpdatedAt(LocalDate.now());
-        store.setThumbnail(media.thumbnailUrl);
+        store.setThumbnail(s3UploadService.toStoredImagePath(media.thumbnailUrl));
         store.setStoreName(storeName);
         store.setOpenYn(safeOpenYn);
         store.setUseYn(safeUseYn);
@@ -95,7 +95,7 @@ public class VideoUploadService {
         return VideoUploadResponse.builder()
                 .storeId(saved.getStoreId())
                 .fileName(s3UploadService.toVideoUrl(saved.getFileName()))
-                .thumbnail(saved.getThumbnail())
+                .thumbnail(s3UploadService.toImageUrl(saved.getThumbnail()))
                 .videoDuration(saved.getVideoDuration())
                 .videoSize(saved.getVideoSize() != null ? saved.getVideoSize().longValue() : null)
                 .build();
@@ -134,20 +134,20 @@ public class VideoUploadService {
         store.setUseYn(nextUseYn);
         store.setMuteYn(nextMuteYn);
         store.setFileName(s3UploadService.toStoredVideoPath(media.fileUrl));
-        store.setThumbnail(media.thumbnailUrl);
+        store.setThumbnail(s3UploadService.toStoredImagePath(media.thumbnailUrl));
         store.setVideoDuration(media.durationSeconds);
         store.setVideoSize(java.math.BigDecimal.valueOf(media.size));
         store.setUpdatedAt(LocalDate.now());
 
         fp300StoreRepository.save(store);
         s3UploadService.deleteVideoObject(oldFile);
-        s3UploadService.deleteObjectByUrl(oldThumb);
+        s3UploadService.deleteImageObject(oldThumb);
         upsertPlace(placeId, address, lat, lng);
 
         return VideoUpdateResponse.builder()
                 .storeId(store.getStoreId())
                 .fileName(s3UploadService.toVideoUrl(store.getFileName()))
-                .thumbnail(store.getThumbnail())
+                .thumbnail(s3UploadService.toImageUrl(store.getThumbnail()))
                 .videoDuration(store.getVideoDuration())
                 .videoSize(store.getVideoSize() != null ? store.getVideoSize().longValue() : null)
                 .updatedAt(store.getUpdatedAt())
@@ -188,7 +188,7 @@ public class VideoUploadService {
         Fp300Store store = findOwnedStore(storeId, username);
 
         s3UploadService.deleteVideoObject(store.getFileName());
-        s3UploadService.deleteObjectByUrl(store.getThumbnail());
+        s3UploadService.deleteImageObject(store.getThumbnail());
 
         List<Integer> commentIds = commentRepository.findIdsByStoreId(storeId);
         if (!commentIds.isEmpty()) {
@@ -297,7 +297,7 @@ public class VideoUploadService {
         String thumbnailUrl = buildThumbnailPlaceholder(fileUrl);
         if (thumbnailFile != null && !thumbnailFile.isEmpty()) {
             try {
-                String thumbName = safeFileName(thumbnailFile.getOriginalFilename(), "thumb.jpg");
+                String thumbName = safeThumbnailFileName(thumbnailFile.getOriginalFilename(), "thumb.jpg");
                 byte[] originalBytes = thumbnailFile.getBytes();
                 byte[] optimized = imageProcessingService.resizeMax(originalBytes, 1280, 1280, "jpg");
                 byte[] thumb300 = imageProcessingService.resizeCropCenter(originalBytes, 300, 300, "jpg");
@@ -320,7 +320,7 @@ public class VideoUploadService {
             }
         } else if (thumbBytes != null && thumbBytes.length > 0) {
             try {
-                String thumbName = safeFileName(originalName, "thumb.jpg");
+                String thumbName = safeThumbnailFileName(originalName, "thumb.jpg");
                 byte[] optimized = imageProcessingService.resizeMax(thumbBytes, 1280, 1280, "jpg");
                 byte[] thumb300 = imageProcessingService.resizeCropCenter(thumbBytes, 300, 300, "jpg");
 
@@ -370,6 +370,16 @@ public class VideoUploadService {
             return fallback;
         }
         return original;
+    }
+
+    private String safeThumbnailFileName(String original, String fallback) {
+        String safeName = safeFileName(original, fallback);
+        int dotIndex = safeName.lastIndexOf('.');
+        String baseName = dotIndex > 0 ? safeName.substring(0, dotIndex) : safeName;
+        if (baseName.isBlank()) {
+            return fallback;
+        }
+        return baseName + ".jpg";
     }
 
     private void validateFileType(String originalName, String contentType) {

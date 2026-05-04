@@ -16,6 +16,7 @@ import com.plateapp.plate_main.friend.dto.FriendVisitDtos.ScheduledVisitResponse
 import com.plateapp.plate_main.friend.entity.Fp150Friend;
 import com.plateapp.plate_main.friend.repository.Fp150FriendRepository;
 import com.plateapp.plate_main.friend.repository.Fp200VisitRepository;
+import com.plateapp.plate_main.common.s3.S3UploadService;
 import com.plateapp.plate_main.user.entity.Fp100User;
 import com.plateapp.plate_main.user.repository.MemberRepository;
 import java.time.LocalDate;
@@ -37,6 +38,7 @@ public class FriendService {
     private final Fp150FriendRepository repository;
     private final Fp200VisitRepository visitRepository;
     private final MemberRepository memberRepository;
+    private final S3UploadService s3UploadService;
 
     @Transactional(readOnly = true)
     public List<FriendDto> list(String username, String status) {
@@ -146,7 +148,7 @@ public class FriendService {
                         .address(r.getAddress())
                         .memo(r.getMemo())
                         .visitDate(r.getVisitDate())
-                        .thumbnail(r.getThumbnail())
+                        .thumbnail(s3UploadService.toImageUrl(r.getThumbnail()))
                         .createdAt(r.getCreatedAt())
                         .build())
                 .toList();
@@ -195,7 +197,7 @@ public class FriendService {
                             .visitCount(s.getVisitCount())
                             .lastVisitedAt(s.getLastVisitedAt())
                             .friends(friends)
-                            .thumbnail(s.getThumbnail())
+                            .thumbnail(s3UploadService.toImageUrl(s.getThumbnail()))
                             .build();
                 })
                 .toList();
@@ -247,7 +249,7 @@ public class FriendService {
                         .memo(r.getMemo())
                         .visitDate(r.getVisitDate())
                         .address(r.getAddress())
-                        .thumbnail(r.getThumbnail())
+                        .thumbnail(s3UploadService.toImageUrl(r.getThumbnail()))
                         .createdAt(r.getCreatedAt())
                         .build())
                 .toList();
@@ -271,7 +273,7 @@ public class FriendService {
                         .address(r.getAddress())
                         .memo(r.getMemo())
                         .visitDate(r.getVisitDate())
-                        .thumbnail(r.getThumbnail())
+                        .thumbnail(s3UploadService.toImageUrl(r.getThumbnail()))
                         .createdAt(r.getCreatedAt())
                         .build())
                 .toList();

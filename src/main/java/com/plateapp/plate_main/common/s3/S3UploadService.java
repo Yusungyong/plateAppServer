@@ -182,6 +182,20 @@ public class S3UploadService {
         return key;
     }
 
+    public String toStoredImagePath(String objectUrlOrKey) {
+        String key = extractKey(objectUrlOrKey);
+        if (key == null || key.isBlank()) {
+            return objectUrlOrKey;
+        }
+        if (!imagePrefix.isEmpty() && key.startsWith(imagePrefix)) {
+            return key.substring(imagePrefix.length());
+        }
+        if (!thumbnailPrefix.isEmpty() && key.startsWith(thumbnailPrefix)) {
+            return key.substring(thumbnailPrefix.length());
+        }
+        return key;
+    }
+
     public String toVideoUrl(String storedPath) {
         if (storedPath == null || storedPath.isBlank()) {
             return storedPath;
@@ -190,6 +204,24 @@ public class S3UploadService {
             return storedPath;
         }
         String key = storedPath.startsWith(videoPrefix) ? storedPath : videoPrefix + storedPath;
+        return buildPublicUrl(key);
+    }
+
+    public String toImageUrl(String storedPath) {
+        if (storedPath == null || storedPath.isBlank()) {
+            return storedPath;
+        }
+        if (storedPath.contains("://")) {
+            return storedPath;
+        }
+        String key;
+        if (!imagePrefix.isEmpty() && storedPath.startsWith(imagePrefix)) {
+            key = storedPath;
+        } else if (!thumbnailPrefix.isEmpty() && storedPath.startsWith(thumbnailPrefix)) {
+            key = storedPath;
+        } else {
+            key = imagePrefix + storedPath;
+        }
         return buildPublicUrl(key);
     }
 
@@ -202,6 +234,25 @@ public class S3UploadService {
             return;
         }
         String key = storedPath.startsWith(videoPrefix) ? storedPath : videoPrefix + storedPath;
+        deleteObjectByKey(key);
+    }
+
+    public void deleteImageObject(String storedPath) {
+        if (storedPath == null || storedPath.isBlank()) {
+            return;
+        }
+        if (storedPath.contains("://")) {
+            deleteObjectByUrl(storedPath);
+            return;
+        }
+        String key;
+        if (!imagePrefix.isEmpty() && storedPath.startsWith(imagePrefix)) {
+            key = storedPath;
+        } else if (!thumbnailPrefix.isEmpty() && storedPath.startsWith(thumbnailPrefix)) {
+            key = storedPath;
+        } else {
+            key = imagePrefix + storedPath;
+        }
         deleteObjectByKey(key);
     }
 

@@ -352,7 +352,7 @@ public class ProfileActivityDetailService {
             VideoItem item = new VideoItem(
                     rs.getInt("store_id"),
                     rs.getString("title"),
-                    rs.getString("thumbnail"),
+                    s3UploadService.toImageUrl(rs.getString("thumbnail")),
                     s3UploadService.toVideoUrl(rs.getString("file_name")),
                     (Integer) rs.getObject("video_duration"),
                     rs.getString("place_id"),

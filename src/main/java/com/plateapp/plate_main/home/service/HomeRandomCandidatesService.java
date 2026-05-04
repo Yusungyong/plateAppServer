@@ -4,6 +4,7 @@ import com.plateapp.plate_main.feed.entity.Fp400Feed;
 import com.plateapp.plate_main.feed.repository.Fp400FeedRepository;
 import com.plateapp.plate_main.home.dto.HomeRandomCandidatesResponse;
 import com.plateapp.plate_main.block.repository.BlockRepository;
+import com.plateapp.plate_main.common.s3.S3UploadService;
 import com.plateapp.plate_main.report.repository.ReportRepository;
 import com.plateapp.plate_main.video.entity.Fp300Store;
 import com.plateapp.plate_main.video.repository.Fp300StoreRepository;
@@ -33,17 +34,20 @@ public class HomeRandomCandidatesService {
     private final Fp400FeedRepository feedRepository;
     private final BlockRepository blockRepository;
     private final ReportRepository reportRepository;
+    private final S3UploadService s3UploadService;
 
     public HomeRandomCandidatesService(
             Fp300StoreRepository storeRepository,
             Fp400FeedRepository feedRepository,
             BlockRepository blockRepository,
-            ReportRepository reportRepository
+            ReportRepository reportRepository,
+            S3UploadService s3UploadService
     ) {
         this.storeRepository = storeRepository;
         this.feedRepository = feedRepository;
         this.blockRepository = blockRepository;
         this.reportRepository = reportRepository;
+        this.s3UploadService = s3UploadService;
     }
 
     @Transactional(readOnly = true)
@@ -162,7 +166,7 @@ public class HomeRandomCandidatesService {
                 store.getPlaceId(),
                 store.getStoreName(),
                 store.getAddress(),
-                store.getThumbnail(),
+                s3UploadService.toImageUrl(store.getThumbnail()),
                 createdAt
         );
     }

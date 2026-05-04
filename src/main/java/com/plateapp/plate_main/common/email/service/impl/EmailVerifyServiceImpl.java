@@ -136,6 +136,31 @@ public class EmailVerifyServiceImpl implements EmailVerifyService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public boolean isVerifiedCodeValid(String email, String verificationCode) {
+        if (email == null || email.isBlank() || verificationCode == null || verificationCode.isBlank()) {
+            return false;
+        }
+
+        Optional<EmailVerification> opt = emailVerificationRepository.findTopByEmailOrderByIdDesc(email);
+        if (opt.isEmpty()) {
+            return false;
+        }
+
+        EmailVerification verification = opt.get();
+        if (!verificationCode.equals(verification.getVerificationCode())) {
+            return false;
+        }
+        if (!Boolean.TRUE.equals(verification.getIsVerified())) {
+            return false;
+        }
+        if (verification.getExpiresAt() != null && verification.getExpiresAt().isBefore(LocalDateTime.now())) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
     public String findUsernameByEmail(String email) {
         return userRepository.findByEmail(email)
                 .map(User::getUsername)

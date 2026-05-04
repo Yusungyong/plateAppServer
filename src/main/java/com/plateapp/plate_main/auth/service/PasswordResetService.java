@@ -2,5 +2,5 @@
 package com.plateapp.plate_main.auth.service;
 
 public interface PasswordResetService {
-    void resetPassword(String email, String newPassword);
+    void resetPassword(String email, String verificationCode, String newPassword);
 }

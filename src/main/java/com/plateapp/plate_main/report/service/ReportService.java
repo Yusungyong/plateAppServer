@@ -7,6 +7,7 @@ import com.plateapp.plate_main.report.dto.ReportHistoryItem;
 import com.plateapp.plate_main.report.dto.ReportHistoryResponse;
 import com.plateapp.plate_main.report.entity.Fp40Report;
 import com.plateapp.plate_main.report.repository.ReportRepository;
+import com.plateapp.plate_main.common.s3.S3UploadService;
 import com.plateapp.plate_main.feed.entity.Fp400ImageFeed;
 import com.plateapp.plate_main.feed.repository.ImageFeedRepository;
 import com.plateapp.plate_main.video.entity.Fp300Store;
@@ -33,6 +34,7 @@ public class ReportService {
     private final ReportRepository reportRepository;
     private final Fp300StoreRepository fp300StoreRepository;
     private final ImageFeedRepository imageFeedRepository;
+    private final S3UploadService s3UploadService;
 
     @Transactional
     public Integer createReport(String reporterUsername, ReportCreateRequest request) {
@@ -98,7 +100,7 @@ public class ReportService {
                     .description(description)
                     .placeId(info != null ? info.placeId : null)
                     .storeName(info != null ? info.storeName : null)
-                    .thumbnail(info != null ? info.thumbnail : null)
+                    .thumbnail(info != null ? s3UploadService.toImageUrl(info.thumbnail) : null)
                     .status(statusLabel(report.getTargetFlag(), report.getUnflaggedAt()))
                     .createdAt(report.getSubmittedAt())
                     .resolvedAt(report.getUnflaggedAt())

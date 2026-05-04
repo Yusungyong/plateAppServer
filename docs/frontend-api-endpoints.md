@@ -39,6 +39,34 @@ async function api(path, options = {}) {
 
 See also: [docs/web-login-guide.md](/workspace/plate-main/docs/web-login-guide.md)
 
+### Password reset
+
+`POST /api/auth/reset-password`
+
+Notes
+- this endpoint now requires an email verification code
+- frontend should first call `POST /api/email/send-verification`
+- then verify the code through `POST /api/email/verify`
+- then call password reset with the verified code
+
+Request body
+```json
+{
+  "email": "user@example.com",
+  "verificationCode": "123456",
+  "newPassword": "new-password"
+}
+```
+
+Success response
+```json
+{
+  "success": true,
+  "data": null,
+  "message": "Password has been changed successfully."
+}
+```
+
 ## Blocks
 
 - POST `/api/blocks`
@@ -540,6 +568,44 @@ Notification `type` (string enum)
 - DELETE `/api/users/me`
 - DELETE `/api/users/me/social`
 
+### Change password
+
+`PUT /api/users/me/password`
+
+Headers
+- `Authorization: Bearer {accessToken}`
+
+Request body
+```json
+{
+  "currentPassword": "current-password",
+  "newPassword": "new-password"
+}
+```
+
+Notes
+- normal ID/password accounts only
+- social accounts receive `UNSUPPORTED_ACCOUNT_TYPE`
+- all refresh tokens for the user are revoked after a successful password change
+
+Success response
+```json
+{
+  "success": true,
+  "data": null,
+  "message": null
+}
+```
+
+Typical error response
+```json
+{
+  "success": false,
+  "message": "Current password does not match",
+  "errorCode": "INVALID_PASSWORD"
+}
+```
+
 ### Delete account
 
 `DELETE /api/users/me`
@@ -654,8 +720,17 @@ Example response
 - PATCH `/api/users/detail/{username}/fcm-token`
 - PATCH `/api/users/detail/{username}/privacy`
 
+Notes
+- `GET /api/users/detail/{username}/public-profile` requires authentication
+- all other `/api/users/detail/**` endpoints require admin token
+- authority required: `ROLE_ADMIN`
+
 ### Profile History
 - POST `/api/users/{username}/profile-history`
+
+Notes
+- admin only
+- authority required: `ROLE_ADMIN`
 
 ## Reports
 

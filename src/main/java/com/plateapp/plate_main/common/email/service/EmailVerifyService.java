@@ -11,6 +11,9 @@ public interface EmailVerifyService {
     // 인증 코드 검증
     boolean verifyEmail(EmailVerifyVO emailVerifyVO);
 
+    // 비밀번호 재설정 등에 사용할 최근 인증 상태 확인
+    boolean isVerifiedCodeValid(String email, String verificationCode);
+
     // 이메일로 아이디 찾기
     String findUsernameByEmail(String email);
 

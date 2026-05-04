@@ -75,6 +75,11 @@ public class SecurityConfig {
                     "/api/image-feeds/groups/*/images"
                 ).permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/qna").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/users/detail/*/public-profile").authenticated()
+
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/users/detail/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/users/*/profile-history").hasRole("ADMIN")
 
                 .anyRequest().authenticated()
             )

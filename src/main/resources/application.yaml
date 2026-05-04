@@ -3,9 +3,9 @@ spring:
     name: foodPlayerServer
 
   datasource:
-    url: jdbc:postgresql://plateappdb.cp6806wks0x5.ap-northeast-2.rds.amazonaws.com:5432/mainproject_2
-    username: master_user
-    password: main1925
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/mainproject_2}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -79,7 +79,7 @@ server:
 jwt:
   access-expire: 3600000        # 1 hour in ms
   refresh-expire: 1209600000    # 14 days in ms
-  secret: ${JWT_SECRET:change-me-please-and-keep-32-bytes-long!!}
+  secret: ${JWT_SECRET}
 
 file:
   upload:
@@ -130,7 +130,7 @@ openai:
   # api-key:
 
 apple:
-  client-id: ${APPLE_CLIENT_ID:}
+  client-id: ${APPLE_CLIENT_ID}
 
 google:
-  client-id: ${GOOGLE_CLIENT_ID:}
+  client-id: ${GOOGLE_CLIENT_ID}

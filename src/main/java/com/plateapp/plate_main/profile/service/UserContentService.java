@@ -50,7 +50,7 @@ public class UserContentService {
         return jdbcTemplate.query(sql, params, (rs, rowNum) -> new UserVideoItem(
                 rs.getInt("store_id"),
                 rs.getString("title"),
-                rs.getString("thumbnail"),
+                s3UploadService.toImageUrl(rs.getString("thumbnail")),
                 s3UploadService.toVideoUrl(rs.getString("file_name")),
                 (Integer) rs.getObject("video_duration"),
                 rs.getString("place_id"),

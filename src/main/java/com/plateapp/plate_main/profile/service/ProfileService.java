@@ -134,7 +134,40 @@ public class ProfileService {
 
     @Transactional
     public void changePassword(String username, ChangePasswordRequest request) {
-        throw new UnsupportedOperationException("Password change is not yet implemented. Please configure PasswordEncoder bean.");
+        if (request == null || request.getCurrentPassword() == null || request.getCurrentPassword().isBlank()) {
+            throw new InvalidPasswordException("Current password is required");
+        }
+        if (request.getNewPassword() == null || request.getNewPassword().isBlank()) {
+            throw new InvalidPasswordException("New password is required");
+        }
+
+        User user = userRepository.findById(username)
+                .orElseThrow(() -> new AccountUnavailableException("User not found"));
+
+        if (user.getPassword() == null || user.getPassword().isBlank()) {
+            throw new UnsupportedAccountDeletionException("Password change is only available for normal accounts");
+        }
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+            throw new InvalidPasswordException("Current password does not match");
+        }
+        if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+            throw new InvalidPasswordException("New password must be different from the current password");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setUpdatedAt(java.time.LocalDate.now());
+        userRepository.save(user);
+
+        profileHistoryService.record(
+                username,
+                ProfileHistoryRequest.builder()
+                        .changeType("CD_003")
+                        .before(Map.of("passwordChanged", false))
+                        .after(Map.of("passwordChanged", true, "changeMethod", "authenticated_user"))
+                        .build()
+        );
+
+        refreshTokenRepository.deleteByUsername(username);
     }
 
     @Transactional(readOnly = true)

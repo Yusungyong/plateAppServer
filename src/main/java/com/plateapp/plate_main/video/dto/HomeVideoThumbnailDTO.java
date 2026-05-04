@@ -10,6 +10,7 @@ import lombok.Data;
 @Builder
 public class HomeVideoThumbnailDTO {
     private Integer storeId;
+    private String username;
     private String title;
     private String fileName;
     private String thumbnail;
