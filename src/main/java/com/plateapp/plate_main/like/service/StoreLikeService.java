@@ -8,6 +8,12 @@ import com.plateapp.plate_main.like.dto.LikeToggleResponse;
 import com.plateapp.plate_main.like.dto.LikeUserDTO;
 import com.plateapp.plate_main.like.entity.StoreLike;
 import com.plateapp.plate_main.like.repository.StoreLikeRepository;
+import com.plateapp.plate_main.notification.service.NotificationCommandService;
+import com.plateapp.plate_main.video.entity.Fp300Store;
+import com.plateapp.plate_main.video.repository.Fp300StoreRepository;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -15,16 +21,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
-
 @Service
 @RequiredArgsConstructor
 public class StoreLikeService {
 
     private final StoreLikeRepository likeRepository;
     private final UserRepository userRepository;
+    private final Fp300StoreRepository storeRepository;
+    private final NotificationCommandService notificationCommandService;
 
     @Transactional
     public LikeToggleResponse toggleLike(Integer storeId, String username) {
@@ -34,23 +38,20 @@ public class StoreLikeService {
         if (existingLike.isPresent()) {
             StoreLike like = existingLike.get();
             if ("Y".equals(like.getUseYn())) {
-                // 좋아요 활성 -> 비활성(소프트 삭제)
                 like.setUseYn("N");
                 like.setDeletedAt(java.time.LocalDateTime.now());
                 likeRepository.save(like);
                 isLiked = false;
             } else {
-                // 좋아요 비활성 -> 재활성
                 like.setUseYn("Y");
                 like.setDeletedAt(null);
                 likeRepository.save(like);
                 isLiked = true;
             }
         } else {
-            // 좋아요 신규 추가
             StoreLike like = StoreLike.builder()
                     .storeId(storeId)
-                    .userId(username) // username 저장
+                    .userId(username)
                     .useYn("Y")
                     .build();
             likeRepository.save(like);
@@ -58,6 +59,13 @@ public class StoreLikeService {
         }
 
         long likeCount = likeRepository.countByStoreIdAndUseYn(storeId, "Y");
+
+        if (isLiked) {
+            storeRepository.findById(storeId)
+                    .map(Fp300Store::getUsername)
+                    .filter(ownerUsername -> ownerUsername != null && !ownerUsername.equals(username))
+                    .ifPresent(ownerUsername -> notificationCommandService.notifyStoreLike(username, ownerUsername, storeId));
+        }
 
         return LikeToggleResponse.builder()
                 .isLiked(isLiked)

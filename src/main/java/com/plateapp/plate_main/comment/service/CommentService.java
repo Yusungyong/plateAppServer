@@ -1,5 +1,15 @@
 package com.plateapp.plate_main.comment.service;
 
+import com.plateapp.plate_main.comment.dto.CommentDtos;
+import com.plateapp.plate_main.comment.entity.Fp440Comment;
+import com.plateapp.plate_main.comment.entity.Fp450Reply;
+import com.plateapp.plate_main.comment.repository.CommentRepository;
+import com.plateapp.plate_main.comment.repository.ReplyRepository;
+import com.plateapp.plate_main.notification.service.NotificationCommandService;
+import com.plateapp.plate_main.user.entity.Fp100User;
+import com.plateapp.plate_main.user.repository.MemberRepository;
+import com.plateapp.plate_main.video.entity.Fp300Store;
+import com.plateapp.plate_main.video.repository.Fp300StoreRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -11,7 +21,7 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
-
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -20,16 +30,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import com.plateapp.plate_main.comment.dto.CommentDtos;
-import com.plateapp.plate_main.comment.entity.Fp440Comment;
-import com.plateapp.plate_main.comment.entity.Fp450Reply;
-import com.plateapp.plate_main.comment.repository.CommentRepository;
-import com.plateapp.plate_main.comment.repository.ReplyRepository;
-import com.plateapp.plate_main.user.entity.Fp100User;
-import com.plateapp.plate_main.user.repository.MemberRepository;
-
-import lombok.RequiredArgsConstructor;
-
 @Service
 @RequiredArgsConstructor
 public class CommentService {
@@ -37,6 +37,8 @@ public class CommentService {
   private final CommentRepository commentRepository;
   private final ReplyRepository replyRepository;
   private final MemberRepository memberRepository;
+  private final Fp300StoreRepository storeRepository;
+  private final NotificationCommandService notificationCommandService;
 
   private void validateContent(String content) {
     if (!StringUtils.hasText(content)) {
@@ -47,7 +49,6 @@ public class CommentService {
     }
   }
 
-  // ✅ B안: 댓글 목록은 replies를 채우지 않고 replyCount만 내려준다
   @Transactional(readOnly = true)
   public CommentDtos.PageResponse<CommentDtos.CommentResponse> getStoreComments(int storeId, int page, int size) {
     int safePage = Math.max(page, 0);
@@ -65,7 +66,6 @@ public class CommentService {
         .filter(Objects::nonNull)
         .toList();
 
-    // ✅ replyCount만 가져오기
     Map<Integer, Long> replyCountMap = new HashMap<>();
     if (!commentIds.isEmpty()) {
       for (ReplyRepository.ReplyCountRow row : replyRepository.countByCommentIds(commentIds)) {
@@ -73,14 +73,16 @@ public class CommentService {
       }
     }
 
-    // ✅ 댓글 작성자 프로필만 한번에 조회 (replies 작성자 조회는 여기서 안 함)
     Set<String> usernames = new HashSet<>();
-    for (Fp440Comment c : comments) if (c.getUsername() != null) usernames.add(c.getUsername());
+    for (Fp440Comment c : comments) {
+      if (c.getUsername() != null) {
+        usernames.add(c.getUsername());
+      }
+    }
 
     Map<String, Fp100User> userMap = memberRepository.findByUsernameIn(usernames).stream()
         .collect(Collectors.toMap(Fp100User::getUsername, u -> u));
 
-    // ✅ 응답 조립 (replies는 비움)
     List<CommentDtos.CommentResponse> items = new ArrayList<>();
 
     for (Fp440Comment c : comments) {
@@ -91,23 +93,18 @@ public class CommentService {
       cr.createdAt = c.getCreatedAt();
       cr.updatedAt = c.getUpdatedAt();
       cr.author = toProfile(userMap.get(c.getUsername()), c.getUsername(), c.getUserId());
-
       cr.replyCount = replyCountMap.getOrDefault(c.getCommentId(), 0L);
-      // cr.replies는 기본 빈 리스트 유지
-
       items.add(cr);
     }
 
     return new CommentDtos.PageResponse<>(safePage, safeSize, commentPage.getTotalElements(), items);
   }
 
-  // ✅ B안 핵심: 답글 목록만 별도로 조회
   @Transactional(readOnly = true)
   public CommentDtos.PageResponse<CommentDtos.ReplyResponse> getCommentReplies(int commentId, int page, int size) {
     int safePage = Math.max(page, 0);
     int safeSize = Math.min(Math.max(size, 1), 50);
 
-    // 부모 댓글 유효성(활성 댓글인지)
     Fp440Comment parent = commentRepository.findById(commentId)
         .orElseThrow(() -> new NoSuchElementException("comment not found"));
 
@@ -122,9 +119,12 @@ public class CommentService {
 
     List<Fp450Reply> replies = replyPage.getContent();
 
-    // ✅ 답글 작성자 프로필만 한번에 조회
     Set<String> usernames = new HashSet<>();
-    for (Fp450Reply r : replies) if (r.getUsername() != null) usernames.add(r.getUsername());
+    for (Fp450Reply r : replies) {
+      if (r.getUsername() != null) {
+        usernames.add(r.getUsername());
+      }
+    }
 
     Map<String, Fp100User> userMap = memberRepository.findByUsernameIn(usernames).stream()
         .collect(Collectors.toMap(Fp100User::getUsername, u -> u));
@@ -156,7 +156,14 @@ public class CommentService {
     c.setUseYn("Y");
     c.setDeletedAt(null);
 
-    return commentRepository.save(c).getCommentId();
+    Fp440Comment saved = commentRepository.save(c);
+
+    storeRepository.findById(storeId)
+        .map(Fp300Store::getUsername)
+        .filter(ownerUsername -> ownerUsername != null && !ownerUsername.equals(username))
+        .ifPresent(ownerUsername -> notificationCommandService.notifyStoreComment(username, ownerUsername, storeId, saved.getCommentId()));
+
+    return saved.getCommentId();
   }
 
   @Transactional
@@ -211,7 +218,14 @@ public class CommentService {
     r.setUseYn("Y");
     r.setDeletedAt(null);
 
-    return replyRepository.save(r).getReplyId();
+    Fp450Reply saved = replyRepository.save(r);
+
+    String receiverUsername = parent.getUsername();
+    if (receiverUsername != null && !receiverUsername.equals(username)) {
+      notificationCommandService.notifyStoreReply(username, receiverUsername, parent.getStoreId(), parent.getCommentId(), saved.getReplyId());
+    }
+
+    return saved.getReplyId();
   }
 
   @Transactional

@@ -92,6 +92,9 @@ public class ProfileService {
         if (request.getPhoneNumber() != null) {
             user.setPhone(request.getPhoneNumber());
         }
+        if (request.getFcmToken() != null) {
+            user.setFcmToken(request.getFcmToken());
+        }
 
         User updated = userRepository.save(user);
         return toProfileDTO(updated, true);
