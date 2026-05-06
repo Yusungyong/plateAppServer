@@ -57,12 +57,15 @@ public class SecurityConfig {
                     "/api/auth/reset-password",
                     "/api/health",
                     "/api/home/random-candidates/**",
-                    "/api/map/stores/**"
+                    "/api/map/stores/**",
+                    "/files/**"
                 ).permitAll()
                 .requestMatchers(HttpMethod.GET,
                     "/api/home/video-thumbnails",
                     "/api/home/image-thumbnails",
                     "/api/home/feed",
+                    "/api/home/seasonal",
+                    "/api/home/seasonal/*",
                     "/api/faqs",
                     "/api/faqs/*",
                     "/api/qna",
