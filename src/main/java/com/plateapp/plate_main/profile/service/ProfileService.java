@@ -22,12 +22,12 @@ import com.plateapp.plate_main.video.repository.Fp305WatchHistoryRepository;
 import com.plateapp.plate_main.video.repository.Fp440CommentRepository;
 import com.plateapp.plate_main.video.repository.Fp300StoreRepository;
 import lombok.RequiredArgsConstructor;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -80,20 +80,30 @@ public class ProfileService {
         User user = userRepository.findById(username)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
+        boolean changed = false;
+
         if (request.getNickname() != null) {
             user.setNickname(request.getNickname());
+            changed = true;
         }
         if (request.getActiveRegion() != null) {
             user.setActiveRegion(request.getActiveRegion());
+            changed = true;
         }
         if (request.getEmail() != null) {
             user.setEmail(request.getEmail());
+            changed = true;
         }
         if (request.getPhoneNumber() != null) {
             user.setPhone(request.getPhoneNumber());
+            changed = true;
         }
         if (request.getFcmToken() != null) {
             user.setFcmToken(request.getFcmToken());
+            changed = true;
+        }
+        if (changed) {
+            user.setUpdatedAt(java.time.LocalDate.now());
         }
 
         User updated = userRepository.save(user);

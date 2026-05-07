@@ -1,28 +1,36 @@
 package com.plateapp.plate_main.like.service;
 
+import com.plateapp.plate_main.common.feed.FeedGuard;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.plateapp.plate_main.common.feed.FeedGuard;
 import com.plateapp.plate_main.like.dto.LikeResponses;
 import com.plateapp.plate_main.like.dto.LikeUserResponse;
 import com.plateapp.plate_main.like.entity.Fp60FeedLike;
 import com.plateapp.plate_main.like.repository.FeedLikeRepository;
+import com.plateapp.plate_main.notification.service.NotificationCommandService;
 
 @Service
 public class FeedLikeService {
 
   private static final String Y = "Y";
+  private static final String TEST_PUSH_USERNAME = "su12ng";
 
   private final FeedGuard feedGuard;
   private final FeedLikeRepository likeRepo;
+  private final NotificationCommandService notificationCommandService;
 
-  public FeedLikeService(FeedGuard feedGuard, FeedLikeRepository likeRepo) {
+  public FeedLikeService(
+      FeedGuard feedGuard,
+      FeedLikeRepository likeRepo,
+      NotificationCommandService notificationCommandService
+  ) {
     this.feedGuard = feedGuard;
     this.likeRepo = likeRepo;
+    this.notificationCommandService = notificationCommandService;
   }
 
   private String currentUsername() {
@@ -59,6 +67,11 @@ public class FeedLikeService {
     }
 
     long likeCount = likeRepo.countByFeedIdAndUseYn(feedId, Y);
+
+    if (liked) {
+      notificationCommandService.notifyVideoLikeTest(username, TEST_PUSH_USERNAME, feedId);
+    }
+
     return new LikeResponses.ToggleLikeResponse(liked, likeCount);
   }
 

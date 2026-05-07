@@ -38,6 +38,21 @@ public class NotificationCommandService {
         createAndDispatch(actorUsername, receiverUsername, "FOLLOW", "Friend request", actorUsername + " sent you a friend request.", "friend_request", toLong(requestId), null, null);
     }
 
+    @Transactional
+    public void notifyVideoLikeTest(String actorUsername, String receiverUsername, Integer feedId) {
+        createAndDispatch(
+                actorUsername,
+                receiverUsername,
+                "LIKE",
+                "Test video like",
+                actorUsername + " liked a video feed.",
+                "video",
+                toLong(feedId),
+                null,
+                null
+        );
+    }
+
     private void createAndDispatch(
             String actorUsername,
             String receiverUsername,
