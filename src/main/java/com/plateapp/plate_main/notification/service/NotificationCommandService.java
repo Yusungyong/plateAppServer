@@ -39,14 +39,14 @@ public class NotificationCommandService {
     }
 
     @Transactional
-    public void notifyVideoLikeTest(String actorUsername, String receiverUsername, Integer feedId) {
+    public void notifyFeedLike(String actorUsername, String receiverUsername, Integer feedId) {
         createAndDispatch(
                 actorUsername,
                 receiverUsername,
                 "LIKE",
-                "Test video like",
-                actorUsername + " liked a video feed.",
-                "video",
+                "New like",
+                actorUsername + " liked your image feed.",
+                "image_feed",
                 toLong(feedId),
                 null,
                 null
@@ -84,6 +84,7 @@ public class NotificationCommandService {
         notification.setType(type);
         notification.setMessage(message);
         notification.setReferenceId(targetId);
+        notification.setTargetType(targetType);
         notification.setCommentId(commentId);
         notification.setReplyId(replyId);
         notification.setIsRead(false);

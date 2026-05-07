@@ -16,6 +16,8 @@ public class NotificationDtos {
     public String message;
     public String targetType;
     public Long targetId;
+    public Long commentId;
+    public Long replyId;
     public Boolean isRead;
     public LocalDateTime readAt;
     public LocalDateTime createdAt;

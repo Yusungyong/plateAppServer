@@ -27,8 +27,14 @@ public class Fp20Notification {
   @Column(name = "reference_id")
   private Long referenceId;
 
+  @Column(name = "target_type", length = 50)
+  private String targetType;
+
   @Column(name = "is_read")
   private Boolean isRead;
+
+  @Column(name = "read_at")
+  private LocalDateTime readAt;
 
   @Column(name = "comment_id")
   private Long commentId;
@@ -63,8 +69,14 @@ public class Fp20Notification {
   public Long getReferenceId() { return referenceId; }
   public void setReferenceId(Long referenceId) { this.referenceId = referenceId; }
 
+  public String getTargetType() { return targetType; }
+  public void setTargetType(String targetType) { this.targetType = targetType; }
+
   public Boolean getIsRead() { return isRead; }
   public void setIsRead(Boolean isRead) { this.isRead = isRead; }
+
+  public LocalDateTime getReadAt() { return readAt; }
+  public void setReadAt(LocalDateTime readAt) { this.readAt = readAt; }
 
   public Long getCommentId() { return commentId; }
   public void setCommentId(Long commentId) { this.commentId = commentId; }

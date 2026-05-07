@@ -34,7 +34,8 @@ public interface NotificationRepository extends JpaRepository<Fp20Notification, 
   @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query("""
       update Fp20Notification n
-         set n.isRead = true
+         set n.isRead = true,
+             n.readAt = CURRENT_TIMESTAMP
        where n.id = :id
          and n.receiverId = :receiverId
   """)
@@ -44,7 +45,8 @@ public interface NotificationRepository extends JpaRepository<Fp20Notification, 
   @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query("""
       update Fp20Notification n
-         set n.isRead = true
+         set n.isRead = true,
+             n.readAt = CURRENT_TIMESTAMP
        where n.receiverId = :receiverId
          and (n.isRead = false or n.isRead is null)
   """)

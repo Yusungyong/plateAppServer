@@ -78,10 +78,12 @@ public class NotificationService {
       r.type = normalizeType(n.getType());
       r.title = defaultTitle(r.type);
       r.message = n.getMessage();
-      r.targetType = null;
+      r.targetType = n.getTargetType();
       r.targetId = n.getReferenceId();
+      r.commentId = n.getCommentId();
+      r.replyId = n.getReplyId();
       r.isRead = n.getIsRead() != null ? n.getIsRead() : false;
-      r.readAt = null;
+      r.readAt = n.getReadAt();
       r.createdAt = n.getCreatedAt();
 
       String senderId = n.getSenderId();
