@@ -19,3 +19,6 @@ jwt:
   access-expire: 3600000
   refresh-expire: 1209600000
   secret: test-jwt-secret-key-for-context-load-32bytes
+
+firebase:
+  enabled: false

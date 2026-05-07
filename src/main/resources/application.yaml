@@ -134,3 +134,8 @@ apple:
 
 google:
   client-id: ${GOOGLE_CLIENT_ID}
+
+firebase:
+  enabled: ${FIREBASE_ENABLED:false}
+  project-id: ${FIREBASE_PROJECT_ID:}
+  service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:}

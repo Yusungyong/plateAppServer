@@ -2,9 +2,14 @@ package com.plateapp.plate_main.notification.service;
 
 import com.plateapp.plate_main.auth.domain.User;
 import com.plateapp.plate_main.auth.repository.UserRepository;
+import com.google.firebase.messaging.FirebaseMessaging;
+import com.google.firebase.messaging.FirebaseMessagingException;
+import com.google.firebase.messaging.Message;
+import com.google.firebase.messaging.Notification;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -13,6 +18,7 @@ import org.springframework.stereotype.Service;
 public class PushNotificationService {
 
     private final UserRepository userRepository;
+    private final ObjectProvider<FirebaseMessaging> firebaseMessagingProvider;
 
     public boolean sendToUsername(String receiverUsername, String title, String body, Map<String, String> data) {
         return userRepository.findById(receiverUsername)
@@ -29,15 +35,44 @@ public class PushNotificationService {
             return false;
         }
 
-        log.info(
-                "Push dispatch requested user={} tokenPresent=true title={} body={} data={}",
-                receiver.getUsername(),
-                title,
-                body,
-                data
-        );
+        FirebaseMessaging firebaseMessaging = firebaseMessagingProvider.getIfAvailable();
+        if (firebaseMessaging == null) {
+            log.info("Skip push send: FirebaseMessaging bean unavailable for user={}", receiver.getUsername());
+            return false;
+        }
 
-        // TODO: Firebase Admin SDK integration point.
-        return true;
+        Message message = Message.builder()
+                .setToken(receiver.getFcmToken())
+                .setNotification(Notification.builder()
+                        .setTitle(title)
+                        .setBody(body)
+                        .build())
+                .putAllData(data)
+                .build();
+
+        try {
+            String messageId = firebaseMessaging.send(message);
+            log.info("Push sent user={} messageId={} data={}", receiver.getUsername(), messageId, data);
+            return true;
+        } catch (FirebaseMessagingException e) {
+            log.warn("Push send failed user={} errorCode={} message={}",
+                    receiver.getUsername(),
+                    e.getMessagingErrorCode(),
+                    e.getMessage());
+            if (shouldInvalidateToken(e)) {
+                receiver.setFcmToken(null);
+                userRepository.save(receiver);
+                log.info("Invalidated fcm token for user={}", receiver.getUsername());
+            }
+            return false;
+        }
+    }
+
+    private boolean shouldInvalidateToken(FirebaseMessagingException e) {
+        return e.getMessagingErrorCode() != null
+                && switch (e.getMessagingErrorCode()) {
+                    case UNREGISTERED, INVALID_ARGUMENT -> true;
+                    default -> false;
+                };
     }
 }
