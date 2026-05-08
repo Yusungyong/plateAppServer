@@ -11,6 +11,9 @@ import com.plateapp.plate_main.friend.repository.Fp200VisitRepository;
 import com.plateapp.plate_main.like.repository.ImageFeedLikeRepository;
 import com.plateapp.plate_main.menu.repository.Fp320MenuRepository;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -69,31 +72,7 @@ public class ImageFeedUploadService {
             if (file == null || file.isEmpty()) {
                 continue;
             }
-            String originalName = safeFileName(file.getOriginalFilename(), "image.jpg");
-            String relativePath = buildRelativePath(originalName);
-            String thumbRelativePath = buildThumbnailRelativePath(relativePath);
-            byte[] rawBytes;
-            try {
-                rawBytes = file.getBytes();
-            } catch (IOException e) {
-                throw new IllegalStateException("Failed to read image bytes", e);
-            }
-
-            byte[] optimized;
-            try {
-                optimized = imageProcessingService.resizeMax(rawBytes, 1280, 1280, "jpg");
-            } catch (IOException e) {
-                throw new IllegalStateException("Failed to process image", e);
-            }
-
-            s3UploadService.uploadBytesWithPrefixAndPath(
-                    s3UploadService.getFeedImagePrefix(),
-                    relativePath,
-                    optimized,
-                    "image/jpeg"
-            );
-            uploadThumbnail(rawBytes, thumbRelativePath);
-            imageUrls.add(relativePath);
+            imageUrls.add(processAndUploadImage(file));
         }
 
         if (imageUrls.isEmpty()) {
@@ -183,31 +162,7 @@ public class ImageFeedUploadService {
             if (file == null || file.isEmpty()) {
                 continue;
             }
-            String originalName = safeFileName(file.getOriginalFilename(), "image.jpg");
-            String relativePath = buildRelativePath(originalName);
-            String thumbRelativePath = buildThumbnailRelativePath(relativePath);
-            byte[] rawBytes;
-            try {
-                rawBytes = file.getBytes();
-            } catch (IOException e) {
-                throw new IllegalStateException("Failed to read image bytes", e);
-            }
-
-            byte[] optimized;
-            try {
-                optimized = imageProcessingService.resizeMax(rawBytes, 1280, 1280, "jpg");
-            } catch (IOException e) {
-                throw new IllegalStateException("Failed to process image", e);
-            }
-
-            s3UploadService.uploadBytesWithPrefixAndPath(
-                    s3UploadService.getFeedImagePrefix(),
-                    relativePath,
-                    optimized,
-                    "image/jpeg"
-            );
-            uploadThumbnail(rawBytes, thumbRelativePath);
-            newUrls.add(relativePath);
+            newUrls.add(processAndUploadImage(file));
         }
 
         if (newUrls.isEmpty()) {
@@ -323,22 +278,61 @@ public class ImageFeedUploadService {
         return datePrefix + "/thumbnails/300x300/" + filename;
     }
 
-    private void uploadThumbnail(byte[] rawBytes, String thumbRelativePath) {
-        if (rawBytes == null || rawBytes.length == 0 || thumbRelativePath == null) {
+    private String processAndUploadImage(MultipartFile file) {
+        String originalName = safeFileName(file.getOriginalFilename(), "image.jpg");
+        String relativePath = buildRelativePath(originalName);
+        String thumbRelativePath = buildThumbnailRelativePath(relativePath);
+        Path sourcePath = null;
+        Path optimizedPath = null;
+        Path thumbPath = null;
+        try {
+            sourcePath = Files.createTempFile("feed-upload-source-", ".bin");
+            file.transferTo(sourcePath);
+            optimizedPath = imageProcessingService.resizeMaxToTempFile(sourcePath, 1280, 1280, "jpg");
+            thumbPath = createThumbnail(sourcePath, thumbRelativePath);
+            uploadFile(optimizedPath, relativePath);
+            uploadFile(thumbPath, thumbRelativePath);
+            return relativePath;
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to process image", e);
+        } finally {
+            deleteTempFile(sourcePath);
+            deleteTempFile(optimizedPath);
+            deleteTempFile(thumbPath);
+        }
+    }
+
+    private Path createThumbnail(Path sourcePath, String thumbRelativePath) throws IOException {
+        if (sourcePath == null || thumbRelativePath == null) {
+            return null;
+        }
+        return imageProcessingService.resizeCropCenterToTempFile(sourcePath, 300, 300, "jpg");
+    }
+
+    private void uploadFile(Path filePath, String relativePath) throws IOException {
+        if (filePath == null || relativePath == null) {
             return;
         }
-        byte[] thumbBytes;
-        try {
-            thumbBytes = imageProcessingService.resizeCropCenter(rawBytes, 300, 300, "jpg");
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to generate thumbnail", e);
+        try (InputStream inputStream = Files.newInputStream(filePath)) {
+            s3UploadService.uploadStreamWithPrefixAndPath(
+                    s3UploadService.getFeedImagePrefix(),
+                    relativePath,
+                    inputStream,
+                    Files.size(filePath),
+                    "image/jpeg"
+            );
         }
-        s3UploadService.uploadBytesWithPrefixAndPath(
-                s3UploadService.getFeedImagePrefix(),
-                thumbRelativePath,
-                thumbBytes,
-                "image/jpeg"
-        );
+    }
+
+    private void deleteTempFile(Path path) {
+        if (path == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException ignored) {
+            // Temp file cleanup failure should not mask the upload result.
+        }
     }
 
     private void deleteImageObjects(String relativePath) {

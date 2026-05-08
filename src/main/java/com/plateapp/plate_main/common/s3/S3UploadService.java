@@ -132,6 +132,24 @@ public class S3UploadService {
         return key;
     }
 
+    public String uploadStreamWithPrefixAndPath(
+            String prefix,
+            String relativePath,
+            InputStream inputStream,
+            long contentLength,
+            String contentType
+    ) {
+        String key = buildKeyWithPath(normalizePrefix(prefix), relativePath);
+        PutObjectRequest putRequest = PutObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .contentLength(contentLength)
+                .contentType(resolveContentType(relativePath, contentType))
+                .build();
+        s3Client.putObject(putRequest, RequestBody.fromInputStream(inputStream, contentLength));
+        return key;
+    }
+
     public void deleteObjectByUrl(String objectUrl) {
         String key = extractKey(objectUrl);
         if (key == null) {
