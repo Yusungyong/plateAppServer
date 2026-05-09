@@ -19,6 +19,7 @@ public class LoginHistoryService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void log(
             String username,
+            Integer userId,
             String status,
             String failReason,
             String ipAddress,
@@ -31,6 +32,7 @@ public class LoginHistoryService {
         try {
             LoginHistory history = LoginHistory.builder()
                     .username(username)
+                    .userId(userId)
                     .loginDatetime(OffsetDateTime.now())
                     .ipAddress(ipAddress)
                     .loginStatus(status)

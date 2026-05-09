@@ -26,8 +26,14 @@ public class Fp40Report {
     @Column(name = "reporter_username", nullable = false)
     private String reporterUsername;
 
+    @Column(name = "reporter_user_id")
+    private Integer reporterUserId;
+
     @Column(name = "target_username")
     private String targetUsername;
+
+    @Column(name = "target_user_id")
+    private Integer targetUserId;
 
     @Column(name = "target_type", nullable = false)
     private String targetType;

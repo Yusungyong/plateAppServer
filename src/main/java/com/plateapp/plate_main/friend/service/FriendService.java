@@ -78,13 +78,16 @@ public class FriendService {
                 .orElseGet(Fp150Friend::new);
 
         friend.setUsername(request.username());
+        friend.setUserId(resolveUserId(request.username()));
         friend.setFriendName(request.friendName());
+        friend.setFriendUserId(resolveUserId(request.friendName()));
         friend.setStatus(request.status() != null && !request.status().isBlank()
                 ? request.status()
                 : (friend.getStatus() != null ? friend.getStatus() : "pending"));
         friend.setInitiatorUsername(request.initiatorUsername() != null && !request.initiatorUsername().isBlank()
                 ? request.initiatorUsername()
                 : request.username());
+        friend.setInitiatorUserId(resolveUserId(friend.getInitiatorUsername()));
         friend.setMessage(request.message());
 
         Fp150Friend saved = repository.save(friend);
@@ -354,5 +357,14 @@ public class FriendService {
                 .updatedAt(e.getUpdatedAt())
                 .acceptedAt(e.getAcceptedAt())
                 .build();
+    }
+
+    private Integer resolveUserId(String username) {
+        if (username == null || username.isBlank()) {
+            return null;
+        }
+        return memberRepository.findById(username)
+                .map(Fp100User::getUserId)
+                .orElse(null);
     }
 }

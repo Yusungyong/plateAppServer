@@ -31,6 +31,9 @@ public class RefreshToken {
     @Column(name = "username", nullable = false)
     private String username;
 
+    @Column(name = "user_id")
+    private Integer userId;
+
     @Column(name = "refresh_token", nullable = false)
     private String refreshToken;
 

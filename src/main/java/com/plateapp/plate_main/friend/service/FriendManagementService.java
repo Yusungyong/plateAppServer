@@ -141,9 +141,12 @@ public class FriendManagementService {
 
         Fp150Friend request = new Fp150Friend();
         request.setUsername(fromUsername);
+        request.setUserId(fromUserId);
         request.setFriendName(toUser.getUsername());
+        request.setFriendUserId(toUser.getUserId());
         request.setStatus("pending");
         request.setInitiatorUsername(fromUsername);
+        request.setInitiatorUserId(fromUserId);
 
         Fp150Friend saved = friendRepository.save(request);
         notificationCommandService.notifyFriendRequest(fromUsername, toUser.getUsername(), saved.getId());
@@ -186,9 +189,12 @@ public class FriendManagementService {
 
         Fp150Friend reciprocal = new Fp150Friend();
         reciprocal.setUsername(request.getFriendName());
+        reciprocal.setUserId(request.getFriendUserId());
         reciprocal.setFriendName(request.getUsername());
+        reciprocal.setFriendUserId(request.getUserId());
         reciprocal.setStatus("accepted");
         reciprocal.setInitiatorUsername(request.getInitiatorUsername());
+        reciprocal.setInitiatorUserId(request.getInitiatorUserId());
         reciprocal.setAcceptedAt(LocalDateTime.now());
         friendRepository.save(reciprocal);
     }

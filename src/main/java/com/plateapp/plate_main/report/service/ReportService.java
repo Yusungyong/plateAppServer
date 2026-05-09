@@ -1,5 +1,6 @@
 package com.plateapp.plate_main.report.service;
 
+import com.plateapp.plate_main.auth.repository.UserRepository;
 import com.plateapp.plate_main.common.error.AppException;
 import com.plateapp.plate_main.common.error.ErrorCode;
 import com.plateapp.plate_main.report.dto.ReportCreateRequest;
@@ -35,6 +36,7 @@ public class ReportService {
     private final Fp300StoreRepository fp300StoreRepository;
     private final ImageFeedRepository imageFeedRepository;
     private final S3UploadService s3UploadService;
+    private final UserRepository userRepository;
 
     @Transactional
     public Integer createReport(String reporterUsername, ReportCreateRequest request) {
@@ -54,7 +56,9 @@ public class ReportService {
 
         Fp40Report report = new Fp40Report();
         report.setReporterUsername(reporterUsername);
+        report.setReporterUserId(userRepository.findUserIdByUsername(reporterUsername));
         report.setTargetUsername(trimToNull(request.getTargetUsername()));
+        report.setTargetUserId(resolveTargetUserId(report.getTargetUsername()));
         report.setTargetType(targetType);
         report.setTargetId(request.getTargetId());
         report.setReason(reason);
@@ -202,5 +206,12 @@ public class ReportService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private Integer resolveTargetUserId(String targetUsername) {
+        if (targetUsername == null || targetUsername.isBlank()) {
+            return null;
+        }
+        return userRepository.findUserIdByUsername(targetUsername);
     }
 }

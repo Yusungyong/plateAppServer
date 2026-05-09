@@ -32,6 +32,9 @@ public class LoginHistory {
     @Column(name = "username", nullable = false)
     private String username;
 
+    @Column(name = "user_id")
+    private Integer userId;
+
     @Column(name = "login_datetime")
     private OffsetDateTime loginDatetime;
 

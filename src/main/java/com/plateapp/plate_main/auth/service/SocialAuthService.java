@@ -102,10 +102,10 @@ public class SocialAuthService {
 
             String accessToken = jwtProvider.createAccessToken(user.getUsername(), normalizeRole(user.getRole()));
             String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
-            logSocialLogin(user.getUsername(), "SUCCESS", null, ipAddress);
+            logSocialLogin(user, "SUCCESS", null, ipAddress);
             return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
         } catch (RuntimeException e) {
-            logSocialLogin(extractSocialUsername(request.getUser(), provider), "FAIL", provider + "_LOGIN_FAILED", ipAddress);
+            logSocialLogin(extractSocialUsername(request.getUser(), provider), null, "FAIL", provider + "_LOGIN_FAILED", ipAddress);
             throw e;
         }
     }
@@ -294,10 +294,10 @@ public class SocialAuthService {
 
             String accessToken = jwtProvider.createAccessToken(user.getUsername(), normalizeRole(user.getRole()));
             String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
-            logSocialLogin(user.getUsername(), "SUCCESS", null, ipAddress);
+            logSocialLogin(user, "SUCCESS", null, ipAddress);
             return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
         } catch (RuntimeException e) {
-            logSocialLogin(null, "FAIL", provider + "_LOGIN_FAILED", ipAddress);
+            logSocialLogin(null, null, "FAIL", provider + "_LOGIN_FAILED", ipAddress);
             throw e;
         }
     }
@@ -407,10 +407,10 @@ public class SocialAuthService {
 
             String accessToken = jwtProvider.createAccessToken(user.getUsername(), normalizeRole(user.getRole()));
             String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
-            logSocialLogin(user.getUsername(), "SUCCESS", null, ipAddress);
+            logSocialLogin(user, "SUCCESS", null, ipAddress);
             return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
         } catch (RuntimeException e) {
-            logSocialLogin(null, "FAIL", provider + "_LOGIN_FAILED", ipAddress);
+            logSocialLogin(null, null, "FAIL", provider + "_LOGIN_FAILED", ipAddress);
             throw e;
         }
     }
@@ -424,9 +424,14 @@ public class SocialAuthService {
         return payload.getSub();
     }
 
-    private void logSocialLogin(String username, String status, String failReason, String ipAddress) {
+    private void logSocialLogin(User user, String status, String failReason, String ipAddress) {
+        logSocialLogin(user != null ? user.getUsername() : null, user != null ? user.getUserId() : null, status, failReason, ipAddress);
+    }
+
+    private void logSocialLogin(String username, Integer userId, String status, String failReason, String ipAddress) {
         loginHistoryService.log(
                 username != null && !username.isBlank() ? username : "social-user",
+                userId,
                 status,
                 failReason,
                 ipAddress,

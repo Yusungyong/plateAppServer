@@ -26,14 +26,23 @@ public class Fp150Friend {
     @Column(name = "username", length = 20, nullable = false)
     private String username;
 
+    @Column(name = "user_id")
+    private Integer userId;
+
     @Column(name = "friend_name", length = 20, nullable = false)
     private String friendName;
+
+    @Column(name = "friend_user_id")
+    private Integer friendUserId;
 
     @Column(name = "status", length = 20, nullable = false)
     private String status = "pending";
 
     @Column(name = "initiator_username", length = 20)
     private String initiatorUsername;
+
+    @Column(name = "initiator_user_id")
+    private Integer initiatorUserId;
 
     @Column(name = "message")
     private String message;

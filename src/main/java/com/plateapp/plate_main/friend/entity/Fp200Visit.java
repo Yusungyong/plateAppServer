@@ -25,8 +25,14 @@ public class Fp200Visit {
     @Column(name = "username", length = 100, nullable = false)
     private String username;
 
+    @Column(name = "user_id")
+    private Integer userId;
+
     @Column(name = "friend_name", length = 100, nullable = false)
     private String friendName;
+
+    @Column(name = "friend_user_id")
+    private Integer friendUserId;
 
     @Column(name = "store_id")
     private Integer storeId;

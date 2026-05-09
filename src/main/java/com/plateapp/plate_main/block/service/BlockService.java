@@ -45,9 +45,18 @@ public class BlockService {
             return;
         }
 
+        Integer blockerUserId = memberRepository.findById(blockerUsername)
+                .map(Fp100User::getUserId)
+                .orElse(null);
+        Integer blockedUserId = memberRepository.findById(blockedUsername)
+                .map(Fp100User::getUserId)
+                .orElse(null);
+
         Fp160Block block = new Fp160Block();
         block.setBlockerUsername(blockerUsername);
+        block.setBlockerUserId(blockerUserId);
         block.setBlockedUsername(blockedUsername);
+        block.setBlockedUserId(blockedUserId);
         block.setBlockedAt(LocalDateTime.now());
         blockRepository.save(block);
     }

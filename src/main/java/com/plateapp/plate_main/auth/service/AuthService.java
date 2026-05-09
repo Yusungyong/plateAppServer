@@ -73,14 +73,14 @@ public class AuthService {
         try {
             User user = userRepository.findById(username).orElse(null);
             if (user == null) {
-                loginHistoryService.log(username, "FAIL", "USER_NOT_FOUND",
+                loginHistoryService.log(username, null, "FAIL", "USER_NOT_FOUND",
                         ipAddress, deviceId, deviceModel, os, osVersion, appVersion);
                 failLogged = true;
                 throw new AuthException(ErrorCode.AUTH_UNAUTHORIZED, loginFailMessage);
             }
 
             if (!passwordEncoder.matches(password, user.getPassword())) {
-                loginHistoryService.log(username, "FAIL", "PASSWORD_MISMATCH",
+                loginHistoryService.log(username, user.getUserId(), "FAIL", "PASSWORD_MISMATCH",
                         ipAddress, deviceId, deviceModel, os, osVersion, appVersion);
                 failLogged = true;
                 throw new AuthException(ErrorCode.AUTH_UNAUTHORIZED, loginFailMessage);
@@ -100,6 +100,7 @@ public class AuthService {
             refreshTokenRepository.save(
                     RefreshToken.builder()
                             .username(username)
+                            .userId(user.getUserId())
                             .refreshToken(refreshToken)
                             .expiryDate(refreshExpiry)
                             .deviceId(deviceId)
@@ -107,19 +108,19 @@ public class AuthService {
                             .build()
             );
 
-            loginHistoryService.log(username, "SUCCESS", null,
+            loginHistoryService.log(username, user.getUserId(), "SUCCESS", null,
                     ipAddress, deviceId, deviceModel, os, osVersion, appVersion);
 
             log.debug("AccessToken issued for {}.", username);
             return new AuthTokens(accessToken, refreshToken);
         } catch (AuthException e) {
             if (!failLogged) {
-                loginHistoryService.log(username, "FAIL", e.getErrorCode().name(),
+                loginHistoryService.log(username, null, "FAIL", e.getErrorCode().name(),
                         ipAddress, deviceId, deviceModel, os, osVersion, appVersion);
             }
             throw e;
         } catch (Exception e) {
-            loginHistoryService.log(username, "FAIL", "UNEXPECTED_ERROR",
+            loginHistoryService.log(username, null, "FAIL", "UNEXPECTED_ERROR",
                     ipAddress, deviceId, deviceModel, os, osVersion, appVersion);
             throw e;
         }
@@ -164,6 +165,7 @@ public class AuthService {
 
         saved.setRefreshToken(newRefresh);
         saved.setExpiryDate(refreshExpiry);
+        saved.setUserId(user.getUserId());
         refreshTokenRepository.save(saved);
 
         return new AuthTokens(newAccess, newRefresh);

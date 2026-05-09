@@ -24,8 +24,14 @@ public class Fp160Block {
     @Column(name = "blocker_username", nullable = false)
     private String blockerUsername;
 
+    @Column(name = "blocker_user_id")
+    private Integer blockerUserId;
+
     @Column(name = "blocked_username", nullable = false)
     private String blockedUsername;
+
+    @Column(name = "blocked_user_id")
+    private Integer blockedUserId;
 
     @Column(name = "blocked_at")
     private LocalDateTime blockedAt;

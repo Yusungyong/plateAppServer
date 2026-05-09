@@ -7,11 +7,16 @@ import com.plateapp.plate_main.friend.dto.FriendVisitUpdateRequest;
 import com.plateapp.plate_main.friend.dto.FriendVisitUpdateResponse;
 import com.plateapp.plate_main.friend.entity.Fp200Visit;
 import com.plateapp.plate_main.friend.repository.Fp200VisitRepository;
+import com.plateapp.plate_main.user.entity.Fp100User;
+import com.plateapp.plate_main.user.repository.MemberRepository;
 import com.plateapp.plate_main.video.entity.Fp300Store;
 import com.plateapp.plate_main.video.repository.Fp300StoreRepository;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +27,7 @@ public class FriendVisitCommandService {
 
     private final Fp200VisitRepository fp200VisitRepository;
     private final Fp300StoreRepository fp300StoreRepository;
+    private final MemberRepository memberRepository;
 
     @Transactional
     public FriendVisitCreateResponse saveVisits(String username, FriendVisitCreateRequest req) {
@@ -140,10 +146,17 @@ public class FriendVisitCommandService {
     ) {
         List<Fp200Visit> rows = new ArrayList<>();
         LocalDateTime now = LocalDateTime.now();
+        Integer userId = memberRepository.findById(username)
+                .map(Fp100User::getUserId)
+                .orElse(null);
+        Map<String, Integer> friendUserIds = memberRepository.findByUsernameIn(targets).stream()
+                .collect(Collectors.toMap(Fp100User::getUsername, Fp100User::getUserId, (a, b) -> a));
         for (String friend : targets) {
             Fp200Visit v = new Fp200Visit();
             v.setUsername(username);
+            v.setUserId(userId);
             v.setFriendName(friend);
+            v.setFriendUserId(friendUserIds.get(friend));
             v.setStoreId(storeInfo.storeId);
             v.setStoreName(storeInfo.storeName);
             v.setAddress(storeInfo.address);
