@@ -14,5 +14,6 @@ public record SearchQuery(
         Double lng,
         SearchSort sort,
         int page,
-        int size
+        int size,
+        String viewerUsername
 ) {}

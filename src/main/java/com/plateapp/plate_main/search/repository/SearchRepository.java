@@ -83,6 +83,7 @@ public class SearchRepository {
         Double lat = query.lat();
         Double lng = query.lng();
         Integer radiusM = query.radiusM();
+        String viewerUsername = query.viewerUsername();
         int limit = query.size();
         int offset = Math.max(0, query.page()) * limit;
 
@@ -102,9 +103,9 @@ public class SearchRepository {
         params.addValue("offset", offset);
 
         String distanceExpr = buildDistanceExpr(lat, lng);
-        String placeSql = buildPlaceQuery(keyword, category, tags, lat, lng, radiusM, distanceExpr, params);
-        String videoSql = buildVideoQuery(keyword, category, tags, lat, lng, radiusM, distanceExpr, params);
-        String imageSql = buildImageQuery(keyword, category, tags, lat, lng, radiusM, distanceExpr, params);
+        String placeSql = buildPlaceQuery(keyword, category, tags, lat, lng, radiusM, distanceExpr, viewerUsername, params);
+        String videoSql = buildVideoQuery(keyword, category, tags, lat, lng, radiusM, distanceExpr, viewerUsername, params);
+        String imageSql = buildImageQuery(keyword, category, tags, lat, lng, radiusM, distanceExpr, viewerUsername, params);
 
         String unionSql = """
             WITH feed_counts AS (
@@ -206,6 +207,7 @@ public class SearchRepository {
         Double lng,
         Integer radiusM,
         String distanceExpr,
+        String viewerUsername,
         MapSqlParameterSource params
     ) {
         StringBuilder where = new StringBuilder("WHERE s.use_yn = 'Y' AND s.open_yn = 'Y' AND s.deleted_at IS NULL");
@@ -215,6 +217,7 @@ public class SearchRepository {
         if (category != null && !category.isBlank()) {
             where.append(" AND EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE t ILIKE :category)");
         }
+        where.append(buildExcludedAuthorFilter(viewerUsername, "s.username", params));
         where.append(buildTagFilter(tags, "store_id", "s.store_id", params, "tag_place_"));
         where.append(buildRadiusFilter(lat, lng, radiusM, distanceExpr));
 
@@ -257,6 +260,7 @@ public class SearchRepository {
         Double lng,
         Integer radiusM,
         String distanceExpr,
+        String viewerUsername,
         MapSqlParameterSource params
     ) {
         StringBuilder where = new StringBuilder("WHERE s.use_yn = 'Y' AND s.open_yn = 'Y' AND s.deleted_at IS NULL");
@@ -266,6 +270,7 @@ public class SearchRepository {
         if (category != null && !category.isBlank()) {
             where.append(" AND EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE t ILIKE :category)");
         }
+        where.append(buildExcludedAuthorFilter(viewerUsername, "s.username", params));
         where.append(buildTagFilter(tags, "store_id", "s.store_id", params, "tag_video_"));
         where.append(buildRadiusFilter(lat, lng, radiusM, distanceExpr));
 
@@ -301,6 +306,7 @@ public class SearchRepository {
         Double lng,
         Integer radiusM,
         String distanceExpr,
+        String viewerUsername,
         MapSqlParameterSource params
     ) {
         StringBuilder where = new StringBuilder("WHERE f.use_yn = 'Y'");
@@ -310,6 +316,7 @@ public class SearchRepository {
         if (category != null && !category.isBlank()) {
             where.append(" AND EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE t ILIKE :category)");
         }
+        where.append(buildExcludedAuthorFilter(viewerUsername, "f.username", params));
         where.append(buildTagFilter(tags, "feed_id", "f.feed_no", params, "tag_image_"));
         where.append(buildRadiusFilter(lat, lng, radiusM, distanceExpr));
 
@@ -326,7 +333,7 @@ public class SearchRepository {
               NULL::integer AS feed_count,
               NULL::varchar AS content_type,
               NULL::integer AS image_feed_id,
-              f.thumbnail,
+              COALESCE(NULLIF(f.thumbnail, ''), NULLIF(split_part(COALESCE(f.images, ''), ',', 1), '')) AS thumbnail,
               f.feed_title AS title,
               f.feed_no AS feed_id,
               f.created_at AS created_at,
@@ -366,6 +373,30 @@ public class SearchRepository {
         return " AND EXISTS (SELECT 1 FROM fp_350 t, regexp_split_to_table(t.tags, ',') AS tag"
             + " WHERE t." + tagOwnerColumn + " = " + ownerColumnRef
             + " AND (" + joined + "))";
+    }
+
+    private String buildExcludedAuthorFilter(String viewerUsername, String authorColumnRef, MapSqlParameterSource params) {
+        if (viewerUsername == null || viewerUsername.isBlank()) {
+            return "";
+        }
+        if (!params.hasValue("viewer_username")) {
+            params.addValue("viewer_username", viewerUsername, Types.VARCHAR);
+        }
+        return """
+            AND NOT EXISTS (
+                SELECT 1
+                FROM fp_160 b
+                WHERE b.blocker_username = :viewer_username
+                  AND b.blocked_username = %s
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM fp_40 r
+                WHERE r.reporter_username = :viewer_username
+                  AND r.target_username = %s
+                  AND r.target_username IS NOT NULL
+            )
+            """.formatted(authorColumnRef, authorColumnRef);
     }
 
     private String buildRadiusFilter(Double lat, Double lng, Integer radiusM, String distanceExpr) {

@@ -13,6 +13,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -72,10 +74,25 @@ public class SearchController {
             lng,
             safeSort,
             safePage,
-            safeSize
+            safeSize,
+            resolveUsername(isGuest, guestId)
         );
 
         return ResponseEntity.ok(searchService.search(query));
+    }
+
+    private String resolveUsername(Boolean isGuest, String guestId) {
+        if (Boolean.TRUE.equals(isGuest)) {
+            return null;
+        }
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated()) {
+            String name = auth.getName();
+            if (name != null && !name.isBlank() && !"anonymousUser".equalsIgnoreCase(name)) {
+                return name;
+            }
+        }
+        return null;
     }
 
     private SearchScope parseScope(String value) {
