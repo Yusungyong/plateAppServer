@@ -16,12 +16,16 @@ public class ImageFeedUploadResponse {
     public List<ImageItem> images;
 
     public static class ImageItem {
+        public Integer imageId;
         public Integer orderNo;
         public String fileName;
+        public String thumbnailUrl;
 
-        public ImageItem(Integer orderNo, String fileName) {
+        public ImageItem(Integer imageId, Integer orderNo, String fileName, String thumbnailUrl) {
+            this.imageId = imageId;
             this.orderNo = orderNo;
             this.fileName = fileName;
+            this.thumbnailUrl = thumbnailUrl;
         }
     }
 }

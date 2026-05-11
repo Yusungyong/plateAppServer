@@ -29,5 +29,5 @@ public record ImageFeedViewerResponse(
 
         List<ImageItem> images
 ) {
-    public record ImageItem(Integer orderNo, String fileName) {}
+    public record ImageItem(Integer imageId, Integer orderNo, String fileName, String thumbnailUrl) {}
 }

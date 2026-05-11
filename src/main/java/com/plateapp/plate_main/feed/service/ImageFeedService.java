@@ -23,6 +23,7 @@ import com.plateapp.plate_main.feed.repository.ImageFeedContextQueryRepository;
 import com.plateapp.plate_main.feed.repository.ImageFeedRepository;
 import com.plateapp.plate_main.like.repository.FeedLikeRepository;
 import com.plateapp.plate_main.report.repository.ReportRepository;
+import com.plateapp.plate_main.common.s3.S3UploadService;
 import com.plateapp.plate_main.user.entity.Fp100User;
 
 @Service
@@ -34,6 +35,7 @@ public class ImageFeedService {
   private final FeedLikeRepository feedLikeRepository;
   private final BlockRepository blockRepository;
   private final ReportRepository reportRepository;
+  private final S3UploadService s3UploadService;
 
     private final ImageFeedContextQueryRepository contextQueryRepository;
 
@@ -44,7 +46,8 @@ public class ImageFeedService {
     FeedLikeRepository feedLikeRepository,
     ImageFeedContextQueryRepository contextQueryRepository,
     BlockRepository blockRepository,
-    ReportRepository reportRepository
+    ReportRepository reportRepository,
+    S3UploadService s3UploadService
   ) {
     this.imageFeedRepository = imageFeedRepository;
     this.commentRepository = commentRepository;
@@ -53,6 +56,7 @@ public class ImageFeedService {
     this.contextQueryRepository = contextQueryRepository;
     this.blockRepository = blockRepository;
     this.reportRepository = reportRepository;
+    this.s3UploadService = s3UploadService;
   }
 
   @Transactional(readOnly = true)
@@ -178,9 +182,35 @@ public class ImageFeedService {
     List<ImageFeedViewerResponse.ImageItem> result = new ArrayList<>();
     int order = 1;
     for (String fileName : unique) {
-      result.add(new ImageFeedViewerResponse.ImageItem(order++, fileName));
+      result.add(new ImageFeedViewerResponse.ImageItem(
+              order,
+              order,
+              fileName,
+              resolveThumbnailUrl(buildThumbnailRelativePath(fileName))
+      ));
+      order++;
     }
     return result;
+  }
+
+  private String resolveThumbnailUrl(String thumbnail) {
+    if (thumbnail == null || thumbnail.isBlank()) {
+      return null;
+    }
+    return s3UploadService.toFeedImageUrl(thumbnail);
+  }
+
+  private String buildThumbnailRelativePath(String relativePath) {
+    if (relativePath == null || relativePath.isBlank()) {
+      return null;
+    }
+    int slash = relativePath.indexOf('/');
+    if (slash <= 0 || slash == relativePath.length() - 1) {
+      return null;
+    }
+    String datePrefix = relativePath.substring(0, slash);
+    String filename = relativePath.substring(slash + 1);
+    return datePrefix + "/thumbnails/300x300/" + filename;
   }
 
   private List<Integer> filterExcludedFeeds(List<Integer> feedIds, Set<String> excluded, Integer baseFeedId) {

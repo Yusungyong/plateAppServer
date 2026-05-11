@@ -84,6 +84,7 @@ public class ImageFeedUploadService {
         feed.setUsername(username);
         feed.setContent(content);
         feed.setImages(String.join(",", imageUrls));
+        feed.setThumbnail(resolveFeedThumbnail(imageUrls));
         feed.setCreatedAt(now);
         feed.setUpdatedAt(now);
         feed.setLocation(address);
@@ -172,6 +173,7 @@ public class ImageFeedUploadService {
         List<String> currentUrls = parseImages(feed.getImages());
         currentUrls.addAll(newUrls);
         feed.setImages(String.join(",", currentUrls));
+        feed.setThumbnail(resolveFeedThumbnail(currentUrls));
         feed.setUpdatedAt(LocalDateTime.now());
         imageFeedRepository.save(feed);
 
@@ -190,6 +192,46 @@ public class ImageFeedUploadService {
     }
 
     @Transactional
+    public ImageFeedUploadResponse.ImageItem replaceImage(
+            Integer feedId,
+            Integer imageId,
+            MultipartFile file,
+            String username
+    ) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("file is required");
+        }
+        if (imageId == null || imageId <= 0) {
+            throw new IllegalArgumentException("imageId is invalid");
+        }
+
+        Fp400ImageFeed feed = imageFeedRepository.findById(feedId)
+                .orElseThrow(() -> new IllegalArgumentException("feed not found"));
+        if (!username.equals(feed.getUsername())) {
+            throw new AccessDeniedException("feed owner mismatch");
+        }
+
+        List<String> currentUrls = parseImages(feed.getImages());
+        int index = imageId - 1;
+        if (index < 0 || index >= currentUrls.size()) {
+            throw new IllegalArgumentException("image not found");
+        }
+
+        String oldRelativePath = currentUrls.get(index);
+        String newRelativePath = processAndUploadImage(file);
+        currentUrls.set(index, newRelativePath);
+
+        feed.setImages(String.join(",", currentUrls));
+        feed.setThumbnail(resolveFeedThumbnail(currentUrls));
+        feed.setUpdatedAt(LocalDateTime.now());
+        imageFeedRepository.save(feed);
+
+        deleteImageObjects(oldRelativePath);
+
+        return buildImageItem(imageId, newRelativePath);
+    }
+
+    @Transactional
     public void deleteFeed(Integer feedId, String username) {
         Fp400ImageFeed feed = imageFeedRepository.findById(feedId)
                 .orElseThrow(() -> new IllegalArgumentException("feed not found"));
@@ -201,7 +243,7 @@ public class ImageFeedUploadService {
             deleteImageObjects(url);
         }
         if (feed.getThumbnail() != null && !feed.getThumbnail().isBlank()) {
-            s3UploadService.deleteObjectByUrl(feed.getThumbnail());
+            deleteThumbnailObject(feed.getThumbnail());
         }
 
         List<Integer> commentIds = feedCommentRepository.findIdsByFeedId(feedId);
@@ -220,9 +262,19 @@ public class ImageFeedUploadService {
         List<ImageFeedUploadResponse.ImageItem> items = new ArrayList<>();
         int order = 1;
         for (String url : urls) {
-            items.add(new ImageFeedUploadResponse.ImageItem(order++, url));
+            items.add(buildImageItem(order, url));
+            order++;
         }
         return items;
+    }
+
+    private ImageFeedUploadResponse.ImageItem buildImageItem(int order, String url) {
+        return new ImageFeedUploadResponse.ImageItem(
+                order,
+                order,
+                url,
+                resolveThumbnailUrl(buildThumbnailRelativePath(url))
+        );
     }
 
     private List<String> parseWithFriends(String raw) {
@@ -302,6 +354,13 @@ public class ImageFeedUploadService {
         }
     }
 
+    private String resolveFeedThumbnail(List<String> imageUrls) {
+        if (imageUrls == null || imageUrls.isEmpty()) {
+            return null;
+        }
+        return buildThumbnailRelativePath(imageUrls.get(0));
+    }
+
     private Path createThumbnail(Path sourcePath, String thumbRelativePath) throws IOException {
         if (sourcePath == null || thumbRelativePath == null) {
             return null;
@@ -343,9 +402,27 @@ public class ImageFeedUploadService {
         s3UploadService.deleteObjectByKey(baseKey);
         String thumbRelativePath = buildThumbnailRelativePath(relativePath);
         if (thumbRelativePath != null) {
-            String thumbKey = s3UploadService.getFeedImagePrefix() + trimLeadingSlash(thumbRelativePath);
-            s3UploadService.deleteObjectByKey(thumbKey);
+            deleteThumbnailObject(thumbRelativePath);
         }
+    }
+
+    private void deleteThumbnailObject(String thumbnailPath) {
+        if (thumbnailPath == null || thumbnailPath.isBlank()) {
+            return;
+        }
+        if (thumbnailPath.contains("://")) {
+            s3UploadService.deleteObjectByUrl(thumbnailPath);
+            return;
+        }
+        String thumbKey = s3UploadService.getFeedImagePrefix() + trimLeadingSlash(thumbnailPath);
+        s3UploadService.deleteObjectByKey(thumbKey);
+    }
+
+    private String resolveThumbnailUrl(String thumbnailPath) {
+        if (thumbnailPath == null || thumbnailPath.isBlank()) {
+            return null;
+        }
+        return s3UploadService.toFeedImageUrl(thumbnailPath);
     }
 
     private String trimLeadingSlash(String value) {

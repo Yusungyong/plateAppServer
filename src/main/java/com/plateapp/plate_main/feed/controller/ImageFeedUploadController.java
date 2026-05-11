@@ -10,6 +10,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -81,6 +82,17 @@ public class ImageFeedUploadController {
     ) {
         String username = currentUsername();
         ImageFeedUploadResponse response = imageFeedUploadService.addImages(feedId, files, username);
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/image-feeds/{feedId}/images/{imageId}")
+    public ResponseEntity<ImageFeedUploadResponse.ImageItem> replaceImageFeedImage(
+            @PathVariable("feedId") Integer feedId,
+            @PathVariable("imageId") Integer imageId,
+            @RequestParam("file") MultipartFile file
+    ) {
+        String username = currentUsername();
+        ImageFeedUploadResponse.ImageItem response = imageFeedUploadService.replaceImage(feedId, imageId, file, username);
         return ResponseEntity.ok(response);
     }
 

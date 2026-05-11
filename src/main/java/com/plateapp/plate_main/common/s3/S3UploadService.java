@@ -243,6 +243,18 @@ public class S3UploadService {
         return buildPublicUrl(key);
     }
 
+    public String toFeedImageUrl(String storedPath) {
+        if (storedPath == null || storedPath.isBlank()) {
+            return storedPath;
+        }
+        if (storedPath.contains("://")) {
+            return storedPath;
+        }
+        String feedPrefix = getFeedImagePrefix();
+        String key = storedPath.startsWith(feedPrefix) ? storedPath : feedPrefix + storedPath;
+        return buildPublicUrl(key);
+    }
+
     public void deleteVideoObject(String storedPath) {
         if (storedPath == null || storedPath.isBlank()) {
             return;
