@@ -7,6 +7,7 @@ import com.plateapp.plate_main.profile.dto.DeleteAccountResponse;
 import com.plateapp.plate_main.profile.dto.DeleteSocialAccountRequest;
 import com.plateapp.plate_main.profile.dto.ProfileImageUploadResponse;
 import com.plateapp.plate_main.profile.dto.UpdateProfileRequest;
+import com.plateapp.plate_main.profile.dto.UserUpdateRequests.SyncPushTokenRequest;
 import com.plateapp.plate_main.profile.dto.UserProfileDTO;
 import com.plateapp.plate_main.profile.dto.UserStatsDTO;
 import com.plateapp.plate_main.profile.service.ProfileService;
