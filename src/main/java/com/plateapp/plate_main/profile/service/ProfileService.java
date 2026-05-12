@@ -8,6 +8,7 @@ import com.plateapp.plate_main.auth.service.SocialAuthService;
 import com.plateapp.plate_main.auth.repository.RefreshTokenRepository;
 import com.plateapp.plate_main.auth.repository.SocialAccountRepository;
 import com.plateapp.plate_main.auth.repository.UserRepository;
+import com.plateapp.plate_main.common.image.ImageProcessingService;
 import com.plateapp.plate_main.common.s3.S3UploadService;
 import com.plateapp.plate_main.feed.repository.ImageFeedRepository;
 import com.plateapp.plate_main.friend.repository.Fp150FriendRepository;
@@ -22,6 +23,9 @@ import com.plateapp.plate_main.video.repository.Fp305WatchHistoryRepository;
 import com.plateapp.plate_main.video.repository.Fp440CommentRepository;
 import com.plateapp.plate_main.video.repository.Fp300StoreRepository;
 import lombok.RequiredArgsConstructor;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -42,6 +46,7 @@ public class ProfileService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final SocialAccountRepository socialAccountRepository;
     private final S3UploadService s3UploadService;
+    private final ImageProcessingService imageProcessingService;
     private final BCryptPasswordEncoder passwordEncoder;
     private final ProfileHistoryService profileHistoryService;
     private final SocialAuthService socialAuthService;
@@ -115,13 +120,22 @@ public class ProfileService {
         User user = userRepository.findById(username)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
+        Path sourcePath = null;
+        Path optimizedPath = null;
         try {
-            String imageUrl = s3UploadService.uploadProfileImage(
-                    file.getOriginalFilename(),
-                    file.getInputStream(),
-                    file.getSize(),
-                    file.getContentType()
-            );
+            sourcePath = Files.createTempFile("profile-upload-source-", ".bin");
+            file.transferTo(sourcePath);
+            optimizedPath = imageProcessingService.resizeMaxToTempFile(sourcePath, 1280, 1280, "jpg");
+
+            String imageUrl;
+            try (InputStream inputStream = Files.newInputStream(optimizedPath)) {
+                imageUrl = s3UploadService.uploadProfileImage(
+                        toJpgFileName(file.getOriginalFilename(), "profile.jpg"),
+                        inputStream,
+                        Files.size(optimizedPath),
+                        "image/jpeg"
+                );
+            }
 
             user.setProfileImageUrl(imageUrl);
             userRepository.save(user);
@@ -129,6 +143,9 @@ public class ProfileService {
             return new ProfileImageUploadResponse(imageUrl);
         } catch (Exception e) {
             throw new RuntimeException("Failed to upload profile image", e);
+        } finally {
+            deleteTempFile(sourcePath);
+            deleteTempFile(optimizedPath);
         }
     }
 
@@ -363,6 +380,24 @@ public class ProfileService {
 
     private String normalizeProvider(String provider) {
         return provider == null ? "" : provider.trim().toUpperCase();
+    }
+
+    private String toJpgFileName(String originalName, String fallback) {
+        String safeName = (originalName == null || originalName.isBlank()) ? fallback : originalName;
+        int dot = safeName.lastIndexOf('.');
+        String baseName = dot > 0 ? safeName.substring(0, dot) : safeName;
+        return baseName + ".jpg";
+    }
+
+    private void deleteTempFile(Path path) {
+        if (path == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(path);
+        } catch (Exception ignored) {
+            // Cleanup failure should not mask upload success/failure.
+        }
     }
 
     private UserProfileDTO toProfileDTO(User user, boolean includePrivateInfo) {
