@@ -12,6 +12,7 @@ import com.plateapp.plate_main.common.image.ImageProcessingService;
 import com.plateapp.plate_main.common.s3.S3UploadService;
 import com.plateapp.plate_main.feed.repository.ImageFeedRepository;
 import com.plateapp.plate_main.friend.repository.Fp150FriendRepository;
+import com.plateapp.plate_main.notification.service.UserPushTokenService;
 import com.plateapp.plate_main.profile.dto.ChangePasswordRequest;
 import com.plateapp.plate_main.profile.dto.DeleteSocialAccountRequest;
 import com.plateapp.plate_main.profile.dto.ProfileImageUploadResponse;
@@ -50,6 +51,7 @@ public class ProfileService {
     private final BCryptPasswordEncoder passwordEncoder;
     private final ProfileHistoryService profileHistoryService;
     private final SocialAuthService socialAuthService;
+    private final UserPushTokenService userPushTokenService;
 
     @Transactional(readOnly = true)
     public UserProfileDTO getMyProfile(String username) {
@@ -105,6 +107,7 @@ public class ProfileService {
         }
         if (request.getFcmToken() != null) {
             user.setFcmToken(request.getFcmToken());
+            userPushTokenService.upsertLegacyToken(user, request.getFcmToken());
             changed = true;
         }
         if (changed) {

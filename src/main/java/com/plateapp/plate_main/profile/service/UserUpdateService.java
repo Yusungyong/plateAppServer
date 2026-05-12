@@ -4,6 +4,7 @@ import com.plateapp.plate_main.auth.domain.User;
 import com.plateapp.plate_main.auth.repository.UserRepository;
 import com.plateapp.plate_main.common.image.ImageProcessingService;
 import com.plateapp.plate_main.common.s3.S3UploadService;
+import com.plateapp.plate_main.notification.service.UserPushTokenService;
 import com.plateapp.plate_main.profile.dto.UserDetailResponse;
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,6 +24,7 @@ public class UserUpdateService {
     private final UserRepository userRepository;
     private final S3UploadService s3UploadService;
     private final ImageProcessingService imageProcessingService;
+    private final UserPushTokenService userPushTokenService;
 
     @Transactional
     public UserDetailResponse updateEmail(String username, String email) {
@@ -93,7 +95,10 @@ public class UserUpdateService {
 
     @Transactional
     public UserDetailResponse updateFcmToken(String username, String fcmToken) {
-        return update(username, user -> user.setFcmToken(fcmToken));
+        return update(username, user -> {
+            user.setFcmToken(fcmToken);
+            userPushTokenService.upsertLegacyToken(user, fcmToken);
+        });
     }
 
     @Transactional
