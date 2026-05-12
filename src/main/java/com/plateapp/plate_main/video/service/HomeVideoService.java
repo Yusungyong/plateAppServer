@@ -2,8 +2,12 @@
 package com.plateapp.plate_main.video.service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Collections;
 import java.util.HashSet;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -49,6 +53,9 @@ public class HomeVideoService {
     private static final double NEARBY_RADIUS_MIN = 300.0;
     private static final double NEARBY_RADIUS_MAX = 5000.0;
     private static final int VIDEO_SIZE_MAX = 50;
+    private static final int HOME_CANDIDATE_FETCH_MAX = 120;
+    private static final int HOME_CANDIDATE_FETCH_MULTIPLIER = 3;
+    private static final double EARTH_RADIUS_METERS = 6_371_000.0;
 
     private final Fp300StoreRepository fp300StoreRepository;
     private final Fp303WatchHistoryRepository fp303WatchHistoryRepository;
@@ -77,6 +84,7 @@ public class HomeVideoService {
         int safePage = Math.max(0, page);
         int safeSize = Math.min(Math.max(size, 1), VIDEO_SIZE_MAX);
         Pageable pageable = PageRequest.of(safePage, safeSize);
+        Pageable candidatePageable = PageRequest.of(0, resolveCandidateFetchSize(safePage, safeSize));
         Set<String> excluded = loadExcludedUsernames(username);
 
         if (isNearby(sortType)) {
@@ -87,16 +95,18 @@ public class HomeVideoService {
                     lng,
                     safeRadius,
                     username,
-                    pageable
+                    candidatePageable
             );
-            if (excluded.isEmpty()) {
-                return entityPage.map(this::toThumbnailDto);
-            }
-            List<HomeVideoThumbnailDTO> filtered = entityPage.getContent().stream()
-                    .filter(store -> store.getUsername() == null || !excluded.contains(store.getUsername()))
-                    .map(this::toThumbnailDto)
-                    .toList();
-            return new PageImpl<>(filtered, pageable, filtered.size());
+            return rerankHomeVideoPage(
+                    entityPage.getContent(),
+                    entityPage.getTotalElements(),
+                    pageable,
+                    excluded,
+                    username,
+                    lat,
+                    lng,
+                    safeRadius
+            );
         }
 
         boolean usePlaceFilter = placeIds != null && !placeIds.isEmpty();
@@ -109,17 +119,19 @@ public class HomeVideoService {
                         guestId,
                         usePlaceFilter,
                         safePlaceIds,
-                        pageable
+                        candidatePageable
                 );
 
-        if (excluded.isEmpty()) {
-            return entityPage.map(this::toThumbnailDto);
-        }
-        List<HomeVideoThumbnailDTO> filtered = entityPage.getContent().stream()
-                .filter(store -> store.getUsername() == null || !excluded.contains(store.getUsername()))
-                .map(this::toThumbnailDto)
-                .toList();
-        return new PageImpl<>(filtered, pageable, filtered.size());
+        return rerankHomeVideoPage(
+                entityPage.getContent(),
+                entityPage.getTotalElements(),
+                pageable,
+                excluded,
+                username,
+                lat,
+                lng,
+                null
+        );
     }
 
     private HomeVideoThumbnailDTO toThumbnailDto(Fp300Store e) {
@@ -141,6 +153,217 @@ public class HomeVideoService {
 
     private boolean isNearby(String sortType) {
         return sortType != null && "NEARBY".equalsIgnoreCase(sortType);
+    }
+
+    private int resolveCandidateFetchSize(int safePage, int safeSize) {
+        int requested = (safePage + 1) * safeSize * HOME_CANDIDATE_FETCH_MULTIPLIER;
+        return Math.min(Math.max(requested, safeSize), HOME_CANDIDATE_FETCH_MAX);
+    }
+
+    private Page<HomeVideoThumbnailDTO> rerankHomeVideoPage(
+            List<Fp300Store> candidates,
+            long originalTotal,
+            Pageable pageable,
+            Set<String> excluded,
+            String username,
+            Double lat,
+            Double lng,
+            Double radiusMeters
+    ) {
+        List<Fp300Store> filtered = candidates.stream()
+                .filter(store -> excluded.isEmpty() || store.getUsername() == null || !excluded.contains(store.getUsername()))
+                .toList();
+
+        if (filtered.isEmpty()) {
+            return new PageImpl<>(Collections.emptyList(), pageable, 0);
+        }
+
+        List<HomeVideoThumbnailDTO> ranked = buildRankedHomeThumbnails(filtered, username, lat, lng, radiusMeters);
+        int offset = (int) pageable.getOffset();
+        if (offset >= ranked.size()) {
+            return new PageImpl<>(Collections.emptyList(), pageable, Math.min(originalTotal, ranked.size()));
+        }
+
+        int end = Math.min(offset + pageable.getPageSize(), ranked.size());
+        List<HomeVideoThumbnailDTO> content = ranked.subList(offset, end);
+        long total = Math.min(originalTotal, ranked.size());
+        return new PageImpl<>(content, pageable, total);
+    }
+
+    private List<HomeVideoThumbnailDTO> buildRankedHomeThumbnails(
+            List<Fp300Store> stores,
+            String username,
+            Double lat,
+            Double lng,
+            Double radiusMeters
+    ) {
+        List<Integer> storeIds = extractStoreIds(stores);
+        Map<Integer, Long> likeCountMap = defaultMap(likeService.getLikeCountMap(storeIds));
+        Map<Integer, Long> commentCountMap = defaultMap(loadCommentCountMap(storeIds));
+        Set<Integer> myLikedStoreIdSet = defaultSet(likeService.getMyLikedStoreIdSet(username, storeIds));
+        Map<String, Fp310Place> placeMap = loadPlaceMap(stores);
+
+        List<ScoredHomeVideoCandidate> scored = stores.stream()
+                .map(store -> new ScoredHomeVideoCandidate(
+                        store,
+                        calculateHomeThumbnailScore(store, likeCountMap, commentCountMap, myLikedStoreIdSet, placeMap, lat, lng, radiusMeters)
+                ))
+                .sorted(Comparator.comparingDouble(ScoredHomeVideoCandidate::baseScore).reversed())
+                .toList();
+
+        return diversifyRankedCandidates(scored).stream()
+                .map(candidate -> toThumbnailDto(candidate.store()))
+                .toList();
+    }
+
+    private double calculateHomeThumbnailScore(
+            Fp300Store store,
+            Map<Integer, Long> likeCountMap,
+            Map<Integer, Long> commentCountMap,
+            Set<Integer> myLikedStoreIdSet,
+            Map<String, Fp310Place> placeMap,
+            Double lat,
+            Double lng,
+            Double radiusMeters
+    ) {
+        Integer storeId = store.getStoreId();
+        long likeCount = storeId != null ? likeCountMap.getOrDefault(storeId, 0L) : 0L;
+        long commentCount = storeId != null ? commentCountMap.getOrDefault(storeId, 0L) : 0L;
+
+        double score = 0.0;
+        score += recencyScore(store);
+        score += Math.min(likeCount * 0.35, 4.0);
+        score += Math.min(commentCount * 0.25, 3.0);
+
+        if (storeId != null && myLikedStoreIdSet.contains(storeId)) {
+            score += 1.4;
+        }
+
+        Double distanceMeters = resolveDistanceMeters(store, placeMap, lat, lng);
+        if (distanceMeters != null) {
+            double effectiveRadius = radiusMeters != null ? radiusMeters : NEARBY_RADIUS_DEFAULT;
+            double normalized = Math.min(distanceMeters / effectiveRadius, 1.0);
+            score += (1.0 - normalized) * 3.0;
+        }
+
+        if (store.getTitle() != null && !store.getTitle().isBlank()) {
+            score += 0.15;
+        }
+        if (store.getThumbnail() != null && !store.getThumbnail().isBlank()) {
+            score += 0.1;
+        }
+
+        return score;
+    }
+
+    private double recencyScore(Fp300Store store) {
+        LocalDate referenceDate = store.getUpdatedAt() != null ? store.getUpdatedAt() : store.getCreatedAt();
+        if (referenceDate == null) {
+            return 0.0;
+        }
+
+        long daysOld = Math.max(0, ChronoUnit.DAYS.between(referenceDate, LocalDate.now()));
+        double decay = Math.min(daysOld, 30) * 0.15;
+        return Math.max(0.5, 5.0 - decay);
+    }
+
+    private Map<String, Fp310Place> loadPlaceMap(List<Fp300Store> stores) {
+        List<String> placeIds = stores.stream()
+                .map(Fp300Store::getPlaceId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        if (placeIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        List<Fp310Place> places = fp310PlaceRepository.findByPlaceIdInAndUseYnAndDeletedAtIsNull(placeIds, FLAG_Y);
+        if (places == null || places.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        return places.stream()
+                .filter(place -> place.getPlaceId() != null)
+                .collect(Collectors.toMap(Fp310Place::getPlaceId, place -> place, (left, right) -> left, LinkedHashMap::new));
+    }
+
+    private Double resolveDistanceMeters(
+            Fp300Store store,
+            Map<String, Fp310Place> placeMap,
+            Double lat,
+            Double lng
+    ) {
+        if (lat == null || lng == null || store.getPlaceId() == null) {
+            return null;
+        }
+
+        Fp310Place place = placeMap.get(store.getPlaceId());
+        if (place == null || place.getLatitude() == null || place.getLongitude() == null) {
+            return null;
+        }
+
+        return calculateDistanceMeters(lat, lng, place.getLatitude(), place.getLongitude());
+    }
+
+    private double calculateDistanceMeters(double startLat, double startLng, double endLat, double endLng) {
+        double latDistance = Math.toRadians(endLat - startLat);
+        double lngDistance = Math.toRadians(endLng - startLng);
+        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                + Math.cos(Math.toRadians(startLat))
+                * Math.cos(Math.toRadians(endLat))
+                * Math.sin(lngDistance / 2)
+                * Math.sin(lngDistance / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return EARTH_RADIUS_METERS * c;
+    }
+
+    private List<ScoredHomeVideoCandidate> diversifyRankedCandidates(List<ScoredHomeVideoCandidate> scored) {
+        List<ScoredHomeVideoCandidate> remaining = new ArrayList<>(scored);
+        List<ScoredHomeVideoCandidate> diversified = new ArrayList<>(scored.size());
+        Map<String, Integer> usernameCounts = new LinkedHashMap<>();
+        Map<String, Integer> placeCounts = new LinkedHashMap<>();
+
+        while (!remaining.isEmpty()) {
+            ScoredHomeVideoCandidate next = remaining.stream()
+                    .max(Comparator.comparingDouble(candidate -> adjustedScore(candidate, usernameCounts, placeCounts)))
+                    .orElse(remaining.get(0));
+
+            diversified.add(next);
+            remaining.remove(next);
+
+            String username = next.store().getUsername();
+            if (username != null && !username.isBlank()) {
+                usernameCounts.merge(username, 1, Integer::sum);
+            }
+
+            String placeId = next.store().getPlaceId();
+            if (placeId != null && !placeId.isBlank()) {
+                placeCounts.merge(placeId, 1, Integer::sum);
+            }
+        }
+
+        return diversified;
+    }
+
+    private double adjustedScore(
+            ScoredHomeVideoCandidate candidate,
+            Map<String, Integer> usernameCounts,
+            Map<String, Integer> placeCounts
+    ) {
+        double adjusted = candidate.baseScore();
+
+        String username = candidate.store().getUsername();
+        if (username != null && !username.isBlank()) {
+            adjusted -= usernameCounts.getOrDefault(username, 0) * 1.1;
+        }
+
+        String placeId = candidate.store().getPlaceId();
+        if (placeId != null && !placeId.isBlank()) {
+            adjusted -= placeCounts.getOrDefault(placeId, 0) * 0.8;
+        }
+
+        return adjusted;
     }
 
     private void validateNearbyParams(Double lat, Double lng) {
@@ -445,5 +668,11 @@ public class HomeVideoService {
             this.likeCountMap = likeCountMap;
             this.myLikedStoreIdSet = myLikedStoreIdSet;
         }
+    }
+
+    private record ScoredHomeVideoCandidate(
+            Fp300Store store,
+            double baseScore
+    ) {
     }
 }
