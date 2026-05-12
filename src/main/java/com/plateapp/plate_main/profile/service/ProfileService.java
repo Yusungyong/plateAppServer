@@ -165,6 +165,13 @@ public class ProfileService {
     }
 
     @Transactional
+    public void syncPushToken(String username, String deviceId, String fcmToken, String platform) {
+        User user = userRepository.findById(username)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        userPushTokenService.upsertAppToken(user, deviceId, platform, fcmToken);
+    }
+
+    @Transactional
     public void changePassword(String username, ChangePasswordRequest request) {
         if (request == null || request.getCurrentPassword() == null || request.getCurrentPassword().isBlank()) {
             throw new InvalidPasswordException("Current password is required");

@@ -55,6 +55,15 @@ public class ProfileController {
         return ApiResponse.success(profile);
     }
 
+    @PostMapping("/me/push-token")
+    public ApiResponse<Void> syncPushToken(
+            @Valid @RequestBody SyncPushTokenRequest request,
+            Authentication authentication) {
+        String username = authentication.getName();
+        profileService.syncPushToken(username, request.deviceId(), request.fcmToken(), request.platform());
+        return ApiResponse.success(null);
+    }
+
     @PostMapping("/me/profile-image")
     public ApiResponse<ProfileImageUploadResponse> uploadProfileImage(
             @RequestParam("file") MultipartFile file,

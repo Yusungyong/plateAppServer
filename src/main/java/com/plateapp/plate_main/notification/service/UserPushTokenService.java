@@ -46,11 +46,17 @@ public class UserPushTokenService {
 
     @Transactional
     public Fp24UserPushToken upsertLoginToken(User user, String deviceId, String pushToken) {
+        return upsertAppToken(user, deviceId, LOGIN_PLATFORM, pushToken);
+    }
+
+    @Transactional
+    public Fp24UserPushToken upsertAppToken(User user, String deviceId, String platform, String pushToken) {
         if (user == null || user.getUserId() == null || deviceId == null || deviceId.isBlank()
                 || pushToken == null || pushToken.isBlank()) {
             return null;
         }
-        return upsertToken(user, deviceId, LOGIN_PLATFORM, pushToken);
+        String resolvedPlatform = (platform == null || platform.isBlank()) ? LOGIN_PLATFORM : platform.trim().toUpperCase();
+        return upsertToken(user, deviceId, resolvedPlatform, pushToken);
     }
 
     @Transactional

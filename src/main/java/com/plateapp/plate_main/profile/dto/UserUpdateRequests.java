@@ -6,18 +6,18 @@ import jakarta.validation.constraints.NotNull;
 
 public class UserUpdateRequests {
     public record UpdateEmailRequest(
-            @NotBlank(message = "email은 필수입니다.")
-            @Email(message = "email 형식이 올바르지 않습니다.")
+            @NotBlank(message = "email is required")
+            @Email(message = "email format is invalid")
             String email
     ) {}
 
     public record UpdatePhoneRequest(
-            @NotBlank(message = "phone은 필수입니다.")
+            @NotBlank(message = "phone is required")
             String phone
     ) {}
 
     public record UpdateRoleRequest(
-            @NotBlank(message = "role은 필수입니다.")
+            @NotBlank(message = "role is required")
             String role
     ) {}
 
@@ -31,8 +31,16 @@ public class UserUpdateRequests {
 
     public record UpdateFcmTokenRequest(String fcmToken) {}
 
+    public record SyncPushTokenRequest(
+            @NotBlank(message = "deviceId is required")
+            String deviceId,
+            @NotBlank(message = "fcmToken is required")
+            String fcmToken,
+            String platform
+    ) {}
+
     public record UpdatePrivacyRequest(
-            @NotNull(message = "isPrivate는 필수입니다.")
+            @NotNull(message = "isPrivate is required")
             Boolean isPrivate
     ) {}
 }
