@@ -96,7 +96,6 @@ public class UserUpdateService {
     @Transactional
     public UserDetailResponse updateFcmToken(String username, String fcmToken) {
         return update(username, user -> {
-            user.setFcmToken(fcmToken);
             userPushTokenService.upsertLegacyToken(user, fcmToken);
         });
     }
@@ -130,7 +129,7 @@ public class UserUpdateService {
                 user.getProfileImageUrl(),
                 user.getNickname(),
                 user.getCode(),
-                user.getFcmToken(),
+                userPushTokenService.findLatestActiveTokenValue(user.getUserId()),
                 user.getIsPrivate()
         );
     }

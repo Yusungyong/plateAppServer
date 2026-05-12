@@ -2,6 +2,7 @@ package com.plateapp.plate_main.profile.controller;
 
 import com.plateapp.plate_main.auth.domain.User;
 import com.plateapp.plate_main.auth.repository.UserRepository;
+import com.plateapp.plate_main.notification.service.UserPushTokenService;
 import com.plateapp.plate_main.profile.dto.PublicProfileResponse;
 import com.plateapp.plate_main.profile.dto.UserDetailResponse;
 import com.plateapp.plate_main.profile.dto.UserUpdateRequests.*;
@@ -27,6 +28,7 @@ public class UserDetailController {
 
     private final UserRepository userRepository;
     private final UserUpdateService userUpdateService;
+    private final UserPushTokenService userPushTokenService;
 
     @GetMapping("/{username}")
     public ResponseEntity<UserDetailResponse> getUser(@PathVariable String username, Authentication authentication) {
@@ -46,7 +48,7 @@ public class UserDetailController {
                 user.getProfileImageUrl(),
                 user.getNickname(),
                 user.getCode(),
-                user.getFcmToken(),
+                userPushTokenService.findLatestActiveTokenValue(user.getUserId()),
                 user.getIsPrivate()
         );
         return ResponseEntity.ok(body);

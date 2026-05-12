@@ -106,7 +106,6 @@ public class ProfileService {
             changed = true;
         }
         if (request.getFcmToken() != null) {
-            user.setFcmToken(request.getFcmToken());
             userPushTokenService.upsertLegacyToken(user, request.getFcmToken());
             changed = true;
         }

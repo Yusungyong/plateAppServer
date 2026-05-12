@@ -56,9 +56,6 @@ public class User {
     @Column(name = "code")
     private String code;
 
-    @Column(name = "fcm_token")
-    private String fcmToken;
-
     @Column(name = "is_private")
     private Boolean isPrivate;
 

@@ -53,6 +53,7 @@ public class AuthController {
                 req.os(),
                 req.osVersion(),
                 req.appVersion(),
+                req.fcmToken(),
                 ip
         );
 
@@ -122,7 +123,8 @@ public class AuthController {
             String deviceModel,
             String os,
             String osVersion,
-            String appVersion
+            String appVersion,
+            String fcmToken
     ) {}
 
     public record RefreshRequest(@NotBlank String refreshToken) {}

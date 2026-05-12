@@ -8,6 +8,7 @@ import com.plateapp.plate_main.auth.repository.RefreshTokenRepository;
 import com.plateapp.plate_main.auth.repository.UserRepository;
 import com.plateapp.plate_main.auth.security.JwtProvider;
 import com.plateapp.plate_main.common.error.ErrorCode;
+import com.plateapp.plate_main.notification.service.UserPushTokenService;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import java.time.LocalDate;
@@ -31,6 +32,7 @@ public class AuthService {
     private final LoginHistoryService loginHistoryService;
     private final JwtProvider jwtProvider;
     private final BCryptPasswordEncoder passwordEncoder;
+    private final UserPushTokenService userPushTokenService;
 
     @Transactional
     public void signup(SignupRequest request) {
@@ -65,6 +67,7 @@ public class AuthService {
             String os,
             String osVersion,
             String appVersion,
+            String fcmToken,
             String ipAddress
     ) {
         boolean failLogged = false;
@@ -110,6 +113,7 @@ public class AuthService {
 
             loginHistoryService.log(username, user.getUserId(), "SUCCESS", null,
                     ipAddress, deviceId, deviceModel, os, osVersion, appVersion);
+            userPushTokenService.upsertLoginToken(user, deviceId, fcmToken);
 
             log.debug("AccessToken issued for {}.", username);
             return new AuthTokens(accessToken, refreshToken);

@@ -36,6 +36,7 @@ import com.plateapp.plate_main.auth.dto.TokenResponse;
 import com.plateapp.plate_main.auth.repository.SocialAccountRepository;
 import com.plateapp.plate_main.auth.repository.UserRepository;
 import com.plateapp.plate_main.auth.security.JwtProvider;
+import com.plateapp.plate_main.notification.service.UserPushTokenService;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -56,6 +57,7 @@ public class SocialAuthService {
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
     private final LoginHistoryService loginHistoryService;
+    private final UserPushTokenService userPushTokenService;
 
     private volatile AppleJwkSet cachedAppleKeys;
     private volatile Instant appleKeysFetchedAt;
@@ -102,6 +104,7 @@ public class SocialAuthService {
 
             String accessToken = jwtProvider.createAccessToken(user.getUsername(), normalizeRole(user.getRole()));
             String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
+            userPushTokenService.upsertLoginToken(user, request.getDeviceId(), request.getFcmToken());
             logSocialLogin(user, "SUCCESS", null, ipAddress);
             return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
         } catch (RuntimeException e) {
@@ -294,6 +297,7 @@ public class SocialAuthService {
 
             String accessToken = jwtProvider.createAccessToken(user.getUsername(), normalizeRole(user.getRole()));
             String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
+            userPushTokenService.upsertLoginToken(user, request.getDeviceId(), request.getFcmToken());
             logSocialLogin(user, "SUCCESS", null, ipAddress);
             return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
         } catch (RuntimeException e) {
@@ -407,6 +411,7 @@ public class SocialAuthService {
 
             String accessToken = jwtProvider.createAccessToken(user.getUsername(), normalizeRole(user.getRole()));
             String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
+            userPushTokenService.upsertLoginToken(user, request.getDeviceId(), request.getFcmToken());
             logSocialLogin(user, "SUCCESS", null, ipAddress);
             return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
         } catch (RuntimeException e) {

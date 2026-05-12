@@ -45,9 +45,6 @@ public class PushNotificationService {
         }
 
         List<Fp24UserPushToken> activeTokens = new ArrayList<>(userPushTokenService.findActiveTokens(receiver.getUserId()));
-        if (activeTokens.isEmpty() && receiver.getFcmToken() != null && !receiver.getFcmToken().isBlank()) {
-            activeTokens.add(userPushTokenService.upsertLegacyToken(receiver, receiver.getFcmToken()));
-        }
         if (activeTokens.isEmpty()) {
             log.debug("Skip push send: no active token for user={}", receiver.getUsername());
             return false;
@@ -100,10 +97,6 @@ public class PushNotificationService {
                     e.getMessage());
             if (shouldInvalidateToken(e)) {
                 userPushTokenService.invalidateToken(token);
-                if (receiver.getFcmToken() != null && receiver.getFcmToken().equals(token.getPushToken())) {
-                    receiver.setFcmToken(null);
-                    userRepository.save(receiver);
-                }
             }
             return false;
         }
