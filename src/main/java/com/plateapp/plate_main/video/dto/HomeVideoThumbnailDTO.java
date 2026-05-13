@@ -21,4 +21,5 @@ public class HomeVideoThumbnailDTO {
     private String address;
     private String placeId;
     private LocalDate updatedAt;
+    private String recommendationRequestId;
 }

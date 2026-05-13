@@ -26,6 +26,8 @@ import com.plateapp.plate_main.common.s3.S3UploadService;
 import com.plateapp.plate_main.block.repository.BlockRepository;
 import com.plateapp.plate_main.report.repository.ReportRepository;
 import com.plateapp.plate_main.like.service.LikeService;
+import com.plateapp.plate_main.recommendation.service.HomeVideoRecommendationService;
+import com.plateapp.plate_main.recommendation.service.HomeVideoRecommendationService.RecommendationContext;
 import com.plateapp.plate_main.user.entity.Fp100User;
 import com.plateapp.plate_main.user.repository.MemberRepository;
 import com.plateapp.plate_main.video.dto.HomeVideoThumbnailDTO;
@@ -68,6 +70,7 @@ public class HomeVideoService {
 
     private final LikeService likeService;
     private final S3UploadService s3UploadService;
+    private final HomeVideoRecommendationService homeVideoRecommendationService;
 
     public Page<HomeVideoThumbnailDTO> getHomeVideoThumbnails(
             int page,
@@ -86,6 +89,7 @@ public class HomeVideoService {
         Pageable pageable = PageRequest.of(safePage, safeSize);
         Pageable candidatePageable = PageRequest.of(0, resolveCandidateFetchSize(safePage, safeSize));
         Set<String> excluded = loadExcludedUsernames(username);
+        String requestId = homeVideoRecommendationService.newRequestId();
 
         if (isNearby(sortType)) {
             validateNearbyParams(lat, lng);
@@ -103,9 +107,14 @@ public class HomeVideoService {
                     pageable,
                     excluded,
                     username,
+                    isGuest,
+                    guestId,
                     lat,
                     lng,
-                    safeRadius
+                    safeRadius,
+                    requestId,
+                    sortType,
+                    placeIds
             );
         }
 
@@ -128,9 +137,14 @@ public class HomeVideoService {
                 pageable,
                 excluded,
                 username,
+                isGuest,
+                guestId,
                 lat,
                 lng,
-                null
+                null,
+                requestId,
+                sortType,
+                placeIds
         );
     }
 
@@ -166,9 +180,14 @@ public class HomeVideoService {
             Pageable pageable,
             Set<String> excluded,
             String username,
+            boolean isGuest,
+            String guestId,
             Double lat,
             Double lng,
-            Double radiusMeters
+            Double radiusMeters,
+            String requestId,
+            String sortType,
+            List<String> placeIds
     ) {
         List<Fp300Store> filtered = candidates.stream()
                 .filter(store -> excluded.isEmpty() || store.getUsername() == null || !excluded.contains(store.getUsername()))
@@ -178,7 +197,16 @@ public class HomeVideoService {
             return new PageImpl<>(Collections.emptyList(), pageable, 0);
         }
 
-        List<HomeVideoThumbnailDTO> ranked = buildRankedHomeThumbnails(filtered, username, lat, lng, radiusMeters);
+        List<HomeVideoThumbnailDTO> ranked = buildRankedHomeThumbnails(
+                filtered,
+                username,
+                isGuest,
+                guestId,
+                lat,
+                lng,
+                radiusMeters,
+                requestId
+        );
         int offset = (int) pageable.getOffset();
         if (offset >= ranked.size()) {
             return new PageImpl<>(Collections.emptyList(), pageable, Math.min(originalTotal, ranked.size()));
@@ -186,6 +214,22 @@ public class HomeVideoService {
 
         int end = Math.min(offset + pageable.getPageSize(), ranked.size());
         List<HomeVideoThumbnailDTO> content = ranked.subList(offset, end);
+        homeVideoRecommendationService.logHomeServing(
+                requestId,
+                username,
+                isGuest,
+                guestId,
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                sortType,
+                lat,
+                lng,
+                radiusMeters,
+                placeIds,
+                ranked.size(),
+                content,
+                offset
+        );
         long total = Math.min(originalTotal, ranked.size());
         return new PageImpl<>(content, pageable, total);
     }
@@ -193,26 +237,43 @@ public class HomeVideoService {
     private List<HomeVideoThumbnailDTO> buildRankedHomeThumbnails(
             List<Fp300Store> stores,
             String username,
+            boolean isGuest,
+            String guestId,
             Double lat,
             Double lng,
-            Double radiusMeters
+            Double radiusMeters,
+            String requestId
     ) {
-        List<Integer> storeIds = extractStoreIds(stores);
+        RecommendationContext recommendationContext =
+                homeVideoRecommendationService.buildContext(stores, username, isGuest, guestId);
+        List<Fp300Store> personalizedCandidates = stores.stream()
+                .filter(store -> !homeVideoRecommendationService.isSuppressed(store, recommendationContext))
+                .toList();
+        if (personalizedCandidates.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Integer> storeIds = extractStoreIds(personalizedCandidates);
         Map<Integer, Long> likeCountMap = defaultMap(likeService.getLikeCountMap(storeIds));
         Map<Integer, Long> commentCountMap = defaultMap(loadCommentCountMap(storeIds));
         Set<Integer> myLikedStoreIdSet = defaultSet(likeService.getMyLikedStoreIdSet(username, storeIds));
-        Map<String, Fp310Place> placeMap = loadPlaceMap(stores);
+        Map<String, Fp310Place> placeMap = loadPlaceMap(personalizedCandidates);
 
-        List<ScoredHomeVideoCandidate> scored = stores.stream()
+        List<ScoredHomeVideoCandidate> scored = personalizedCandidates.stream()
                 .map(store -> new ScoredHomeVideoCandidate(
                         store,
                         calculateHomeThumbnailScore(store, likeCountMap, commentCountMap, myLikedStoreIdSet, placeMap, lat, lng, radiusMeters)
+                                + homeVideoRecommendationService.personalizationScore(store, recommendationContext)
                 ))
                 .sorted(Comparator.comparingDouble(ScoredHomeVideoCandidate::baseScore).reversed())
                 .toList();
 
         return diversifyRankedCandidates(scored).stream()
-                .map(candidate -> toThumbnailDto(candidate.store()))
+                .map(candidate -> {
+                    HomeVideoThumbnailDTO dto = toThumbnailDto(candidate.store());
+                    dto.setRecommendationRequestId(requestId);
+                    return dto;
+                })
                 .toList();
     }
 

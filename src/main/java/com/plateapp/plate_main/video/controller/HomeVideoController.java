@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -44,8 +45,11 @@ public class HomeVideoController {
             @RequestParam(name = "username", required = false) String username,
             @RequestParam(name = "isGuest", defaultValue = "false") boolean isGuest,
             @RequestParam(name = "guestId", required = false) String guestId,
-            @RequestParam(name = "placeIds", required = false) List<String> placeIds
+            @RequestParam(name = "placeIds", required = false) List<String> placeIds,
+            Authentication authentication
     ) {
+        String resolvedUsername = resolveUsername(username, isGuest, guestId, authentication);
+        boolean resolvedGuest = resolvedUsername == null && isGuest;
         return homeVideoService.getHomeVideoThumbnails(
                 page,
                 size,
@@ -53,8 +57,8 @@ public class HomeVideoController {
                 lat,
                 lng,
                 radius,
-                username,
-                isGuest,
+                resolvedUsername,
+                resolvedGuest,
                 guestId,
                 placeIds
         );
@@ -76,15 +80,22 @@ public class HomeVideoController {
             @RequestParam(value = "isGuest", required = false) Boolean isGuest,
             @RequestParam(value = "guestId", required = false) String guestId,
             @RequestParam(value = "storeId", required = false) Integer storeId,
-            @RequestParam("placeId") String placeId
+            @RequestParam("placeId") String placeId,
+            Authentication authentication
     ) {
         List<VideoFeedItemDTO> result =
-                homeVideoService.getVideoFeed(resolveUsername(username, isGuest, guestId), storeId, placeId);
+                homeVideoService.getVideoFeed(resolveUsername(username, isGuest, guestId, authentication), storeId, placeId);
 
         return ResponseEntity.ok(result);
     }
 
-    private String resolveUsername(String usernameParam, Boolean isGuest, String guestId) {
+    private String resolveUsername(String usernameParam, Boolean isGuest, String guestId, Authentication authentication) {
+        if (authentication != null && authentication.isAuthenticated() && authentication.getPrincipal() != null) {
+            String principal = String.valueOf(authentication.getPrincipal());
+            if (!"anonymousUser".equals(principal)) {
+                return principal;
+            }
+        }
         if (Boolean.TRUE.equals(isGuest)) {
             return null;
         }
