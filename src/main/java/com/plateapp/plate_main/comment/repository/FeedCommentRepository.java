@@ -48,4 +48,19 @@ public interface FeedCommentRepository extends JpaRepository<Fp460FeedComment, I
       and c.deletedAt is null
   """)
   long countActiveByFeedId(@Param("feedId") Integer feedId);
+
+  @Query("""
+    select c.feedId as feedId, count(c) as cnt
+    from Fp460FeedComment c
+    where c.feedId in :feedIds
+      and c.useYn = 'Y'
+      and c.deletedAt is null
+    group by c.feedId
+  """)
+  List<FeedCommentCount> countActiveByFeedIds(@Param("feedIds") List<Integer> feedIds);
+
+  interface FeedCommentCount {
+    Integer getFeedId();
+    Long getCnt();
+  }
 }

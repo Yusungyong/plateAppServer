@@ -13,6 +13,34 @@ public interface FeedLikeRepository extends JpaRepository<Fp60FeedLike, Fp60Feed
   long countByFeedIdAndUseYn(Integer feedId, String useYn);
   boolean existsByUsernameAndFeedIdAndUseYnAndDeletedAtIsNull(String username, Integer feedId, String useYn);
 
+  @Query("""
+    select l.feedId as feedId, count(l) as cnt
+    from Fp60FeedLike l
+    where l.useYn = 'Y'
+      and l.deletedAt is null
+      and l.feedId in :feedIds
+    group by l.feedId
+  """)
+  List<FeedLikeCount> countActiveByFeedIds(@Param("feedIds") List<Integer> feedIds);
+
+  @Query("""
+    select l.feedId
+    from Fp60FeedLike l
+    where l.useYn = 'Y'
+      and l.deletedAt is null
+      and l.username = :username
+      and l.feedId in :feedIds
+  """)
+  List<Integer> findMyActiveLikedFeedIds(
+      @Param("username") String username,
+      @Param("feedIds") List<Integer> feedIds
+  );
+
+  interface FeedLikeCount {
+    Integer getFeedId();
+    Long getCnt();
+  }
+
   @Query(value = """
       select
         u.user_id           as userId,

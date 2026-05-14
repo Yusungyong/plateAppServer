@@ -63,6 +63,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET,
                     "/api/home/video-thumbnails",
                     "/api/home/image-thumbnails",
+                    "/api/home/content-feed",
                     "/api/home/feed",
                     "/api/home/seasonal",
                     "/api/home/seasonal/*",

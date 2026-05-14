@@ -105,4 +105,20 @@ public interface ReplyRepository extends JpaRepository<Fp450Reply, Integer> {
       and r.use_yn = 'Y' and r.deleted_at is null
   """, nativeQuery = true)
   long countActiveByFeedId(@Param("feedId") Integer feedId);
+
+  interface FeedReplyCountRow {
+    Integer getFeedId();
+    Long getCnt();
+  }
+
+  @Query(value = """
+    select c.feed_id as feedId, count(*) as cnt
+    from fp_470 r
+    join fp_460 c on c.comment_id = r.comment_id
+    where c.feed_id in (:feedIds)
+      and c.use_yn = 'Y' and c.deleted_at is null
+      and r.use_yn = 'Y' and r.deleted_at is null
+    group by c.feed_id
+  """, nativeQuery = true)
+  List<FeedReplyCountRow> countActiveByFeedIds(@Param("feedIds") List<Integer> feedIds);
 }
