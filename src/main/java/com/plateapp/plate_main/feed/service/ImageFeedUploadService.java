@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -305,11 +306,15 @@ public class ImageFeedUploadService {
                 .toList());
     }
 
-    private String safeFileName(String original, String fallback) {
-        if (original == null || original.isBlank()) {
-            return fallback;
-        }
-        return original;
+    private String safeStoredImageFileName(String original, String fallback) {
+        String safeName = (original == null || original.isBlank()) ? fallback : original;
+        int dotIndex = safeName.lastIndexOf('.');
+        String extension = dotIndex >= 0 ? safeName.substring(dotIndex + 1).trim().toLowerCase(Locale.ROOT) : "";
+        String normalizedExtension = switch (extension) {
+            case "jpg", "jpeg", "png", "webp", "heic", "heif" -> "jpg";
+            default -> "jpg";
+        };
+        return UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT) + "." + normalizedExtension;
     }
 
     private String buildRelativePath(String filename) {
@@ -331,8 +336,8 @@ public class ImageFeedUploadService {
     }
 
     private String processAndUploadImage(MultipartFile file) {
-        String originalName = safeFileName(file.getOriginalFilename(), "image.jpg");
-        String relativePath = buildRelativePath(originalName);
+        String storedFileName = safeStoredImageFileName(file.getOriginalFilename(), "image.jpg");
+        String relativePath = buildRelativePath(storedFileName);
         String thumbRelativePath = buildThumbnailRelativePath(relativePath);
         Path sourcePath = null;
         Path optimizedPath = null;
