@@ -14,6 +14,8 @@ import com.plateapp.plate_main.comment.entity.Fp460FeedComment;
 import com.plateapp.plate_main.comment.entity.Fp470FeedReply;
 import com.plateapp.plate_main.comment.repository.FeedCommentRepository;
 import com.plateapp.plate_main.comment.repository.FeedReplyRepository;
+import com.plateapp.plate_main.feed.repository.ImageFeedRepository;
+import com.plateapp.plate_main.notification.service.NotificationCommandService;
 import com.plateapp.plate_main.user.entity.Fp100User;
 import com.plateapp.plate_main.user.repository.MemberRepository;
 
@@ -25,7 +27,9 @@ public class FeedCommentService {
 
   private final FeedCommentRepository feedCommentRepository;
   private final FeedReplyRepository feedReplyRepository;
+  private final ImageFeedRepository imageFeedRepository;
   private final MemberRepository memberRepository;
+  private final NotificationCommandService notificationCommandService;
 
   private void validateContent(String content) {
     if (!StringUtils.hasText(content)) throw new IllegalArgumentException("content is empty");
@@ -136,7 +140,14 @@ public class FeedCommentService {
     c.setUseYn("Y");
     c.setDeletedAt(null);
 
-    return feedCommentRepository.save(c).getCommentId();
+    Fp460FeedComment saved = feedCommentRepository.save(c);
+
+    imageFeedRepository.findById(feedId)
+        .map(feed -> feed.getUsername())
+        .filter(ownerUsername -> ownerUsername != null && !ownerUsername.equals(username))
+        .ifPresent(ownerUsername -> notificationCommandService.notifyFeedComment(username, ownerUsername, feedId, saved.getCommentId()));
+
+    return saved.getCommentId();
   }
 
   @Transactional
@@ -181,7 +192,14 @@ public class FeedCommentService {
     r.setUseYn("Y");
     r.setDeletedAt(null);
 
-    return feedReplyRepository.save(r).getReplyId();
+    Fp470FeedReply saved = feedReplyRepository.save(r);
+
+    String receiverUsername = parent.getUsername();
+    if (receiverUsername != null && !receiverUsername.equals(username)) {
+      notificationCommandService.notifyFeedReply(username, receiverUsername, parent.getFeedId(), parent.getCommentId(), saved.getReplyId());
+    }
+
+    return saved.getReplyId();
   }
 
   @Transactional

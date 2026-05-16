@@ -173,11 +173,20 @@ public class NotificationService {
         if ("VIDEO_REPLY".equals(event.getEventType())) {
             return event.getParentObjectId();
         }
+        if ("IMAGE_FEED_COMMENT".equals(event.getEventType())) {
+            return target == null ? null : target.getTargetSubId();
+        }
+        if ("IMAGE_FEED_REPLY".equals(event.getEventType())) {
+            return event.getParentObjectId();
+        }
         return null;
     }
 
     private Long resolveReplyId(Fp21NotificationEvent event, Fp23NotificationTarget target) {
         if ("VIDEO_REPLY".equals(event.getEventType())) {
+            return target == null ? null : target.getTargetSubId();
+        }
+        if ("IMAGE_FEED_REPLY".equals(event.getEventType())) {
             return target == null ? null : target.getTargetSubId();
         }
         return null;
@@ -204,10 +213,11 @@ public class NotificationService {
             return null;
         }
         return switch (type) {
-            case "VIDEO_LIKE", "IMAGE_FEED_LIKE" -> "Like";
-            case "VIDEO_COMMENT" -> "Comment";
-            case "VIDEO_REPLY" -> "Reply";
-            case "FRIEND_REQUEST" -> "Friend request";
+            case "VIDEO_LIKE", "IMAGE_FEED_LIKE" -> "좋아요";
+            case "VIDEO_COMMENT", "IMAGE_FEED_COMMENT" -> "댓글";
+            case "VIDEO_REPLY", "IMAGE_FEED_REPLY" -> "답글";
+            case "FRIEND_REQUEST" -> "친구 요청";
+            case "FRIEND_ACCEPTED" -> "친구 수락";
             default -> type;
         };
     }

@@ -197,6 +197,8 @@ public class FriendManagementService {
         reciprocal.setInitiatorUserId(request.getInitiatorUserId());
         reciprocal.setAcceptedAt(LocalDateTime.now());
         friendRepository.save(reciprocal);
+
+        notificationCommandService.notifyFriendAccepted(username, request.getInitiatorUsername(), request.getId());
     }
 
     @Transactional

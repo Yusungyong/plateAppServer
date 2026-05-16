@@ -30,8 +30,8 @@ public class NotificationCommandService {
                 actorUsername,
                 receiverUsername,
                 "VIDEO_LIKE",
-                "New like",
-                actorUsername + " liked your store.",
+                "새 좋아요",
+                actorUsername + "님이 회원님의 동영상을 좋아합니다.",
                 "store",
                 toLong(storeId),
                 null,
@@ -45,8 +45,8 @@ public class NotificationCommandService {
                 actorUsername,
                 receiverUsername,
                 "VIDEO_COMMENT",
-                "New comment",
-                actorUsername + " commented on your store.",
+                "새 댓글",
+                actorUsername + "님이 회원님의 동영상에 댓글을 남겼습니다.",
                 "store",
                 toLong(storeId),
                 toLong(commentId),
@@ -60,8 +60,8 @@ public class NotificationCommandService {
                 actorUsername,
                 receiverUsername,
                 "VIDEO_REPLY",
-                "New reply",
-                actorUsername + " replied to your comment.",
+                "새 답글",
+                actorUsername + "님이 회원님의 댓글에 답글을 남겼습니다.",
                 "store",
                 toLong(storeId),
                 toLong(commentId),
@@ -75,8 +75,8 @@ public class NotificationCommandService {
                 actorUsername,
                 receiverUsername,
                 "FRIEND_REQUEST",
-                "Friend request",
-                actorUsername + " sent you a friend request.",
+                "친구 요청",
+                actorUsername + "님이 친구 요청을 보냈습니다.",
                 "friend_request",
                 toLong(requestId),
                 null,
@@ -90,10 +90,55 @@ public class NotificationCommandService {
                 actorUsername,
                 receiverUsername,
                 "IMAGE_FEED_LIKE",
-                "New like",
-                actorUsername + " liked your image feed.",
+                "새 좋아요",
+                actorUsername + "님이 회원님의 이미지 피드를 좋아합니다.",
                 "image_feed",
                 toLong(feedId),
+                null,
+                null
+        );
+    }
+
+    @Transactional
+    public void notifyFeedComment(String actorUsername, String receiverUsername, Integer feedId, Integer commentId) {
+        createAndDispatch(
+                actorUsername,
+                receiverUsername,
+                "IMAGE_FEED_COMMENT",
+                "새 댓글",
+                actorUsername + "님이 회원님의 이미지 피드에 댓글을 남겼습니다.",
+                "image_feed",
+                toLong(feedId),
+                toLong(commentId),
+                null
+        );
+    }
+
+    @Transactional
+    public void notifyFeedReply(String actorUsername, String receiverUsername, Integer feedId, Integer commentId, Integer replyId) {
+        createAndDispatch(
+                actorUsername,
+                receiverUsername,
+                "IMAGE_FEED_REPLY",
+                "새 답글",
+                actorUsername + "님이 회원님의 댓글에 답글을 남겼습니다.",
+                "image_feed",
+                toLong(feedId),
+                toLong(commentId),
+                toLong(replyId)
+        );
+    }
+
+    @Transactional
+    public void notifyFriendAccepted(String actorUsername, String receiverUsername, Integer requestId) {
+        createAndDispatch(
+                actorUsername,
+                receiverUsername,
+                "FRIEND_ACCEPTED",
+                "친구 수락",
+                actorUsername + "님이 친구 요청을 수락했습니다.",
+                "friend_request",
+                toLong(requestId),
                 null,
                 null
         );
@@ -188,7 +233,9 @@ public class NotificationCommandService {
         return switch (eventType) {
             case "VIDEO_COMMENT" -> "comment";
             case "VIDEO_REPLY" -> "reply";
-            case "FRIEND_REQUEST" -> "friend_request";
+            case "IMAGE_FEED_COMMENT" -> "comment";
+            case "IMAGE_FEED_REPLY" -> "reply";
+            case "FRIEND_REQUEST", "FRIEND_ACCEPTED" -> "friend_request";
             default -> "content";
         };
     }
@@ -197,6 +244,8 @@ public class NotificationCommandService {
         return switch (eventType) {
             case "VIDEO_COMMENT" -> "comment";
             case "VIDEO_REPLY" -> "comment";
+            case "IMAGE_FEED_COMMENT" -> "comment";
+            case "IMAGE_FEED_REPLY" -> "comment";
             default -> null;
         };
     }
@@ -205,6 +254,8 @@ public class NotificationCommandService {
         return switch (eventType) {
             case "VIDEO_COMMENT" -> commentId;
             case "VIDEO_REPLY" -> commentId;
+            case "IMAGE_FEED_COMMENT" -> commentId;
+            case "IMAGE_FEED_REPLY" -> commentId;
             default -> null;
         };
     }
@@ -213,6 +264,8 @@ public class NotificationCommandService {
         return switch (eventType) {
             case "VIDEO_COMMENT" -> commentId;
             case "VIDEO_REPLY" -> replyId;
+            case "IMAGE_FEED_COMMENT" -> commentId;
+            case "IMAGE_FEED_REPLY" -> replyId;
             default -> null;
         };
     }

@@ -212,7 +212,21 @@ public class SearchRepository {
     ) {
         StringBuilder where = new StringBuilder("WHERE s.use_yn = 'Y' AND s.open_yn = 'Y' AND s.deleted_at IS NULL");
         if (keyword != null && !keyword.isBlank()) {
-            where.append(" AND (s.store_name ILIKE :kw OR s.address ILIKE :kw OR s.title ILIKE :kw)");
+            where.append("""
+                 AND (
+                    s.store_name ILIKE :kw
+                    OR s.address ILIKE :kw
+                    OR s.title ILIKE :kw
+                    OR s.place_id ILIKE :kw
+                    OR EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE t ILIKE :kw)
+                    OR EXISTS (
+                        SELECT 1
+                        FROM fp_350 tg, regexp_split_to_table(tg.tags, ',') AS tag
+                        WHERE tg.store_id = s.store_id
+                          AND trim(tag) ILIKE :kw
+                    )
+                 )
+            """);
         }
         if (category != null && !category.isBlank()) {
             where.append(" AND EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE t ILIKE :category)");
@@ -265,7 +279,21 @@ public class SearchRepository {
     ) {
         StringBuilder where = new StringBuilder("WHERE s.use_yn = 'Y' AND s.open_yn = 'Y' AND s.deleted_at IS NULL");
         if (keyword != null && !keyword.isBlank()) {
-            where.append(" AND (s.store_name ILIKE :kw OR s.address ILIKE :kw OR s.title ILIKE :kw)");
+            where.append("""
+                 AND (
+                    s.store_name ILIKE :kw
+                    OR s.address ILIKE :kw
+                    OR s.title ILIKE :kw
+                    OR s.place_id ILIKE :kw
+                    OR EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE t ILIKE :kw)
+                    OR EXISTS (
+                        SELECT 1
+                        FROM fp_350 tg, regexp_split_to_table(tg.tags, ',') AS tag
+                        WHERE tg.store_id = s.store_id
+                          AND trim(tag) ILIKE :kw
+                    )
+                 )
+            """);
         }
         if (category != null && !category.isBlank()) {
             where.append(" AND EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE t ILIKE :category)");
@@ -311,7 +339,22 @@ public class SearchRepository {
     ) {
         StringBuilder where = new StringBuilder("WHERE f.use_yn = 'Y'");
         if (keyword != null && !keyword.isBlank()) {
-            where.append(" AND (f.store_name ILIKE :kw OR f.feed_title ILIKE :kw OR loc.formatted_address ILIKE :kw OR f.location ILIKE :kw)");
+            where.append("""
+                 AND (
+                    f.store_name ILIKE :kw
+                    OR f.feed_title ILIKE :kw
+                    OR loc.formatted_address ILIKE :kw
+                    OR f.location ILIKE :kw
+                    OR f.place_id ILIKE :kw
+                    OR EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE t ILIKE :kw)
+                    OR EXISTS (
+                        SELECT 1
+                        FROM fp_350 tg, regexp_split_to_table(tg.tags, ',') AS tag
+                        WHERE tg.feed_id = f.feed_no
+                          AND trim(tag) ILIKE :kw
+                    )
+                 )
+            """);
         }
         if (category != null && !category.isBlank()) {
             where.append(" AND EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE t ILIKE :category)");
