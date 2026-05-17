@@ -46,6 +46,35 @@ public class HomeContentFeedController {
         );
     }
 
+    @GetMapping("/search/content")
+    public HomeContentFeedResponse searchContentFeed(
+            @RequestParam(name = "q") String q,
+            @RequestParam(name = "cursor", required = false) String cursor,
+            @RequestParam(name = "limit", defaultValue = "10") int limit,
+            @RequestParam(name = "surface", defaultValue = "home-content-search") String surface,
+            @RequestParam(name = "username", required = false) String username,
+            @RequestParam(name = "isGuest", defaultValue = "false") boolean isGuest,
+            @RequestParam(name = "guestId", required = false) String guestId,
+            @RequestParam(name = "lat", required = false) Double lat,
+            @RequestParam(name = "lng", required = false) Double lng,
+            @RequestParam(name = "radius", required = false) Double radius,
+            Authentication authentication
+    ) {
+        String resolvedUsername = resolveUsername(username, isGuest, authentication);
+        return contentFeedService.searchContentFeed(
+                q,
+                cursor,
+                limit,
+                surface,
+                resolvedUsername,
+                resolvedUsername == null && isGuest,
+                guestId,
+                lat,
+                lng,
+                radius
+        );
+    }
+
     private String resolveUsername(String usernameParam, boolean isGuest, Authentication authentication) {
         if (authentication != null && authentication.isAuthenticated() && authentication.getPrincipal() != null) {
             String principal = String.valueOf(authentication.getPrincipal());

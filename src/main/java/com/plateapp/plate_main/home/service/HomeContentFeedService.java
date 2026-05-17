@@ -147,6 +147,72 @@ public class HomeContentFeedService {
         );
     }
 
+    @Transactional(readOnly = true)
+    public HomeContentFeedResponse searchContentFeed(
+            String keyword,
+            String cursor,
+            int limit,
+            String surface,
+            String username,
+            boolean isGuest,
+            String guestId,
+            Double lat,
+            Double lng,
+            Double radius
+    ) {
+        if (!hasText(keyword)) {
+            return getContentFeed(cursor, limit, surface, username, isGuest, guestId, lat, lng, radius);
+        }
+
+        int safeLimit = Math.min(Math.max(limit, 1), LIMIT_MAX);
+        int offset = decodeOffset(cursor);
+        int candidateSize = Math.max((offset + safeLimit) * CANDIDATE_MULTIPLIER, 120);
+        String normalizedKeyword = keyword.trim().toLowerCase();
+
+        String actorUsername = isGuest ? null : blankToNull(username);
+        Set<String> excludedUsernames = loadExcludedUsernames(actorUsername);
+
+        List<Fp300Store> videos = videoRepository.findLatestForHome(PageRequest.of(0, candidateSize));
+        List<Fp400Feed> images = imageRepository.findLatestForHomeByGroup(null, null, PageRequest.of(0, candidateSize));
+
+        videos = videos.stream()
+                .filter(video -> video.getUsername() == null || !excludedUsernames.contains(video.getUsername()))
+                .filter(video -> matchesVideo(video, normalizedKeyword))
+                .toList();
+        images = images.stream()
+                .filter(image -> image.getUsername() == null || !excludedUsernames.contains(image.getUsername()))
+                .filter(image -> matchesImage(image, normalizedKeyword))
+                .toList();
+
+        FeedContext context = loadContext(videos, images, actorUsername);
+
+        List<ScoredContent> candidates = new ArrayList<>();
+        for (Fp300Store video : videos) {
+            candidates.add(new ScoredContent(toVideoItem(video, context), scoreVideo(video, context)));
+        }
+        for (Fp400Feed image : images) {
+            candidates.add(new ScoredContent(toImageItem(image, context), scoreImage(image, context)));
+        }
+
+        List<HomeContentFeedItem> ranked = diversify(candidates).stream()
+                .map(ScoredContent::item)
+                .filter(item -> matchesItem(item, normalizedKeyword))
+                .toList();
+
+        int end = Math.min(offset + safeLimit, ranked.size());
+        List<HomeContentFeedItem> items = offset >= ranked.size()
+                ? List.of()
+                : ranked.subList(offset, end);
+        String nextCursor = end < ranked.size() ? encodeOffset(end) : null;
+
+        return new HomeContentFeedResponse(
+                "home-content-search-" + UUID.randomUUID(),
+                LocalDateTime.now(),
+                items,
+                nextCursor
+        );
+    }
+
     private FeedContext loadContext(List<Fp300Store> videos, List<Fp400Feed> images, String username) {
         List<Integer> videoIds = videos.stream()
                 .map(Fp300Store::getStoreId)
@@ -447,6 +513,34 @@ public class HomeContentFeedService {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private boolean matchesVideo(Fp300Store video, String keyword) {
+        return containsIgnoreCase(video.getStoreName(), keyword)
+                || containsIgnoreCase(video.getTitle(), keyword)
+                || containsIgnoreCase(video.getAddress(), keyword)
+                || containsIgnoreCase(video.getUsername(), keyword);
+    }
+
+    private boolean matchesImage(Fp400Feed image, String keyword) {
+        return containsIgnoreCase(image.getStoreName(), keyword)
+                || containsIgnoreCase(image.getFeedTitle(), keyword)
+                || containsIgnoreCase(image.getContent(), keyword)
+                || containsIgnoreCase(image.getLocation(), keyword)
+                || containsIgnoreCase(image.getUsername(), keyword);
+    }
+
+    private boolean matchesItem(HomeContentFeedItem item, String keyword) {
+        return containsIgnoreCase(item.title(), keyword)
+                || containsIgnoreCase(item.content(), keyword)
+                || containsIgnoreCase(item.storeName(), keyword)
+                || containsIgnoreCase(item.address(), keyword)
+                || containsIgnoreCase(item.author() != null ? item.author().username() : null, keyword)
+                || containsIgnoreCase(item.author() != null ? item.author().nickName() : null, keyword);
+    }
+
+    private boolean containsIgnoreCase(String value, String keyword) {
+        return hasText(value) && value.toLowerCase().contains(keyword);
     }
 
     private <K, V> Map<K, V> defaultMap(Map<K, V> map) {
