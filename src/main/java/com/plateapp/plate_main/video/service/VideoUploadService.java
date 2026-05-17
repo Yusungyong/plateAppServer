@@ -60,6 +60,8 @@ public class VideoUploadService {
             String storeName,
             String placeId,
             String address,
+            Double lat,
+            Double lng,
             String muteYn,
             String openYn,
             String useYn
@@ -91,6 +93,7 @@ public class VideoUploadService {
         store.setVideoSize(java.math.BigDecimal.valueOf(media.size));
 
         Fp300Store saved = fp300StoreRepository.save(store);
+        upsertPlace(placeId, address, lat, lng);
 
         return VideoUploadResponse.builder()
                 .storeId(saved.getStoreId())

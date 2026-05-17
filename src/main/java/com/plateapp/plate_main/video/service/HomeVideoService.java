@@ -491,8 +491,6 @@ public class HomeVideoService {
     }
 
     private List<Fp300Store> resolveFeedStores(String placeId, Integer storeId, int limit) {
-        Fp310Place centerPlace = findCenterPlace(placeId);
-
         List<Fp300Store> resultStores = new ArrayList<>();
         int remainLimit = limit;
 
@@ -501,8 +499,13 @@ public class HomeVideoService {
             remainLimit -= 1;
         }
 
-        if (remainLimit > 0) {
+        Fp310Place centerPlace = findCenterPlace(placeId);
+        if (remainLimit > 0 && centerPlace != null) {
             resultStores.addAll(expandRadiusUntilFilled(centerPlace, storeId, remainLimit));
+        }
+
+        if (remainLimit > 0 && centerPlace == null) {
+            resultStores.addAll(findFallbackStoresByPlaceId(placeId, storeId, remainLimit));
         }
 
         return resultStores;
@@ -569,14 +572,13 @@ public class HomeVideoService {
     }
 
     private Fp310Place findCenterPlace(String placeId) {
-        Fp310Place centerPlace = fp310PlaceRepository
-                .findByPlaceIdAndUseYnAndDeletedAtIsNull(placeId, FLAG_Y)
-                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 placeId: " + placeId));
-
-        if (centerPlace.getLatitude() == null || centerPlace.getLongitude() == null) {
-            throw new IllegalStateException("placeId???꾨룄/寃쎈룄 ?뺣낫媛 ?놁뒿?덈떎: " + placeId);
+        if (placeId == null || placeId.isBlank()) {
+            return null;
         }
-        return centerPlace;
+        return fp310PlaceRepository
+                .findByPlaceIdAndUseYnAndDeletedAtIsNull(placeId, FLAG_Y)
+                .filter(centerPlace -> centerPlace.getLatitude() != null && centerPlace.getLongitude() != null)
+                .orElse(null);
     }
 
     private Fp300Store findMainStore(Integer storeId) {
@@ -624,6 +626,29 @@ public class HomeVideoService {
         }
 
         return collected;
+    }
+
+    private List<Fp300Store> findFallbackStoresByPlaceId(String placeId, Integer excludeStoreId, int limit) {
+        if (placeId == null || placeId.isBlank() || limit <= 0) {
+            return Collections.emptyList();
+        }
+        if (excludeStoreId != null) {
+            return fp300StoreRepository
+                    .findTop9ByPlaceIdAndStoreIdNotAndUseYnAndOpenYnAndDeletedAtIsNullOrderByCreatedAtDesc(
+                            placeId,
+                            excludeStoreId,
+                            FLAG_Y,
+                            FLAG_Y
+                    )
+                    .stream()
+                    .limit(limit)
+                    .toList();
+        }
+        return fp300StoreRepository
+                .findTop10ByPlaceIdAndUseYnAndOpenYnAndDeletedAtIsNullOrderByCreatedAtDesc(placeId, FLAG_Y, FLAG_Y)
+                .stream()
+                .limit(limit)
+                .toList();
     }
 
     private Set<String> loadExcludedUsernames(String username) {

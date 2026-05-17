@@ -44,12 +44,26 @@ public class VideoController {
             @RequestParam("storeName") String storeName,
             @RequestParam("placeId") String placeId,
             @RequestParam("address") String address,
+            @RequestParam(value = "lat", required = false) Double lat,
+            @RequestParam(value = "lng", required = false) Double lng,
             @RequestParam(value = "muteYn", defaultValue = "N") String muteYn,
             @RequestParam(value = "openYn", defaultValue = "Y") String openYn,
             @RequestParam(value = "useYn", defaultValue = "Y") String useYn
     ) {
         String username = currentUsername();
-        VideoUploadResponse res = videoUploadService.uploadVideo(file, thumbnail, username, storeName, placeId, address, muteYn, openYn, useYn);
+        VideoUploadResponse res = videoUploadService.uploadVideo(
+                file,
+                thumbnail,
+                username,
+                storeName,
+                placeId,
+                address,
+                lat,
+                lng,
+                muteYn,
+                openYn,
+                useYn
+        );
         return ResponseEntity.ok(res);
     }
 

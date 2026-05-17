@@ -32,6 +32,8 @@ public class ImageFeedUploadController {
             @RequestParam("address") String address,
             @RequestParam(value = "storeName", required = false) String storeName,
             @RequestParam(value = "placeId", required = false) String placeId,
+            @RequestParam(value = "lat", required = false) Double lat,
+            @RequestParam(value = "lng", required = false) Double lng,
             @RequestParam(value = "withFriends", required = false) String withFriends,
             @RequestParam(value = "openYn", required = false) String openYn,
             @RequestParam(value = "useYn", required = false) String useYn
@@ -43,6 +45,8 @@ public class ImageFeedUploadController {
                 address,
                 storeName,
                 placeId,
+                lat,
+                lng,
                 withFriends,
                 openYn,
                 useYn,
@@ -69,6 +73,8 @@ public class ImageFeedUploadController {
                 body.address,
                 body.storeName,
                 body.placeId,
+                body.lat,
+                body.lng,
                 body.useYn,
                 username
         );
@@ -96,6 +102,29 @@ public class ImageFeedUploadController {
         return ResponseEntity.ok(response);
     }
 
+    @DeleteMapping("/image-feeds/{feedId}/images/{imageId}")
+    public ResponseEntity<?> deleteImageFeedImage(
+            @PathVariable("feedId") Integer feedId,
+            @PathVariable("imageId") Integer imageId
+    ) {
+        String username = currentUsername();
+        imageFeedUploadService.deleteImage(feedId, imageId, username);
+        return ResponseEntity.ok(java.util.Map.of("ok", true));
+    }
+
+    @PatchMapping("/image-feeds/{feedId}/images/order")
+    public ResponseEntity<ImageFeedUploadResponse> reorderImageFeedImages(
+            @PathVariable("feedId") Integer feedId,
+            @RequestBody ImageFeedImageOrderRequest body
+    ) {
+        if (body.imageIds == null || body.imageIds.isEmpty()) {
+            throw new IllegalArgumentException("imageIds is required");
+        }
+        String username = currentUsername();
+        ImageFeedUploadResponse response = imageFeedUploadService.reorderImages(feedId, body.imageIds, username);
+        return ResponseEntity.ok(response);
+    }
+
     @DeleteMapping("/image-feeds/{feedId}")
     public ResponseEntity<?> deleteImageFeed(@PathVariable("feedId") Integer feedId) {
         String username = currentUsername();
@@ -119,8 +148,14 @@ public class ImageFeedUploadController {
         public String address;
         public String storeName;
         public String placeId;
+        public Double lat;
+        public Double lng;
         public String withFriends;
         public String openYn;
         public String useYn;
+    }
+
+    public static class ImageFeedImageOrderRequest {
+        public List<Integer> imageIds;
     }
 }

@@ -18,6 +18,14 @@ public class PlaceService {
     @Transactional
     public void savePlace(PlaceRequest req) {
         Fp310Place place = repository.findByPlaceIdAndUseYnAndDeletedAtIsNull(req.getPlaceId(), "Y")
+                .map(existing -> {
+                    if (hasMissingCoordinates(existing)) {
+                        repository.delete(existing);
+                        repository.flush();
+                        return new Fp310Place();
+                    }
+                    return existing;
+                })
                 .orElseGet(Fp310Place::new);
 
         place.setPlaceId(req.getPlaceId());
@@ -27,6 +35,10 @@ public class PlaceService {
         place.setUseYn("Y");
 
         repository.save(place);
+    }
+
+    private boolean hasMissingCoordinates(Fp310Place place) {
+        return place.getLatitude() == null || place.getLongitude() == null;
     }
 
     @Value

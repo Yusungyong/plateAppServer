@@ -10,6 +10,7 @@ import com.plateapp.plate_main.feed.repository.ImageFeedRepository;
 import com.plateapp.plate_main.friend.repository.Fp200VisitRepository;
 import com.plateapp.plate_main.like.repository.ImageFeedLikeRepository;
 import com.plateapp.plate_main.menu.repository.Fp320MenuRepository;
+import com.plateapp.plate_main.video.service.PlaceService;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -42,6 +43,7 @@ public class ImageFeedUploadService {
     private final Fp320MenuRepository fp320MenuRepository;
     private final S3UploadService s3UploadService;
     private final ImageProcessingService imageProcessingService;
+    private final PlaceService placeService;
 
     @Transactional
     public ImageFeedUploadResponse createFeed(
@@ -50,6 +52,8 @@ public class ImageFeedUploadService {
             String address,
             String storeName,
             String placeId,
+            Double lat,
+            Double lng,
             String withFriendsRaw,
             String openYn,
             String useYn,
@@ -94,6 +98,7 @@ public class ImageFeedUploadService {
         feed.setUseYn(safeUseYn);
 
         Fp400ImageFeed saved = imageFeedRepository.save(feed);
+        upsertPlace(placeId, address, lat, lng);
 
         ImageFeedUploadResponse response = new ImageFeedUploadResponse();
         response.feedId = saved.getFeedId();
@@ -116,6 +121,8 @@ public class ImageFeedUploadService {
             String address,
             String storeName,
             String placeId,
+            Double lat,
+            Double lng,
             String useYn,
             String username
     ) {
@@ -142,6 +149,7 @@ public class ImageFeedUploadService {
         }
         feed.setUpdatedAt(LocalDateTime.now());
         imageFeedRepository.save(feed);
+        upsertPlace(feed.getPlaceId(), feed.getLocation(), lat, lng);
     }
 
     @Transactional
@@ -233,6 +241,95 @@ public class ImageFeedUploadService {
     }
 
     @Transactional
+    public void deleteImage(
+            Integer feedId,
+            Integer imageId,
+            String username
+    ) {
+        if (imageId == null || imageId <= 0) {
+            throw new IllegalArgumentException("imageId is invalid");
+        }
+
+        Fp400ImageFeed feed = imageFeedRepository.findById(feedId)
+                .orElseThrow(() -> new IllegalArgumentException("feed not found"));
+        if (!username.equals(feed.getUsername())) {
+            throw new AccessDeniedException("feed owner mismatch");
+        }
+
+        List<String> currentUrls = parseImages(feed.getImages());
+        if (currentUrls.size() <= 1) {
+            throw new IllegalArgumentException("last image cannot be deleted");
+        }
+
+        int index = imageId - 1;
+        if (index < 0 || index >= currentUrls.size()) {
+            throw new IllegalArgumentException("image not found");
+        }
+
+        String removedRelativePath = currentUrls.remove(index);
+        feed.setImages(String.join(",", currentUrls));
+        feed.setThumbnail(resolveFeedThumbnail(currentUrls));
+        feed.setUpdatedAt(LocalDateTime.now());
+        imageFeedRepository.save(feed);
+
+        deleteImageObjects(removedRelativePath);
+    }
+
+    @Transactional
+    public ImageFeedUploadResponse reorderImages(
+            Integer feedId,
+            List<Integer> imageIds,
+            String username
+    ) {
+        if (imageIds == null || imageIds.isEmpty()) {
+            throw new IllegalArgumentException("imageIds is required");
+        }
+
+        Fp400ImageFeed feed = imageFeedRepository.findById(feedId)
+                .orElseThrow(() -> new IllegalArgumentException("feed not found"));
+        if (!username.equals(feed.getUsername())) {
+            throw new AccessDeniedException("feed owner mismatch");
+        }
+
+        List<String> currentUrls = parseImages(feed.getImages());
+        if (currentUrls.size() != imageIds.size()) {
+            throw new IllegalArgumentException("imageIds size mismatch");
+        }
+
+        boolean[] used = new boolean[currentUrls.size()];
+        List<String> reorderedUrls = new ArrayList<>();
+        for (Integer imageId : imageIds) {
+            if (imageId == null || imageId <= 0 || imageId > currentUrls.size()) {
+                throw new IllegalArgumentException("imageId is invalid");
+            }
+            int index = imageId - 1;
+            if (used[index]) {
+                throw new IllegalArgumentException("imageIds contains duplicates");
+            }
+            used[index] = true;
+            reorderedUrls.add(currentUrls.get(index));
+        }
+
+        feed.setImages(String.join(",", reorderedUrls));
+        feed.setThumbnail(resolveFeedThumbnail(reorderedUrls));
+        feed.setUpdatedAt(LocalDateTime.now());
+        imageFeedRepository.save(feed);
+
+        ImageFeedUploadResponse response = new ImageFeedUploadResponse();
+        response.feedId = feed.getFeedId();
+        response.images = buildImageItems(reorderedUrls);
+        response.content = feed.getContent();
+        response.storeName = feed.getStoreName();
+        response.placeId = feed.getPlaceId();
+        response.address = feed.getLocation();
+        response.useYn = feed.getUseYn();
+        response.openYn = "Y";
+        response.createdAt = OffsetDateTime.of(feed.getCreatedAt(), ZoneOffset.UTC);
+        response.withFriends = List.of();
+        return response;
+    }
+
+    @Transactional
     public void deleteFeed(Integer feedId, String username) {
         Fp400ImageFeed feed = imageFeedRepository.findById(feedId)
                 .orElseThrow(() -> new IllegalArgumentException("feed not found"));
@@ -304,6 +401,19 @@ public class ImageFeedUploadService {
                 .map(String::trim)
                 .filter(s -> !s.isBlank())
                 .toList());
+    }
+
+    private void upsertPlace(String placeId, String address, Double lat, Double lng) {
+        if (placeId == null || placeId.isBlank() || address == null || address.isBlank()) {
+            return;
+        }
+        PlaceService.PlaceRequest req = PlaceService.PlaceRequest.builder()
+                .placeId(placeId)
+                .address(address)
+                .lat(lat)
+                .lng(lng)
+                .build();
+        placeService.savePlace(req);
     }
 
     private String safeStoredImageFileName(String original, String fallback) {
