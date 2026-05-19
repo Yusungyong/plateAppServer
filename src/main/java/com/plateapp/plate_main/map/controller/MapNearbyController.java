@@ -29,7 +29,8 @@ public class MapNearbyController {
       @RequestParam(value = "username", required = false) String username,
       @RequestParam(value = "isGuest", required = false) Boolean isGuest,
       @RequestParam(value = "guestId", required = false) String guestId,
-      @RequestParam(value = "groupId", required = false) String groupId
+      @RequestParam(value = "groupId", required = false) String groupId,
+      @RequestParam(value = "category", required = false) String category
   ) {
     return ResponseEntity.ok(mapNearbyService.findNearby(
         lat,
@@ -37,7 +38,8 @@ public class MapNearbyController {
         radius,
         limit,
         resolveUsername(username, isGuest, guestId),
-        groupId
+        groupId,
+        category
     ));
   }
 

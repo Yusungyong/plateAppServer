@@ -333,6 +333,61 @@ Response
 - GET `/api/map/stores/search`
 - GET `/api/map/stores/suggest`
 
+### Nearby store markers
+
+`GET /api/map/stores/nearby`
+
+Query params
+- `lat` (number, required)
+- `lng` (number, required)
+- `radius` (number, optional, default 1500)
+- `limit` (number, optional, default 60)
+- `category` (string, optional)
+- `username` (string, optional)
+- `isGuest` (boolean, optional)
+- `guestId` (string, optional)
+- `groupId` (string, optional)
+
+Supported `category` values
+- `KOREAN`
+- `JAPANESE`
+- `CHINESE`
+- `CAFE`
+- `DESSERT`
+
+Notes
+- Omit `category` or send `ALL` for all nearby stores.
+- Category filtering uses the place `types` stored in `fp_310`.
+- Facet/count response is not included yet.
+
+Example request
+```http
+GET /api/map/stores/nearby?lat=37.57&lng=126.98&radius=1800&category=KOREAN
+```
+
+Example response
+```json
+{
+  "items": [
+    {
+      "storeId": 338,
+      "placeId": "abc",
+      "storeName": "Momoya",
+      "address": "Seoul ...",
+      "thumbnail": "https://...",
+      "groupId": "place:abc",
+      "lat": 37.57,
+      "lng": 126.98,
+      "distanceM": 240,
+      "feedCount": 3,
+      "contentType": "both",
+      "representativeFeedId": 91,
+      "category": "KOREAN"
+    }
+  ]
+}
+```
+
 ## Home
 
 - GET `/api/home/image-thumbnails`

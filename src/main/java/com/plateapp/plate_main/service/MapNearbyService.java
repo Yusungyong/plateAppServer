@@ -7,6 +7,7 @@ import com.plateapp.plate_main.map.repository.MapNearbyRepository;
 import com.plateapp.plate_main.report.repository.ReportRepository;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,9 +20,10 @@ public class MapNearbyService {
     private final BlockRepository blockRepository;
     private final ReportRepository reportRepository;
 
-    public NearbyStoreMarkersResponse findNearby(double lat, double lng, int radiusM, int limit, String username, String groupId) {
+    public NearbyStoreMarkersResponse findNearby(double lat, double lng, int radiusM, int limit, String username, String groupId, String category) {
         int safeRadius = clamp(radiusM, 100, 50_000); // 100m ~ 50km
         int safeLimit = clamp(limit, 1, 200);         // avoid flooding map with markers
+        String normalizedCategory = normalizeCategory(category);
 
         List<String> excluded = List.copyOf(loadExcludedUsernames(username));
         GroupKey groupKey = parseGroupId(groupId);
@@ -35,7 +37,9 @@ public class MapNearbyService {
                 safeLimit,
                 excluded,
                 groupKey.placeId,
-                groupKey.storeName
+                groupKey.storeName,
+                normalizedCategory,
+                categoryTypes(normalizedCategory)
         );
         return new NearbyStoreMarkersResponse(items);
     }
@@ -76,6 +80,34 @@ public class MapNearbyService {
             excluded.addAll(reported);
         }
         return excluded;
+    }
+
+    private String normalizeCategory(String category) {
+        if (category == null || category.isBlank()) {
+            return null;
+        }
+        String normalized = category.trim().toUpperCase(Locale.ROOT);
+        if ("ALL".equals(normalized)) {
+            return null;
+        }
+        return switch (normalized) {
+            case "KOREAN", "JAPANESE", "CHINESE", "CAFE", "DESSERT" -> normalized;
+            default -> null;
+        };
+    }
+
+    private List<String> categoryTypes(String category) {
+        if (category == null) {
+            return List.of("__none__");
+        }
+        return switch (category) {
+            case "KOREAN" -> List.of("korean_restaurant", "korean");
+            case "JAPANESE" -> List.of("japanese_restaurant", "japanese");
+            case "CHINESE" -> List.of("chinese_restaurant", "chinese");
+            case "CAFE" -> List.of("cafe", "coffee_shop");
+            case "DESSERT" -> List.of("dessert_restaurant", "bakery", "ice_cream_shop", "dessert");
+            default -> List.of("__none__");
+        };
     }
 
     private GroupKey parseGroupId(String groupId) {

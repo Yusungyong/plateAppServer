@@ -12,5 +12,6 @@ public record NearbyStoreMarkerDto(
     Integer distanceM,
     Integer feedCount,
     String contentType,
-    Integer representativeFeedId
+    Integer representativeFeedId,
+    String category
 ) {}

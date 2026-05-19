@@ -28,6 +28,14 @@ public class MapNearbyRepository {
           s.username AS store_username,
           loc.latitude  AS lat,
           loc.longitude AS lng,
+          COALESCE(:category, CASE
+            WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('korean_restaurant', 'korean')) THEN 'KOREAN'
+            WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('japanese_restaurant', 'japanese')) THEN 'JAPANESE'
+            WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('chinese_restaurant', 'chinese')) THEN 'CHINESE'
+            WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('cafe', 'coffee_shop')) THEN 'CAFE'
+            WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('dessert_restaurant', 'bakery', 'ice_cream_shop', 'dessert')) THEN 'DESSERT'
+            ELSE NULL
+          END) AS category,
           (
             6371000 * acos(
               LEAST(1.0, GREATEST(-1.0,
@@ -50,6 +58,7 @@ public class MapNearbyRepository {
           AND (:excluded_count = 0 OR s.username NOT IN (:excluded_usernames))
           AND (:group_place_id IS NULL OR s.place_id = :group_place_id)
           AND (:group_store_name IS NULL OR (s.place_id IS NULL AND s.store_name = :group_store_name))
+          AND (:category IS NULL OR EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN (:category_types)))
       ),
       feed_counts AS (
         SELECT
@@ -75,6 +84,7 @@ public class MapNearbyRepository {
         c.thumbnail,
         c.lat,
         c.lng,
+        c.category,
         c.distance_m,
         COALESCE(f.feed_count, 0) AS feed_count,
         (c.video_file_name IS NOT NULL AND c.video_file_name <> '') AS has_video,
@@ -96,7 +106,9 @@ public class MapNearbyRepository {
       int limit,
       List<String> excludedUsernames,
       String groupPlaceId,
-      String groupStoreName
+      String groupStoreName,
+      String category,
+      List<String> categoryTypes
   ) {
     int excludedCount = (excludedUsernames == null) ? 0 : excludedUsernames.size();
     List<String> excluded = (excludedUsernames == null) ? List.of() : excludedUsernames;
@@ -111,7 +123,9 @@ public class MapNearbyRepository {
         .addValue("excluded_usernames", excluded)
         .addValue("excluded_count", excludedCount)
         .addValue("group_place_id", groupPlaceId, Types.VARCHAR)
-        .addValue("group_store_name", groupStoreName, Types.VARCHAR);
+        .addValue("group_store_name", groupStoreName, Types.VARCHAR)
+        .addValue("category", category, Types.VARCHAR)
+        .addValue("category_types", categoryTypes);
 
     return jdbc.query(SQL_NEARBY_MARKERS, params, (rs, rowNum) -> {
       int feedCount = rs.getInt("feed_count");
@@ -131,7 +145,8 @@ public class MapNearbyRepository {
           (int) Math.round(rs.getDouble("distance_m")),
           feedCount,
           contentType,
-          representativeFeedId
+          representativeFeedId,
+          rs.getString("category")
       );
     });
   }
@@ -183,6 +198,14 @@ public class MapNearbyRepository {
           s.thumbnail,
           loc.latitude  AS lat,
           loc.longitude AS lng,
+          CASE
+            WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('korean_restaurant', 'korean')) THEN 'KOREAN'
+            WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('japanese_restaurant', 'japanese')) THEN 'JAPANESE'
+            WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('chinese_restaurant', 'chinese')) THEN 'CHINESE'
+            WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('cafe', 'coffee_shop')) THEN 'CAFE'
+            WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('dessert_restaurant', 'bakery', 'ice_cream_shop', 'dessert')) THEN 'DESSERT'
+            ELSE NULL
+          END AS category,
           %s AS distance_m,
           COALESCE(fc.feed_count, 0) AS feed_count,
           (s.file_name IS NOT NULL AND s.file_name <> '') AS has_video,
@@ -259,7 +282,8 @@ public class MapNearbyRepository {
               distance,
               feedCount,
               contentType,
-              representativeFeedId
+              representativeFeedId,
+              rs.getString("category")
       );
     });
   }
