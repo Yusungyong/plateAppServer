@@ -397,6 +397,23 @@ Example response
 - POST `/api/home/video-watch-history`
 - GET `/api/home/feed`
 
+### Home video feed
+
+`GET /api/home/feed`
+
+Viewer items include place coordinates when the content has a resolvable `placeId`.
+
+```json
+{
+  "storeId": 338,
+  "placeId": "ChIJ...",
+  "storeName": "Momoya",
+  "address": "Seoul ...",
+  "lat": 37.5714,
+  "lng": 126.9769
+}
+```
+
 ## Image Feeds
 
 - GET `/api/image-feeds/{feedId}`
@@ -407,6 +424,29 @@ Example response
 - PATCH `/api/image-feeds/{feedId}` (application/json)
 - POST `/api/image-feeds/{feedId}/images` (multipart/form-data)
 - DELETE `/api/image-feeds/{feedId}`
+
+### Image feed viewer
+
+`GET /api/image-feeds/{feedId}`
+
+Viewer responses include place coordinates when the feed has a resolvable `placeId`.
+
+```json
+{
+  "feedId": 428,
+  "placeId": "ChIJ...",
+  "storeName": "Chodang Mill",
+  "location": "Gangneung ...",
+  "lat": 37.7912,
+  "lng": 128.9144
+}
+```
+
+### Image feed groups
+
+`GET /api/image-feeds/groups`
+
+Group items include `lat` and `lng` when the group is place-backed.
 
 ### Image Feed Comments
 

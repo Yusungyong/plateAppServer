@@ -523,15 +523,16 @@ public class HomeVideoService {
     private FeedContext loadFeedContext(String username, List<Fp300Store> stores) {
         List<Integer> storeIds = extractStoreIds(stores);
         if (storeIds.isEmpty()) {
-            return new FeedContext(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
+            return new FeedContext(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet(), Collections.emptyMap());
         }
 
         Map<Integer, Long> commentCountMap = defaultMap(loadCommentCountMap(storeIds));
         Map<String, String> profileImageMap = defaultMap(loadProfileImageMap(stores));
         Map<Integer, Long> likeCountMap = defaultMap(likeService.getLikeCountMap(storeIds));
         Set<Integer> myLikedStoreIdSet = defaultSet(likeService.getMyLikedStoreIdSet(username, storeIds));
+        Map<String, Fp310Place> placeMap = loadPlaceMap(stores);
 
-        return new FeedContext(commentCountMap, profileImageMap, likeCountMap, myLikedStoreIdSet);
+        return new FeedContext(commentCountMap, profileImageMap, likeCountMap, myLikedStoreIdSet, placeMap);
     }
 
     private VideoFeedItemDTO toVideoFeedItemDto(
@@ -550,6 +551,7 @@ public class HomeVideoService {
 
         Long likeCount = context.likeCountMap.getOrDefault(sid, 0L);
         Boolean likedByMe = context.myLikedStoreIdSet.contains(sid);
+        Fp310Place place = store.getPlaceId() == null ? null : context.placeMap.get(store.getPlaceId());
 
         return VideoFeedItemDTO.builder()
                 .storeId(sid)
@@ -557,6 +559,8 @@ public class HomeVideoService {
                 .title(title)
                 .storeName(store.getStoreName())
                 .address(store.getAddress())
+                .lat(place == null ? null : place.getLatitude())
+                .lng(place == null ? null : place.getLongitude())
                 .fileName(s3UploadService.toVideoUrl(store.getFileName()))
                 .thumbnail(s3UploadService.toImageUrl(store.getThumbnail()))
                 .videoDuration(store.getVideoDuration())
@@ -742,17 +746,20 @@ public class HomeVideoService {
         private final Map<String, String> profileImageMap;
         private final Map<Integer, Long> likeCountMap;
         private final Set<Integer> myLikedStoreIdSet;
+        private final Map<String, Fp310Place> placeMap;
 
         private FeedContext(
                 Map<Integer, Long> commentCountMap,
                 Map<String, String> profileImageMap,
                 Map<Integer, Long> likeCountMap,
-                Set<Integer> myLikedStoreIdSet
+                Set<Integer> myLikedStoreIdSet,
+                Map<String, Fp310Place> placeMap
         ) {
             this.commentCountMap = commentCountMap;
             this.profileImageMap = profileImageMap;
             this.likeCountMap = likeCountMap;
             this.myLikedStoreIdSet = myLikedStoreIdSet;
+            this.placeMap = placeMap;
         }
     }
 

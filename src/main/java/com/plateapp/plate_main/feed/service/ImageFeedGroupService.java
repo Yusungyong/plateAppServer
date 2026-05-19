@@ -76,6 +76,8 @@ public class ImageFeedGroupService {
                         r.placeId(),
                         r.storeName(),
                         r.address(),
+                        r.lat(),
+                        r.lng(),
                         r.thumbnail(),
                         r.imageCount(),
                         r.latestFeedId(),

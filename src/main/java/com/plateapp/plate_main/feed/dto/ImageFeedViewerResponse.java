@@ -17,6 +17,8 @@ public record ImageFeedViewerResponse(
         String location,
         String placeId,
         String groupId,
+        Double lat,
+        Double lng,
 
         String thumbnail,
 

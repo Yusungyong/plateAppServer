@@ -13,6 +13,8 @@ public record ImageFeedGroupResponse(
             String placeId,
             String storeName,
             String address,
+            Double lat,
+            Double lng,
             String thumbnail,
             long imageCount,
             Integer latestFeedId,

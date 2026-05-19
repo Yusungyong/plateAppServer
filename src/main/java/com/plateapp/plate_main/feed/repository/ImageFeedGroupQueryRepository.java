@@ -20,6 +20,8 @@ public class ImageFeedGroupQueryRepository {
             String placeId,
             String storeName,
             String address,
+            Double lat,
+            Double lng,
             String thumbnail,
             long imageCount,
             Integer latestFeedId,
@@ -72,6 +74,8 @@ public class ImageFeedGroupQueryRepository {
               l.place_id,
               l.store_name,
               COALESCE(l.location, p.formatted_address) AS address,
+              p.latitude AS lat,
+              p.longitude AS lng,
               l.thumbnail,
               a.image_count,
               l.latest_feed_id,
@@ -152,6 +156,8 @@ public class ImageFeedGroupQueryRepository {
               l.place_id,
               l.store_name,
               COALESCE(l.location, p.formatted_address) AS address,
+              p.latitude AS lat,
+              p.longitude AS lng,
               l.thumbnail,
               a.image_count,
               l.latest_feed_id,
@@ -194,15 +200,19 @@ public class ImageFeedGroupQueryRepository {
         String placeId = Objects.toString(row[1], null);
         String storeName = Objects.toString(row[2], null);
         String address = Objects.toString(row[3], null);
-        String thumbnail = Objects.toString(row[4], null);
-        long imageCount = row[5] == null ? 0L : ((Number) row[5]).longValue();
-        Integer latestFeedId = row[6] == null ? null : ((Number) row[6]).intValue();
-        LocalDateTime latestCreatedAt = row[7] == null ? null : ((java.sql.Timestamp) row[7]).toLocalDateTime();
+        Double lat = row[4] == null ? null : ((Number) row[4]).doubleValue();
+        Double lng = row[5] == null ? null : ((Number) row[5]).doubleValue();
+        String thumbnail = Objects.toString(row[6], null);
+        long imageCount = row[7] == null ? 0L : ((Number) row[7]).longValue();
+        Integer latestFeedId = row[8] == null ? null : ((Number) row[8]).intValue();
+        LocalDateTime latestCreatedAt = row[9] == null ? null : ((java.sql.Timestamp) row[9]).toLocalDateTime();
         return new GroupRow(
                 groupId,
                 placeId,
                 storeName,
                 address,
+                lat,
+                lng,
                 thumbnail,
                 imageCount,
                 latestFeedId,
