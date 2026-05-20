@@ -8,8 +8,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.Locale;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -81,7 +80,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         try {
             String username = jwtProvider.getUsernameFromAccessToken(token);
-            String role = jwtProvider.getRoleFromAccessToken(token);
+            List<String> roles = jwtProvider.getRolesFromAccessToken(token);
+            List<String> permissions = jwtProvider.getPermissionsFromAccessToken(token);
 
             if (!userRepository.existsById(username)) {
                 SecurityContextHolder.clearContext();
@@ -94,7 +94,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     new UsernamePasswordAuthenticationToken(
                             username,
                             null,
-                            Collections.singletonList(new SimpleGrantedAuthority(toAuthority(role)))
+                            PlateAuthorities.toSpringAuthorities(roles, permissions).stream()
+                                    .map(SimpleGrantedAuthority::new)
+                                    .toList()
                     );
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -108,22 +110,5 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
-    }
-
-    private String toAuthority(String role) {
-        if (role == null || role.isBlank()) {
-            return "ROLE_USER";
-        }
-
-        String normalized = role.trim().toUpperCase(Locale.ROOT);
-        if (normalized.startsWith("ROLE_")) {
-            return normalized;
-        }
-
-        return switch (normalized) {
-            case "ADM", "ADMIN", "993" -> "ROLE_ADMIN";
-            case "USR", "USER" -> "ROLE_USER";
-            default -> "ROLE_" + normalized;
-        };
     }
 }

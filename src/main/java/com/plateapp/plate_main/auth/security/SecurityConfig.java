@@ -82,9 +82,23 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/home/video-events").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/detail/*/public-profile").authenticated()
 
-                .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                .requestMatchers("/api/users/detail/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.POST, "/api/users/*/profile-history").hasRole("ADMIN")
+                .requestMatchers("/api/admin/member-monitoring/**").hasAnyAuthority(
+                    PlateAuthorities.AUTHORITY_ADMIN,
+                    PlateAuthorities.PERMISSION_ADMIN_ACCESS,
+                    PlateAuthorities.PERMISSION_MEMBER_MONITORING_READ
+                )
+                .requestMatchers("/api/admin/**").hasAnyAuthority(
+                    PlateAuthorities.AUTHORITY_ADMIN,
+                    PlateAuthorities.PERMISSION_ADMIN_ACCESS
+                )
+                .requestMatchers("/api/users/detail/**").hasAnyAuthority(
+                    PlateAuthorities.AUTHORITY_ADMIN,
+                    PlateAuthorities.PERMISSION_ADMIN_ACCESS
+                )
+                .requestMatchers(HttpMethod.POST, "/api/users/*/profile-history").hasAnyAuthority(
+                    PlateAuthorities.AUTHORITY_ADMIN,
+                    PlateAuthorities.PERMISSION_ADMIN_ACCESS
+                )
 
                 .anyRequest().authenticated()
             )

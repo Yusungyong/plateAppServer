@@ -36,6 +36,7 @@ import com.plateapp.plate_main.auth.dto.TokenResponse;
 import com.plateapp.plate_main.auth.repository.SocialAccountRepository;
 import com.plateapp.plate_main.auth.repository.UserRepository;
 import com.plateapp.plate_main.auth.security.JwtProvider;
+import com.plateapp.plate_main.auth.security.PlateAuthorities;
 import com.plateapp.plate_main.notification.service.UserPushTokenService;
 
 import io.jsonwebtoken.Claims;
@@ -527,10 +528,7 @@ public class SocialAuthService {
     }
 
     private String normalizeRole(String role) {
-        if (role == null || role.isBlank()) {
-            return "USR";
-        }
-        return role.trim().toUpperCase();
+        return PlateAuthorities.toRole(role);
     }
 
     private static class AppleJwkSet {

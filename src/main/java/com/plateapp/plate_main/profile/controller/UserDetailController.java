@@ -2,6 +2,7 @@ package com.plateapp.plate_main.profile.controller;
 
 import com.plateapp.plate_main.auth.domain.User;
 import com.plateapp.plate_main.auth.repository.UserRepository;
+import com.plateapp.plate_main.auth.security.PlateAuthorities;
 import com.plateapp.plate_main.notification.service.UserPushTokenService;
 import com.plateapp.plate_main.profile.dto.PublicProfileResponse;
 import com.plateapp.plate_main.profile.dto.UserDetailResponse;
@@ -160,11 +161,11 @@ public class UserDetailController {
     }
 
     private void requireAdmin(Authentication authentication) {
-        boolean isAdmin = authentication != null
-                && authentication.getAuthorities() != null
-                && authentication.getAuthorities().stream()
-                .map(Object::toString)
-                .anyMatch("ROLE_ADMIN"::equals);
+        boolean isAdmin = PlateAuthorities.hasAny(
+                authentication,
+                PlateAuthorities.AUTHORITY_ADMIN,
+                PlateAuthorities.PERMISSION_ADMIN_ACCESS
+        );
         if (!isAdmin) {
             throw new AccessDeniedException("Admin role required");
         }

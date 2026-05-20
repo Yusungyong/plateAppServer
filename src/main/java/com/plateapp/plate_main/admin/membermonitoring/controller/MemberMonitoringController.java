@@ -1,5 +1,6 @@
 package com.plateapp.plate_main.admin.membermonitoring.controller;
 
+import com.plateapp.plate_main.auth.security.PlateAuthorities;
 import com.plateapp.plate_main.admin.membermonitoring.dto.LoginRiskResponse;
 import com.plateapp.plate_main.admin.membermonitoring.dto.MemberMonitoringSummaryResponse;
 import com.plateapp.plate_main.admin.membermonitoring.dto.ProfileChangeResponse;
@@ -10,7 +11,6 @@ import com.plateapp.plate_main.common.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -61,12 +61,15 @@ public class MemberMonitoringController {
             throw new AppException(ErrorCode.AUTH_UNAUTHORIZED, "Unauthorized");
         }
 
-        boolean isAdmin = authentication.getAuthorities().stream()
-            .map(GrantedAuthority::getAuthority)
-            .anyMatch("ROLE_ADMIN"::equals);
+        boolean isAdmin = PlateAuthorities.hasAny(
+            authentication,
+            PlateAuthorities.AUTHORITY_ADMIN,
+            PlateAuthorities.PERMISSION_ADMIN_ACCESS,
+            PlateAuthorities.PERMISSION_MEMBER_MONITORING_READ
+        );
 
         if (!isAdmin) {
-            throw new AppException(ErrorCode.AUTH_FORBIDDEN, "Admin role required");
+            throw new AppException(ErrorCode.AUTH_FORBIDDEN, "Member monitoring permission required");
         }
     }
 }

@@ -8,7 +8,10 @@ import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -17,6 +20,9 @@ public class JwtProvider {
 
     private static final String CLAIM_TOKEN_TYPE = "typ";
     private static final String CLAIM_ROLE = "role";
+    private static final String CLAIM_ROLES = "roles";
+    private static final String CLAIM_PERMISSIONS = "permissions";
+    private static final String CLAIM_USERNAME = "username";
     private static final String TYPE_ACCESS = "access";
     private static final String TYPE_REFRESH = "refresh";
 
@@ -44,13 +50,19 @@ public class JwtProvider {
     public String createAccessToken(String username, String role) {
         Date now = new Date();
         Date exp = new Date(now.getTime() + accessExpire);
+        String normalizedRole = PlateAuthorities.toRole(role);
+        List<String> roles = PlateAuthorities.rolesFor(normalizedRole);
+        List<String> permissions = PlateAuthorities.permissionsFor(normalizedRole);
 
         return Jwts.builder()
                 .setSubject(username)
                 .setIssuedAt(now)
                 .setExpiration(exp)
                 .claim(CLAIM_TOKEN_TYPE, TYPE_ACCESS)
-                .claim(CLAIM_ROLE, role)
+                .claim(CLAIM_USERNAME, username)
+                .claim(CLAIM_ROLE, normalizedRole)
+                .claim(CLAIM_ROLES, roles)
+                .claim(CLAIM_PERMISSIONS, permissions)
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }
@@ -86,6 +98,28 @@ public class JwtProvider {
         return claims.get(CLAIM_ROLE, String.class);
     }
 
+    public List<String> getRolesFromAccessToken(String token) {
+        Claims claims = parseAccessClaims(token);
+        List<String> roles = getStringListClaim(claims, CLAIM_ROLES);
+        if (!roles.isEmpty()) {
+            return roles;
+        }
+
+        String legacyRole = claims.get(CLAIM_ROLE, String.class);
+        return PlateAuthorities.rolesFor(legacyRole);
+    }
+
+    public List<String> getPermissionsFromAccessToken(String token) {
+        Claims claims = parseAccessClaims(token);
+        List<String> permissions = getStringListClaim(claims, CLAIM_PERMISSIONS);
+        if (!permissions.isEmpty()) {
+            return permissions;
+        }
+
+        String legacyRole = claims.get(CLAIM_ROLE, String.class);
+        return PlateAuthorities.permissionsFor(legacyRole);
+    }
+
     public String getUsernameFromRefreshToken(String token) {
         Claims claims = parseClaims(token);
         String typ = claims.get(CLAIM_TOKEN_TYPE, String.class);
@@ -119,5 +153,19 @@ public class JwtProvider {
             throw new JwtException("Invalid token type (access required)");
         }
         return claims;
+    }
+
+    private List<String> getStringListClaim(Claims claims, String claimName) {
+        Object value = claims.get(claimName);
+        if (value instanceof Collection<?> collection) {
+            return collection.stream()
+                    .filter(String.class::isInstance)
+                    .map(String.class::cast)
+                    .toList();
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            return List.of(text.trim().split("\\s+"));
+        }
+        return new ArrayList<>();
     }
 }

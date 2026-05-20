@@ -2,6 +2,7 @@ package com.plateapp.plate_main.auth.controller;
 
 import com.plateapp.plate_main.auth.dto.ProfileHistoryRequest;
 import com.plateapp.plate_main.auth.dto.ProfileHistoryResponse;
+import com.plateapp.plate_main.auth.security.PlateAuthorities;
 import com.plateapp.plate_main.auth.service.ProfileHistoryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,11 +33,11 @@ public class ProfileHistoryController {
     }
 
     private void requireAdmin(Authentication authentication) {
-        boolean isAdmin = authentication != null
-                && authentication.getAuthorities() != null
-                && authentication.getAuthorities().stream()
-                .map(Object::toString)
-                .anyMatch("ROLE_ADMIN"::equals);
+        boolean isAdmin = PlateAuthorities.hasAny(
+                authentication,
+                PlateAuthorities.AUTHORITY_ADMIN,
+                PlateAuthorities.PERMISSION_ADMIN_ACCESS
+        );
         if (!isAdmin) {
             throw new AccessDeniedException("Admin role required");
         }

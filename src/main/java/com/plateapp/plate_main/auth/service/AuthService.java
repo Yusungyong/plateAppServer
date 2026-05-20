@@ -6,6 +6,7 @@ import com.plateapp.plate_main.auth.dto.SignupRequest;
 import com.plateapp.plate_main.auth.exception.AuthException;
 import com.plateapp.plate_main.auth.repository.RefreshTokenRepository;
 import com.plateapp.plate_main.auth.repository.UserRepository;
+import com.plateapp.plate_main.auth.security.PlateAuthorities;
 import com.plateapp.plate_main.auth.security.JwtProvider;
 import com.plateapp.plate_main.common.error.ErrorCode;
 import com.plateapp.plate_main.notification.service.UserPushTokenService;
@@ -178,9 +179,6 @@ public class AuthService {
     public record AuthTokens(String accessToken, String refreshToken) {}
 
     private String normalizeRole(String role) {
-        if (role == null || role.isBlank()) {
-            return "USR";
-        }
-        return role.trim().toUpperCase();
+        return PlateAuthorities.toRole(role);
     }
 }

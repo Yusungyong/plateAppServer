@@ -3,6 +3,7 @@ package com.plateapp.plate_main.auth.security;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -19,10 +20,12 @@ class JwtProviderTest {
         ReflectionTestUtils.setField(provider, "accessExpire", 1000L);
         ReflectionTestUtils.setField(provider, "refreshExpire", 2000L);
 
-        String token = provider.createAccessToken("tester@example.com", "ADM");
+        String token = provider.createAccessToken("tester@example.com", "993");
 
         assertEquals("tester@example.com", provider.getUsernameFromAccessToken(token));
-        assertEquals("ADM", provider.getRoleFromAccessToken(token));
+        assertEquals("ADMIN", provider.getRoleFromAccessToken(token));
+        assertEquals("ADMIN", provider.getRolesFromAccessToken(token).get(0));
+        assertTrue(provider.getPermissionsFromAccessToken(token).contains("ADMIN_ACCESS"));
         assertThrows(JwtException.class, () -> provider.getUsernameFromRefreshToken(token));
     }
 
@@ -36,6 +39,18 @@ class JwtProviderTest {
 
         assertEquals("tester@example.com", provider.getUsernameFromRefreshToken(token));
         assertThrows(JwtException.class, () -> provider.getUsernameFromAccessToken(token));
+    }
+
+    @Test
+    void superAdminRoleReceivesAdminAccessPermission() {
+        JwtProvider provider = new JwtProvider(SECRET);
+        ReflectionTestUtils.setField(provider, "accessExpire", 1000L);
+        ReflectionTestUtils.setField(provider, "refreshExpire", 2000L);
+
+        String token = provider.createAccessToken("tester@example.com", "SUPER_ADMIN");
+
+        assertEquals("SUPER_ADMIN", provider.getRolesFromAccessToken(token).get(0));
+        assertTrue(provider.getPermissionsFromAccessToken(token).contains("ADMIN_ACCESS"));
     }
 
     @Test

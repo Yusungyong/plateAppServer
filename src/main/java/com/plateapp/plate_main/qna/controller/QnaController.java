@@ -1,5 +1,6 @@
 package com.plateapp.plate_main.qna.controller;
 
+import com.plateapp.plate_main.auth.security.PlateAuthorities;
 import com.plateapp.plate_main.common.error.AppException;
 import com.plateapp.plate_main.common.error.ErrorCode;
 import com.plateapp.plate_main.qna.dto.QnaCreateRequest;
@@ -11,7 +12,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -80,9 +80,12 @@ public class QnaController {
         if (authentication == null || authentication.getAuthorities() == null) {
             return false;
         }
-        return authentication.getAuthorities().stream()
-            .map(GrantedAuthority::getAuthority)
-            .anyMatch("ROLE_ADMIN"::equals);
+        return PlateAuthorities.hasAny(
+            authentication,
+            PlateAuthorities.AUTHORITY_ADMIN,
+            PlateAuthorities.PERMISSION_ADMIN_ACCESS,
+            PlateAuthorities.PERMISSION_QNA_MANAGE
+        );
     }
 
     private void requireAdmin(Authentication authentication) {
@@ -90,7 +93,7 @@ public class QnaController {
             throw new AppException(ErrorCode.AUTH_UNAUTHORIZED, "Unauthorized");
         }
         if (!isAdmin(authentication)) {
-            throw new AppException(ErrorCode.AUTH_FORBIDDEN, "Admin role required");
+            throw new AppException(ErrorCode.AUTH_FORBIDDEN, "QNA manage permission required");
         }
     }
 }

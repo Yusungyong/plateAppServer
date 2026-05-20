@@ -1,5 +1,6 @@
 package com.plateapp.plate_main.faq.controller;
 
+import com.plateapp.plate_main.auth.security.PlateAuthorities;
 import com.plateapp.plate_main.common.error.AppException;
 import com.plateapp.plate_main.common.error.ErrorCode;
 import com.plateapp.plate_main.faq.dto.FaqListResponse;
@@ -10,7 +11,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -77,12 +77,15 @@ public class FaqController {
             throw new AppException(ErrorCode.AUTH_UNAUTHORIZED, "Unauthorized");
         }
 
-        boolean isAdmin = authentication.getAuthorities().stream()
-            .map(GrantedAuthority::getAuthority)
-            .anyMatch("ROLE_ADMIN"::equals);
+        boolean isAdmin = PlateAuthorities.hasAny(
+            authentication,
+            PlateAuthorities.AUTHORITY_ADMIN,
+            PlateAuthorities.PERMISSION_ADMIN_ACCESS,
+            PlateAuthorities.PERMISSION_FAQ_MANAGE
+        );
 
         if (!isAdmin) {
-            throw new AppException(ErrorCode.AUTH_FORBIDDEN, "Admin role required");
+            throw new AppException(ErrorCode.AUTH_FORBIDDEN, "FAQ manage permission required");
         }
     }
 }
