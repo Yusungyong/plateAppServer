@@ -21,6 +21,7 @@ public final class PlateAuthorities {
     public static final String PERMISSION_FAQ_MANAGE = "FAQ_MANAGE";
     public static final String PERMISSION_QNA_MANAGE = "QNA_MANAGE";
     public static final String PERMISSION_MEMBER_MONITORING_READ = "MEMBER_MONITORING_READ";
+    public static final String PERMISSION_RESTAURANT_MANAGE = "RESTAURANT_MANAGE";
 
     private PlateAuthorities() {
     }

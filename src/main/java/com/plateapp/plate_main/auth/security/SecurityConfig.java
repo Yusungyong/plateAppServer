@@ -87,6 +87,11 @@ public class SecurityConfig {
                     PlateAuthorities.PERMISSION_ADMIN_ACCESS,
                     PlateAuthorities.PERMISSION_MEMBER_MONITORING_READ
                 )
+                .requestMatchers("/api/admin/restaurants/**", "/api/admin/files").hasAnyAuthority(
+                    PlateAuthorities.AUTHORITY_ADMIN,
+                    PlateAuthorities.PERMISSION_ADMIN_ACCESS,
+                    PlateAuthorities.PERMISSION_RESTAURANT_MANAGE
+                )
                 .requestMatchers("/api/admin/**").hasAnyAuthority(
                     PlateAuthorities.AUTHORITY_ADMIN,
                     PlateAuthorities.PERMISSION_ADMIN_ACCESS

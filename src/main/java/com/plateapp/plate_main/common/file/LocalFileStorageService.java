@@ -57,6 +57,33 @@ public class LocalFileStorageService {
         }
     }
 
+    public String storeRestaurantFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new AppException(ErrorCode.COMMON_INVALID_INPUT, "Upload file is required.");
+        }
+        String originalFilename = file.getOriginalFilename() == null ? "upload.bin" : file.getOriginalFilename();
+        String safeFilename = UUID.randomUUID().toString().replace("-", "") + "-" + sanitizeFilename(originalFilename);
+        LocalDate today = LocalDate.now();
+        Path relativePath = Paths.get(
+                "restaurants",
+                String.valueOf(today.getYear()),
+                String.format("%02d", today.getMonthValue()),
+                String.format("%02d", today.getDayOfMonth()),
+                safeFilename
+        );
+        Path targetPath = rootPath.resolve(relativePath).normalize();
+
+        try {
+            Files.createDirectories(targetPath.getParent());
+            try (InputStream inputStream = file.getInputStream()) {
+                Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
+            }
+            return toPublicUrl(relativePath);
+        } catch (IOException e) {
+            throw new AppException(ErrorCode.COMMON_INTERNAL_ERROR, "Restaurant file upload failed.");
+        }
+    }
+
     public void deleteByPublicUrl(String publicUrl) {
         if (publicUrl == null || publicUrl.isBlank()) {
             return;
