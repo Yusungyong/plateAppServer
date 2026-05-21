@@ -8,8 +8,11 @@ import java.security.spec.RSAPublicKeySpec;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.Collection;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -23,6 +26,7 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.plateapp.plate_main.auth.domain.RefreshToken;
 import com.plateapp.plate_main.auth.domain.SocialAccount;
 import com.plateapp.plate_main.auth.domain.User;
 import com.plateapp.plate_main.auth.dto.AppleIdTokenPayload;
@@ -33,6 +37,7 @@ import com.plateapp.plate_main.auth.dto.GoogleLoginRequest;
 import com.plateapp.plate_main.auth.dto.KakaoLoginRequest;
 import com.plateapp.plate_main.auth.dto.KakaoUserResponse;
 import com.plateapp.plate_main.auth.dto.TokenResponse;
+import com.plateapp.plate_main.auth.repository.RefreshTokenRepository;
 import com.plateapp.plate_main.auth.repository.SocialAccountRepository;
 import com.plateapp.plate_main.auth.repository.UserRepository;
 import com.plateapp.plate_main.auth.security.JwtProvider;
@@ -53,6 +58,7 @@ public class SocialAuthService {
 
     private final JwtProvider jwtProvider;
     private final UserRepository userRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
     private final SocialAccountRepository socialAccountRepository;
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
@@ -103,11 +109,10 @@ public class SocialAuthService {
                 socialAccountRepository.save(social);
             }
 
-            String accessToken = jwtProvider.createAccessToken(user.getUsername(), normalizeRole(user.getRole()));
-            String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
+            TokenPair tokens = issueTokens(user, request.getDeviceId());
             userPushTokenService.upsertLoginToken(user, request.getDeviceId(), request.getFcmToken());
             logSocialLogin(user, "SUCCESS", null, ipAddress);
-            return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
+            return new TokenResponse(tokens.accessToken(), tokens.refreshToken(), AuthUserDto.from(user));
         } catch (RuntimeException e) {
             logSocialLogin(extractSocialUsername(request.getUser(), provider), null, "FAIL", provider + "_LOGIN_FAILED", ipAddress);
             throw e;
@@ -296,11 +301,10 @@ public class SocialAuthService {
                 socialAccountRepository.save(social);
             }
 
-            String accessToken = jwtProvider.createAccessToken(user.getUsername(), normalizeRole(user.getRole()));
-            String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
+            TokenPair tokens = issueTokens(user, request.getDeviceId());
             userPushTokenService.upsertLoginToken(user, request.getDeviceId(), request.getFcmToken());
             logSocialLogin(user, "SUCCESS", null, ipAddress);
-            return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
+            return new TokenResponse(tokens.accessToken(), tokens.refreshToken(), AuthUserDto.from(user));
         } catch (RuntimeException e) {
             logSocialLogin(null, null, "FAIL", provider + "_LOGIN_FAILED", ipAddress);
             throw e;
@@ -410,11 +414,10 @@ public class SocialAuthService {
                 socialAccountRepository.save(social);
             }
 
-            String accessToken = jwtProvider.createAccessToken(user.getUsername(), normalizeRole(user.getRole()));
-            String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
+            TokenPair tokens = issueTokens(user, request.getDeviceId());
             userPushTokenService.upsertLoginToken(user, request.getDeviceId(), request.getFcmToken());
             logSocialLogin(user, "SUCCESS", null, ipAddress);
-            return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
+            return new TokenResponse(tokens.accessToken(), tokens.refreshToken(), AuthUserDto.from(user));
         } catch (RuntimeException e) {
             logSocialLogin(null, null, "FAIL", provider + "_LOGIN_FAILED", ipAddress);
             throw e;
@@ -433,6 +436,34 @@ public class SocialAuthService {
     private void logSocialLogin(User user, String status, String failReason, String ipAddress) {
         logSocialLogin(user != null ? user.getUsername() : null, user != null ? user.getUserId() : null, status, failReason, ipAddress);
     }
+
+    private TokenPair issueTokens(User user, String deviceId) {
+        String accessToken = jwtProvider.createAccessToken(user.getUsername(), normalizeRole(user.getRole()));
+        String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
+
+        Date refreshExpDate = jwtProvider.getExpiration(refreshToken);
+        OffsetDateTime refreshExpiry = refreshExpDate.toInstant().atOffset(ZoneOffset.UTC);
+
+        refreshTokenRepository.deleteByUsername(user.getUsername());
+        if (deviceId != null && !deviceId.isBlank()) {
+            refreshTokenRepository.deleteByUsernameAndDeviceId(user.getUsername(), deviceId);
+        }
+
+        refreshTokenRepository.save(
+                RefreshToken.builder()
+                        .username(user.getUsername())
+                        .userId(user.getUserId())
+                        .refreshToken(refreshToken)
+                        .expiryDate(refreshExpiry)
+                        .deviceId(deviceId)
+                        .createdAt(OffsetDateTime.now(ZoneOffset.UTC))
+                        .build()
+        );
+
+        return new TokenPair(accessToken, refreshToken);
+    }
+
+    private record TokenPair(String accessToken, String refreshToken) {}
 
     private void logSocialLogin(String username, Integer userId, String status, String failReason, String ipAddress) {
         loginHistoryService.log(
