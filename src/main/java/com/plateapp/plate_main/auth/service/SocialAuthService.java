@@ -486,10 +486,9 @@ public class SocialAuthService {
         session.setConsumedAt(now);
         socialSignupSessionRepository.save(session);
 
-        String accessToken = jwtProvider.createAccessToken(user.getUsername(), normalizeRole(user.getRole()));
-        String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
+        TokenPair tokens = issueTokens(user, null);
         logSocialLogin(user, "SUCCESS", null, ipAddress);
-        return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
+        return new TokenResponse(tokens.accessToken(), tokens.refreshToken(), AuthUserDto.from(user));
     }
 
     private SocialSignupSession createSignupSession(
