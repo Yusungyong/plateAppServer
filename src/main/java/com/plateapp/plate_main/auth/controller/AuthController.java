@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.plateapp.plate_main.auth.dto.AppleLoginRequest;
 import com.plateapp.plate_main.auth.dto.GoogleLoginRequest;
 import com.plateapp.plate_main.auth.dto.KakaoLoginRequest;
+import com.plateapp.plate_main.auth.dto.SocialAuthResponse;
+import com.plateapp.plate_main.auth.dto.SocialSignupCompleteRequest;
 import com.plateapp.plate_main.auth.dto.SignupRequest;
 import com.plateapp.plate_main.auth.dto.TokenResponse;
 import com.plateapp.plate_main.auth.service.AuthService;
@@ -69,29 +71,38 @@ public class AuthController {
     // ===== Social Login (중복 제거: provider별로 명확히) =====
 
     @PostMapping("/social/apple")
-    public ResponseEntity<ApiResponse<TokenResponse>> appleLogin(
+    public ResponseEntity<ApiResponse<SocialAuthResponse>> appleLogin(
             @Valid @RequestBody AppleLoginRequest request,
             HttpServletRequest httpRequest
     ) {
-        TokenResponse tokenResponse = socialAuthService.loginWithApple(request, extractClientIp(httpRequest));
-        return ResponseEntity.ok(ApiResponse.ok(tokenResponse));
+        SocialAuthResponse response = socialAuthService.loginWithApple(request, extractClientIp(httpRequest));
+        return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
     @PostMapping("/social/kakao")
-    public ResponseEntity<ApiResponse<TokenResponse>> kakaoLogin(
+    public ResponseEntity<ApiResponse<SocialAuthResponse>> kakaoLogin(
             @Valid @RequestBody KakaoLoginRequest request,
             HttpServletRequest httpRequest
     ) {
-        TokenResponse tokenResponse = socialAuthService.loginWithKakao(request, extractClientIp(httpRequest));
-        return ResponseEntity.ok(ApiResponse.ok(tokenResponse));
+        SocialAuthResponse response = socialAuthService.loginWithKakao(request, extractClientIp(httpRequest));
+        return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
     @PostMapping("/social/google")
-    public ResponseEntity<ApiResponse<TokenResponse>> googleLogin(
+    public ResponseEntity<ApiResponse<SocialAuthResponse>> googleLogin(
             @Valid @RequestBody GoogleLoginRequest request,
             HttpServletRequest httpRequest
     ) {
-        TokenResponse tokenResponse = socialAuthService.loginWithGoogle(request, extractClientIp(httpRequest));
+        SocialAuthResponse response = socialAuthService.loginWithGoogle(request, extractClientIp(httpRequest));
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @PostMapping("/social/signup/complete")
+    public ResponseEntity<ApiResponse<TokenResponse>> completeSocialSignup(
+            @Valid @RequestBody SocialSignupCompleteRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        TokenResponse tokenResponse = socialAuthService.completeSignup(request, extractClientIp(httpRequest));
         return ResponseEntity.ok(ApiResponse.ok(tokenResponse));
     }
 

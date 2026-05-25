@@ -28,6 +28,7 @@ import org.springframework.web.client.RestTemplate;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.plateapp.plate_main.auth.domain.RefreshToken;
 import com.plateapp.plate_main.auth.domain.SocialAccount;
+import com.plateapp.plate_main.auth.domain.SocialSignupSession;
 import com.plateapp.plate_main.auth.domain.User;
 import com.plateapp.plate_main.auth.dto.AppleIdTokenPayload;
 import com.plateapp.plate_main.auth.dto.AppleLoginRequest;
@@ -36,12 +37,17 @@ import com.plateapp.plate_main.auth.dto.GoogleIdTokenPayload;
 import com.plateapp.plate_main.auth.dto.GoogleLoginRequest;
 import com.plateapp.plate_main.auth.dto.KakaoLoginRequest;
 import com.plateapp.plate_main.auth.dto.KakaoUserResponse;
+import com.plateapp.plate_main.auth.dto.SocialAuthResponse;
+import com.plateapp.plate_main.auth.dto.SocialSignupCompleteRequest;
 import com.plateapp.plate_main.auth.dto.TokenResponse;
+import com.plateapp.plate_main.auth.exception.AuthException;
 import com.plateapp.plate_main.auth.repository.RefreshTokenRepository;
 import com.plateapp.plate_main.auth.repository.SocialAccountRepository;
+import com.plateapp.plate_main.auth.repository.SocialSignupSessionRepository;
 import com.plateapp.plate_main.auth.repository.UserRepository;
 import com.plateapp.plate_main.auth.security.JwtProvider;
 import com.plateapp.plate_main.auth.security.PlateAuthorities;
+import com.plateapp.plate_main.common.error.ErrorCode;
 import com.plateapp.plate_main.notification.service.UserPushTokenService;
 
 import io.jsonwebtoken.Claims;
@@ -60,6 +66,7 @@ public class SocialAuthService {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final SocialAccountRepository socialAccountRepository;
+    private final SocialSignupSessionRepository socialSignupSessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
@@ -75,7 +82,9 @@ public class SocialAuthService {
     @Value("${google.client-id}")
     private String googleClientId;
 
-    public TokenResponse loginWithApple(AppleLoginRequest request, String ipAddress) {
+    private static final Duration SIGNUP_SESSION_TTL = Duration.ofMinutes(30);
+
+    public SocialAuthResponse loginWithApple(AppleLoginRequest request, String ipAddress) {
         String provider = "APPLE";
         try {
             AppleIdTokenPayload payload = parseAndValidateAppleToken(request.getIdentityToken());
@@ -91,28 +100,27 @@ public class SocialAuthService {
                 user = userRepository.findByUserId(userId)
                         .orElseThrow(() -> new IllegalStateException("User not found by user_id."));
             } else {
-                user = createUserForApple(payload);
-
-                Integer userId = userRepository.findUserIdByUsername(user.getUsername());
-                if (userId == null) {
-                    throw new IllegalStateException("User id not found after create.");
-                }
-
-                SocialAccount social = SocialAccount.builder()
-                        .userId(userId)
-                        .provider(provider)
-                        .providerUserId(providerUserId)
-                        .email(payload.getEmail())
-                        .displayName(user.getNickname())
-                        .build();
-
-                socialAccountRepository.save(social);
+                SocialSignupSession session = createSignupSession(
+                        provider,
+                        providerUserId,
+                        payload.getEmail(),
+                        extractAppleNickname(request.getUser()),
+                        payload
+                );
+                logSocialLogin(extractSocialUsername(request.getUser(), provider), null, "SIGNUP_REQUIRED", null, ipAddress);
+                return SocialAuthResponse.signupRequired(
+                        session.getSignupToken(),
+                        provider,
+                        providerUserId,
+                        session.getEmail(),
+                        session.getNickname()
+                );
             }
 
             TokenPair tokens = issueTokens(user, request.getDeviceId());
             userPushTokenService.upsertLoginToken(user, request.getDeviceId(), request.getFcmToken());
             logSocialLogin(user, "SUCCESS", null, ipAddress);
-            return new TokenResponse(tokens.accessToken(), tokens.refreshToken(), AuthUserDto.from(user));
+            return SocialAuthResponse.loginSuccess(tokens.accessToken(), tokens.refreshToken(), user);
         } catch (RuntimeException e) {
             logSocialLogin(extractSocialUsername(request.getUser(), provider), null, "FAIL", provider + "_LOGIN_FAILED", ipAddress);
             throw e;
@@ -255,7 +263,7 @@ public class SocialAuthService {
         );
     }
 
-    public TokenResponse loginWithKakao(KakaoLoginRequest request, String ipAddress) {
+    public SocialAuthResponse loginWithKakao(KakaoLoginRequest request, String ipAddress) {
         String provider = "KAKAO";
         try {
             if (request.getAccessToken() == null || request.getAccessToken().isBlank()) {
@@ -275,13 +283,6 @@ public class SocialAuthService {
                 user = userRepository.findByUserId(userId)
                         .orElseThrow(() -> new IllegalStateException("User not found by user_id."));
             } else {
-                user = createUserForKakao(kakaoUser);
-
-                Integer userId = userRepository.findUserIdByUsername(user.getUsername());
-                if (userId == null) {
-                    throw new IllegalStateException("User id not found after create.");
-                }
-
                 String email = kakaoUser.getKakaoAccount() != null
                         ? kakaoUser.getKakaoAccount().getEmail()
                         : null;
@@ -290,21 +291,27 @@ public class SocialAuthService {
                         ? kakaoUser.getKakaoAccount().getProfile().getNickname()
                         : null;
 
-                SocialAccount social = SocialAccount.builder()
-                        .userId(userId)
-                        .provider(provider)
-                        .providerUserId(providerUserId)
-                        .email(email)
-                        .displayName(nickname)
-                        .build();
-
-                socialAccountRepository.save(social);
+                SocialSignupSession session = createSignupSession(
+                        provider,
+                        providerUserId,
+                        email,
+                        nickname,
+                        kakaoUser
+                );
+                logSocialLogin(null, null, "SIGNUP_REQUIRED", null, ipAddress);
+                return SocialAuthResponse.signupRequired(
+                        session.getSignupToken(),
+                        provider,
+                        providerUserId,
+                        session.getEmail(),
+                        session.getNickname()
+                );
             }
 
             TokenPair tokens = issueTokens(user, request.getDeviceId());
             userPushTokenService.upsertLoginToken(user, request.getDeviceId(), request.getFcmToken());
             logSocialLogin(user, "SUCCESS", null, ipAddress);
-            return new TokenResponse(tokens.accessToken(), tokens.refreshToken(), AuthUserDto.from(user));
+            return SocialAuthResponse.loginSuccess(tokens.accessToken(), tokens.refreshToken(), user);
         } catch (RuntimeException e) {
             logSocialLogin(null, null, "FAIL", provider + "_LOGIN_FAILED", ipAddress);
             throw e;
@@ -370,7 +377,7 @@ public class SocialAuthService {
         );
     }
 
-    public TokenResponse loginWithGoogle(GoogleLoginRequest request, String ipAddress) {
+    public SocialAuthResponse loginWithGoogle(GoogleLoginRequest request, String ipAddress) {
         String provider = "GOOGLE";
         try {
             if (request.getIdToken() == null || request.getIdToken().isBlank()) {
@@ -393,31 +400,30 @@ public class SocialAuthService {
                 user = userRepository.findByUserId(userId)
                         .orElseThrow(() -> new IllegalStateException("User not found by user_id."));
             } else {
-                user = createUserForGoogle(payload);
-
-                Integer userId = userRepository.findUserIdByUsername(user.getUsername());
-                if (userId == null) {
-                    throw new IllegalStateException("User id not found after create.");
-                }
-
                 String email = payload.getEmail();
                 String name = payload.getName();
 
-                SocialAccount social = SocialAccount.builder()
-                        .userId(userId)
-                        .provider(provider)
-                        .providerUserId(providerUserId)
-                        .email(email)
-                        .displayName(name)
-                        .build();
-
-                socialAccountRepository.save(social);
+                SocialSignupSession session = createSignupSession(
+                        provider,
+                        providerUserId,
+                        email,
+                        name,
+                        payload
+                );
+                logSocialLogin(null, null, "SIGNUP_REQUIRED", null, ipAddress);
+                return SocialAuthResponse.signupRequired(
+                        session.getSignupToken(),
+                        provider,
+                        providerUserId,
+                        session.getEmail(),
+                        session.getNickname()
+                );
             }
 
             TokenPair tokens = issueTokens(user, request.getDeviceId());
             userPushTokenService.upsertLoginToken(user, request.getDeviceId(), request.getFcmToken());
             logSocialLogin(user, "SUCCESS", null, ipAddress);
-            return new TokenResponse(tokens.accessToken(), tokens.refreshToken(), AuthUserDto.from(user));
+            return SocialAuthResponse.loginSuccess(tokens.accessToken(), tokens.refreshToken(), user);
         } catch (RuntimeException e) {
             logSocialLogin(null, null, "FAIL", provider + "_LOGIN_FAILED", ipAddress);
             throw e;
@@ -431,6 +437,136 @@ public class SocialAuthService {
         }
         GoogleIdTokenPayload payload = parseAndValidateGoogleToken(idToken);
         return payload.getSub();
+    }
+
+    public TokenResponse completeSignup(SocialSignupCompleteRequest request, String ipAddress) {
+        SocialSignupSession session = socialSignupSessionRepository.findBySignupToken(request.signupToken())
+                .orElseThrow(() -> new AuthException(ErrorCode.COMMON_NOT_FOUND, "signupToken not found."));
+
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        if (session.getConsumedAt() != null) {
+            throw new AuthException(ErrorCode.COMMON_CONFLICT, "signupToken already consumed.");
+        }
+        if (session.getExpiresAt() == null || session.getExpiresAt().isBefore(now)) {
+            throw new AuthException(ErrorCode.AUTH_TOKEN_EXPIRED, "signupToken expired.");
+        }
+        if (!Boolean.TRUE.equals(request.agreeService()) || !Boolean.TRUE.equals(request.agreePrivacy())) {
+            throw new AuthException(ErrorCode.COMMON_INVALID_INPUT, "Required agreements must be accepted.");
+        }
+
+        String email = request.email() == null ? "" : request.email().trim();
+        String nickname = request.nickname() == null ? "" : request.nickname().trim();
+        if (email.isBlank() || nickname.isBlank()) {
+            throw new AuthException(ErrorCode.COMMON_INVALID_INPUT, "email and nickname are required.");
+        }
+        if (userRepository.existsByEmail(email) || userRepository.existsById(email)) {
+            throw new AuthException(ErrorCode.COMMON_CONFLICT, "Email is already in use.");
+        }
+        if (socialAccountRepository.findByProviderAndProviderUserId(session.getProvider(), session.getProviderUserId()).isPresent()) {
+            throw new AuthException(ErrorCode.COMMON_CONFLICT, "Social account is already linked.");
+        }
+
+        User user = createUserForSocial(session.getProvider(), email, nickname);
+        Integer userId = userRepository.findUserIdByUsername(user.getUsername());
+        if (userId == null) {
+            throw new IllegalStateException("User id not found after create.");
+        }
+
+        SocialAccount social = SocialAccount.builder()
+                .userId(userId)
+                .provider(session.getProvider())
+                .providerUserId(session.getProviderUserId())
+                .email(email)
+                .displayName(nickname)
+                .build();
+        socialAccountRepository.save(social);
+
+        session.setEmail(email);
+        session.setNickname(nickname);
+        session.setConsumedAt(now);
+        socialSignupSessionRepository.save(session);
+
+        String accessToken = jwtProvider.createAccessToken(user.getUsername(), normalizeRole(user.getRole()));
+        String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
+        logSocialLogin(user, "SUCCESS", null, ipAddress);
+        return new TokenResponse(accessToken, refreshToken, AuthUserDto.from(user));
+    }
+
+    private SocialSignupSession createSignupSession(
+            String provider,
+            String providerUserId,
+            String email,
+            String nickname,
+            Object rawProfile
+    ) {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        SocialSignupSession session = SocialSignupSession.builder()
+                .signupToken(UUID.randomUUID().toString())
+                .provider(provider)
+                .providerUserId(providerUserId)
+                .email(trimToNull(email))
+                .nickname(trimToNull(nickname))
+                .rawProfileJson(toJson(rawProfile))
+                .createdAt(now)
+                .expiresAt(now.plus(SIGNUP_SESSION_TTL))
+                .build();
+        return socialSignupSessionRepository.save(session);
+    }
+
+    private User createUserForSocial(String provider, String email, String nickname) {
+        String encodedPw = passwordEncoder.encode(provider + "-" + UUID.randomUUID());
+        LocalDate today = LocalDate.now();
+
+        return userRepository.save(
+                User.builder()
+                        .username(email)
+                        .password(encodedPw)
+                        .email(email)
+                        .nickname(nickname)
+                        .role("USR")
+                        .createdAt(today)
+                        .updatedAt(today)
+                        .isPrivate(false)
+                        .build()
+        );
+    }
+
+    private String extractAppleNickname(String rawUser) {
+        if (rawUser == null || rawUser.isBlank()) {
+            return null;
+        }
+        try {
+            Map<String, Object> payload = objectMapper.readValue(rawUser, Map.class);
+            Object nameObject = payload.get("name");
+            if (!(nameObject instanceof Map<?, ?> name)) {
+                return null;
+            }
+            String firstName = name.get("firstName") == null ? "" : String.valueOf(name.get("firstName")).trim();
+            String lastName = name.get("lastName") == null ? "" : String.valueOf(name.get("lastName")).trim();
+            String fullName = (lastName + firstName).trim();
+            return fullName.isBlank() ? null : fullName;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String toJson(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isBlank() ? null : trimmed;
     }
 
     private void logSocialLogin(User user, String status, String failReason, String ipAddress) {
