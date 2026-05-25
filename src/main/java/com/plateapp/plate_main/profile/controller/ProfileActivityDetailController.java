@@ -3,6 +3,7 @@ package com.plateapp.plate_main.profile.controller;
 import com.plateapp.plate_main.common.dto.ApiResponse;
 import com.plateapp.plate_main.profile.dto.LikedContentDtos.LikedImageItem;
 import com.plateapp.plate_main.profile.dto.LikedContentDtos.LikedVideoItem;
+import com.plateapp.plate_main.profile.dto.LikedPlaceMapResponse;
 import com.plateapp.plate_main.profile.dto.ProfileActivityDetailItems.ImageItem;
 import com.plateapp.plate_main.profile.dto.ProfileActivityDetailItems.VideoItem;
 import com.plateapp.plate_main.profile.dto.ProfileActivityDetailResponse;
@@ -150,5 +151,11 @@ public class ProfileActivityDetailController {
         return ApiResponse.success(
                 profileActivityDetailService.getLikedImages(username, limit, offset, sort, from, to, region, groupId)
         );
+    }
+
+    @GetMapping("/my/likes/places/map")
+    public ApiResponse<LikedPlaceMapResponse> getMyLikedPlacesMap(Authentication authentication) {
+        String username = authentication.getName();
+        return ApiResponse.success(profileActivityDetailService.getLikedPlacesMap(username));
     }
 }

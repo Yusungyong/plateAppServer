@@ -3,6 +3,8 @@ package com.plateapp.plate_main.profile.service;
 import com.plateapp.plate_main.common.s3.S3UploadService;
 import com.plateapp.plate_main.profile.dto.LikedContentDtos.LikedImageItem;
 import com.plateapp.plate_main.profile.dto.LikedContentDtos.LikedVideoItem;
+import com.plateapp.plate_main.profile.dto.LikedPlaceMapResponse;
+import com.plateapp.plate_main.profile.dto.LikedPlaceMapResponse.LikedPlaceMapItem;
 import com.plateapp.plate_main.profile.dto.ProfileActivityDetailItems.ImageItem;
 import com.plateapp.plate_main.profile.dto.ProfileActivityDetailItems.VideoItem;
 import com.plateapp.plate_main.profile.dto.ProfileActivityDetailResponse;
@@ -157,6 +159,169 @@ public class ProfileActivityDetailService {
                 .offset(safeOffset)
                 .total(total)
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public LikedPlaceMapResponse getLikedPlacesMap(String username) {
+        String sql = """
+            WITH video_likes AS (
+                SELECT
+                    COALESCE(NULLIF(s.place_id, ''), 'fallback:' || COALESCE(s.store_name, '') || '|' || COALESCE(s.address, '')) AS group_key,
+                    s.place_id AS place_id,
+                    s.store_id AS store_id,
+                    s.store_name AS store_name,
+                    s.address AS address,
+                    loc.latitude AS lat,
+                    loc.longitude AS lng,
+                    CASE
+                        WHEN loc.types IS NULL THEN NULL
+                        WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('korean_restaurant', 'korean')) THEN 'KOREAN'
+                        WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('japanese_restaurant', 'japanese')) THEN 'JAPANESE'
+                        WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('chinese_restaurant', 'chinese')) THEN 'CHINESE'
+                        WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('cafe', 'coffee_shop')) THEN 'CAFE'
+                        WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('dessert_restaurant', 'bakery', 'ice_cream_shop', 'dessert')) THEN 'DESSERT'
+                        ELSE NULL
+                    END AS category,
+                    s.thumbnail AS thumbnail_path,
+                    'video' AS thumbnail_type,
+                    l.created_at AS liked_at,
+                    1 AS video_like_delta,
+                    0 AS image_like_delta
+                FROM fp_50 l
+                JOIN fp_300 s ON s.store_id = l.store_id
+                LEFT JOIN fp_310 loc
+                    ON loc.place_id = s.place_id
+                   AND loc.use_yn = 'Y'
+                   AND loc.deleted_at IS NULL
+                WHERE l.username = :username
+                  AND l.use_yn = 'Y'
+                  AND l.deleted_at IS NULL
+                  AND s.use_yn = 'Y'
+                  AND s.open_yn = 'Y'
+                  AND s.deleted_at IS NULL
+            ),
+            image_likes AS (
+                SELECT
+                    COALESCE(NULLIF(f.place_id, ''), 'fallback:' || COALESCE(f.store_name, '') || '|' || COALESCE(f.location, '')) AS group_key,
+                    f.place_id AS place_id,
+                    NULL::integer AS store_id,
+                    f.store_name AS store_name,
+                    f.location AS address,
+                    loc.latitude AS lat,
+                    loc.longitude AS lng,
+                    CASE
+                        WHEN loc.types IS NULL THEN NULL
+                        WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('korean_restaurant', 'korean')) THEN 'KOREAN'
+                        WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('japanese_restaurant', 'japanese')) THEN 'JAPANESE'
+                        WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('chinese_restaurant', 'chinese')) THEN 'CHINESE'
+                        WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('cafe', 'coffee_shop')) THEN 'CAFE'
+                        WHEN EXISTS (SELECT 1 FROM unnest(loc.types) t WHERE lower(t) IN ('dessert_restaurant', 'bakery', 'ice_cream_shop', 'dessert')) THEN 'DESSERT'
+                        ELSE NULL
+                    END AS category,
+                    f.thumbnail AS thumbnail_path,
+                    'image' AS thumbnail_type,
+                    l.created_at AS liked_at,
+                    0 AS video_like_delta,
+                    1 AS image_like_delta
+                FROM fp_60 l
+                JOIN fp_400 f ON f.feed_no = l.feed_id
+                LEFT JOIN fp_310 loc
+                    ON loc.place_id = f.place_id
+                   AND loc.use_yn = 'Y'
+                   AND loc.deleted_at IS NULL
+                WHERE l.username = :username
+                  AND l.use_yn = 'Y'
+                  AND l.deleted_at IS NULL
+                  AND f.use_yn = 'Y'
+            ),
+            all_likes AS (
+                SELECT * FROM video_likes
+                UNION ALL
+                SELECT * FROM image_likes
+            ),
+            latest_rows AS (
+                SELECT
+                    group_key,
+                    place_id,
+                    store_id,
+                    store_name,
+                    address,
+                    lat,
+                    lng,
+                    category,
+                    thumbnail_path,
+                    thumbnail_type,
+                    liked_at,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY group_key
+                        ORDER BY liked_at DESC NULLS LAST,
+                                 CASE WHEN thumbnail_path IS NULL OR thumbnail_path = '' THEN 1 ELSE 0 END,
+                                 store_id DESC NULLS LAST
+                    ) AS rn
+                FROM all_likes
+            ),
+            aggregates AS (
+                SELECT
+                    group_key,
+                    MAX(place_id) FILTER (WHERE place_id IS NOT NULL AND place_id <> '') AS place_id,
+                    MAX(store_id) FILTER (WHERE store_id IS NOT NULL) AS store_id,
+                    SUM(video_like_delta)::bigint AS video_like_count,
+                    SUM(image_like_delta)::bigint AS image_like_count,
+                    COUNT(*)::bigint AS total_like_count,
+                    MAX(liked_at) AS latest_liked_at,
+                    MAX(lat) FILTER (WHERE lat IS NOT NULL) AS lat,
+                    MAX(lng) FILTER (WHERE lng IS NOT NULL) AS lng
+                FROM all_likes
+                GROUP BY group_key
+            )
+            SELECT
+                a.place_id,
+                a.store_id,
+                lr.store_name,
+                lr.address,
+                lr.category,
+                a.lat,
+                a.lng,
+                lr.thumbnail_path,
+                lr.thumbnail_type,
+                a.video_like_count,
+                a.image_like_count,
+                a.total_like_count,
+                a.latest_liked_at
+            FROM aggregates a
+            JOIN latest_rows lr
+              ON lr.group_key = a.group_key
+             AND lr.rn = 1
+            ORDER BY a.latest_liked_at DESC NULLS LAST, lr.store_name ASC NULLS LAST
+            """;
+
+        MapSqlParameterSource params = new MapSqlParameterSource("username", username);
+        List<LikedPlaceMapItem> items = jdbcTemplate.query(sql, params, (rs, rowNum) -> {
+            String thumbnailPath = rs.getString("thumbnail_path");
+            String thumbnailType = rs.getString("thumbnail_type");
+            String thumbnailUrl = switch (thumbnailType == null ? "" : thumbnailType) {
+                case "image" -> s3UploadService.toFeedImageUrl(thumbnailPath);
+                default -> s3UploadService.toImageUrl(thumbnailPath);
+            };
+
+            Timestamp latestLikedAt = rs.getTimestamp("latest_liked_at");
+            return new LikedPlaceMapItem(
+                    rs.getString("place_id"),
+                    rs.getObject("store_id", Integer.class),
+                    rs.getString("store_name"),
+                    rs.getString("address"),
+                    rs.getString("category"),
+                    rs.getObject("lat", Double.class),
+                    rs.getObject("lng", Double.class),
+                    thumbnailUrl,
+                    rs.getLong("video_like_count"),
+                    rs.getLong("image_like_count"),
+                    rs.getLong("total_like_count"),
+                    latestLikedAt != null ? latestLikedAt.toLocalDateTime() : null
+            );
+        });
+
+        return new LikedPlaceMapResponse(items);
     }
 
     private List<Integer> fetchUserVideoIds(
