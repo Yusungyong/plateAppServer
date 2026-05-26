@@ -102,6 +102,7 @@ aws:
     imageFilePath: foodimages/
     feedImagePath: FeedImages/
     profileImagePath: profileImage/
+    restaurantFilePath: restaurants/
     newsImagePath: newsImage/
     migration:
       old-prefix: profileImage/

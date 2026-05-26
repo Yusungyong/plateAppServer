@@ -2,11 +2,14 @@ package com.plateapp.plate_main.restaurant.service;
 
 import com.plateapp.plate_main.common.error.AppException;
 import com.plateapp.plate_main.common.error.ErrorCode;
-import com.plateapp.plate_main.common.file.LocalFileStorageService;
+import com.plateapp.plate_main.common.s3.S3UploadService;
 import com.plateapp.plate_main.restaurant.dto.RestaurantAdminDtos;
+import java.io.IOException;
 import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -19,11 +22,14 @@ public class RestaurantAdminFileService {
     private static final Set<String> IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp", "gif");
     private static final Set<String> VIDEO_EXTENSIONS = Set.of("mp4", "mov", "webm");
 
-    private final LocalFileStorageService localFileStorageService;
+    private final S3UploadService s3UploadService;
+
+    @Value("${aws.s3.restaurantFilePath:restaurants/}")
+    private String restaurantFilePrefix;
 
     public RestaurantAdminDtos.RestaurantFileUploadResponse upload(MultipartFile file) {
         validateFile(file);
-        String fileUrl = localFileStorageService.storeRestaurantFile(file);
+        String fileUrl = uploadToS3(file);
         return new RestaurantAdminDtos.RestaurantFileUploadResponse(
                 fileUrl,
                 file.getOriginalFilename(),
@@ -61,5 +67,20 @@ public class RestaurantAdminFileService {
             return "";
         }
         return filename.substring(dot + 1).toLowerCase(Locale.ROOT);
+    }
+
+    private String uploadToS3(MultipartFile file) {
+        String storedFilename = UUID.randomUUID().toString().replace("-", "") + "." + extension(file.getOriginalFilename());
+        try {
+            return s3UploadService.uploadStreamWithPrefix(
+                    restaurantFilePrefix,
+                    storedFilename,
+                    file.getInputStream(),
+                    file.getSize(),
+                    file.getContentType()
+            );
+        } catch (IOException e) {
+            throw new AppException(ErrorCode.COMMON_INTERNAL_ERROR, "Restaurant file upload failed.");
+        }
     }
 }

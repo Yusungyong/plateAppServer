@@ -58,7 +58,7 @@ public class RestaurantAdminService {
         );
 
         Page<Restaurant> result = restaurantRepository.searchAdminRestaurants(
-                normalizeNullable(keyword),
+                normalizeSearchKeyword(keyword),
                 normalizeNullable(category),
                 normalizeExposureStatusNullable(exposureStatus),
                 pageable
@@ -379,6 +379,11 @@ public class RestaurantAdminService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeSearchKeyword(String value) {
+        String normalized = normalizeNullable(value);
+        return normalized == null ? "" : normalized;
     }
 
     private <T> List<T> nullToEmpty(List<T> values) {
