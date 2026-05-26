@@ -2,6 +2,7 @@ package com.plateapp.plate_main.restaurant.service;
 
 import com.plateapp.plate_main.common.error.AppException;
 import com.plateapp.plate_main.common.error.ErrorCode;
+import com.plateapp.plate_main.common.s3.S3UploadService;
 import com.plateapp.plate_main.restaurant.dto.RestaurantAdminDtos;
 import com.plateapp.plate_main.restaurant.entity.Restaurant;
 import com.plateapp.plate_main.restaurant.entity.RestaurantCategory;
@@ -20,6 +21,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -29,6 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class RestaurantAdminService {
+
+    private static final Logger log = LoggerFactory.getLogger(RestaurantAdminService.class);
 
     private static final Set<String> EXPOSURE_STATUSES = Set.of("draft", "review", "published");
     private static final String MEDIA_IMAGE = "image";
@@ -40,6 +45,7 @@ public class RestaurantAdminService {
     private final RestaurantCategoryRepository categoryRepository;
     private final RestaurantMenuRepository menuRepository;
     private final RestaurantMediaRepository mediaRepository;
+    private final S3UploadService s3UploadService;
 
     @Transactional(readOnly = true)
     public RestaurantAdminDtos.RestaurantListResponse listRestaurants(
@@ -104,6 +110,7 @@ public class RestaurantAdminService {
     public RestaurantAdminDtos.RestaurantIdResponse updateRestaurant(Long restaurantId, RestaurantAdminDtos.RestaurantUpsertRequest request) {
         Restaurant restaurant = findRestaurant(restaurantId);
         ValidatedRestaurantRequest validated = validateRequest(request);
+        Set<String> existingMediaUrls = loadRestaurantMediaUrls(restaurant.getId());
         restaurant.update(
                 validated.title(),
                 validated.address(),
@@ -114,13 +121,16 @@ public class RestaurantAdminService {
         );
 
         replaceChildren(restaurant.getId(), validated);
+        deleteRemovedMediaObjects(existingMediaUrls, collectRequestedMediaUrls(validated));
         return new RestaurantAdminDtos.RestaurantIdResponse(restaurant.getId());
     }
 
     @Transactional
     public RestaurantAdminDtos.RestaurantDeleteResponse deleteRestaurant(Long restaurantId) {
         Restaurant restaurant = findRestaurant(restaurantId);
+        Set<String> existingMediaUrls = loadRestaurantMediaUrls(restaurant.getId());
         restaurantRepository.delete(restaurant);
+        deleteMediaObjects(existingMediaUrls);
         return new RestaurantAdminDtos.RestaurantDeleteResponse(true);
     }
 
@@ -384,6 +394,50 @@ public class RestaurantAdminService {
     private String normalizeSearchKeyword(String value) {
         String normalized = normalizeNullable(value);
         return normalized == null ? "" : normalized;
+    }
+
+    private Set<String> loadRestaurantMediaUrls(Long restaurantId) {
+        return mediaRepository.findByRestaurantIdOrderByDisplayOrderAscIdAsc(restaurantId).stream()
+                .map(RestaurantMedia::getFileUrl)
+                .map(this::normalizeNullable)
+                .filter(url -> url != null)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private Set<String> collectRequestedMediaUrls(ValidatedRestaurantRequest request) {
+        Set<String> urls = new LinkedHashSet<>();
+        for (RestaurantAdminDtos.RestaurantMediaRequest media : request.media()) {
+            addMediaUrl(urls, media);
+        }
+        for (RestaurantAdminDtos.RestaurantMenuRequest menu : request.menus()) {
+            for (RestaurantAdminDtos.RestaurantMediaRequest media : nullToEmpty(menu.media())) {
+                addMediaUrl(urls, media);
+            }
+        }
+        return urls;
+    }
+
+    private void addMediaUrl(Set<String> urls, RestaurantAdminDtos.RestaurantMediaRequest media) {
+        String url = media == null ? null : normalizeNullable(media.fileUrl());
+        if (url != null) {
+            urls.add(url);
+        }
+    }
+
+    private void deleteRemovedMediaObjects(Set<String> existingMediaUrls, Set<String> requestedMediaUrls) {
+        Set<String> removedMediaUrls = new LinkedHashSet<>(existingMediaUrls);
+        removedMediaUrls.removeAll(requestedMediaUrls);
+        deleteMediaObjects(removedMediaUrls);
+    }
+
+    private void deleteMediaObjects(Set<String> mediaUrls) {
+        for (String mediaUrl : mediaUrls) {
+            try {
+                s3UploadService.deleteObjectByUrl(mediaUrl);
+            } catch (RuntimeException e) {
+                log.warn("Failed to delete restaurant media from S3. fileUrl={}", mediaUrl, e);
+            }
+        }
     }
 
     private <T> List<T> nullToEmpty(List<T> values) {

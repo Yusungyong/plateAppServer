@@ -1,6 +1,6 @@
 package com.plateapp.plate_main.profile.controller;
 
-import com.plateapp.plate_main.common.dto.ApiResponse;
+import com.plateapp.plate_main.common.api.ApiResponse;
 import com.plateapp.plate_main.profile.dto.ProfileDetailResponse;
 import com.plateapp.plate_main.profile.service.ProfileDetailService;
 import lombok.RequiredArgsConstructor;
@@ -19,12 +19,12 @@ public class ProfileDetailController {
 
     @GetMapping("/users/{username}/profile-detail")
     public ApiResponse<ProfileDetailResponse> getPublicProfileDetail(@PathVariable String username) {
-        return ApiResponse.success(profileDetailService.getPublicProfileDetail(username));
+        return ApiResponse.ok(profileDetailService.getPublicProfileDetail(username));
     }
 
     @GetMapping("/my/profile-detail")
     public ApiResponse<ProfileDetailResponse> getMyProfileDetail(Authentication authentication) {
         String username = authentication.getName();
-        return ApiResponse.success(profileDetailService.getMyProfileDetail(username));
+        return ApiResponse.ok(profileDetailService.getMyProfileDetail(username));
     }
 }

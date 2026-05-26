@@ -55,6 +55,11 @@ public class MapNearbyRepository {
               (:lng - (:radius_m / (111000.0 * cos(radians(:lat)))))
               AND
               (:lng + (:radius_m / (111000.0 * cos(radians(:lat)))))
+          AND loc.use_yn = 'Y'
+          AND loc.deleted_at IS NULL
+          AND s.use_yn = 'Y'
+          AND s.open_yn = 'Y'
+          AND s.deleted_at IS NULL
           AND (:excluded_count = 0 OR s.username NOT IN (:excluded_usernames))
           AND (:group_place_id IS NULL OR s.place_id = :group_place_id)
           AND (:group_store_name IS NULL OR (s.place_id IS NULL AND s.store_name = :group_store_name))

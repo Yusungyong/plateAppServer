@@ -1,6 +1,6 @@
 package com.plateapp.plate_main.profile.controller;
 
-import com.plateapp.plate_main.common.dto.ApiResponse;
+import com.plateapp.plate_main.common.api.ApiResponse;
 import com.plateapp.plate_main.profile.dto.LikedContentDtos.LikedImageItem;
 import com.plateapp.plate_main.profile.dto.LikedContentDtos.LikedVideoItem;
 import com.plateapp.plate_main.profile.dto.LikedPlaceMapResponse;
@@ -35,7 +35,7 @@ public class ProfileActivityDetailController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) String region
     ) {
-        return ApiResponse.success(
+        return ApiResponse.ok(
                 profileActivityDetailService.getUserVideos(username, limit, offset, sort, from, to, region)
         );
     }
@@ -51,7 +51,7 @@ public class ProfileActivityDetailController {
             @RequestParam(required = false) String region,
             @RequestParam(required = false) String groupId
     ) {
-        return ApiResponse.success(
+        return ApiResponse.ok(
                 profileActivityDetailService.getUserImages(username, limit, offset, sort, from, to, region, groupId)
         );
     }
@@ -66,7 +66,7 @@ public class ProfileActivityDetailController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) String region
     ) {
-        return ApiResponse.success(
+        return ApiResponse.ok(
                 profileActivityDetailService.getLikedVideos(username, limit, offset, sort, from, to, region)
         );
     }
@@ -82,7 +82,7 @@ public class ProfileActivityDetailController {
             @RequestParam(required = false) String region,
             @RequestParam(required = false) String groupId
     ) {
-        return ApiResponse.success(
+        return ApiResponse.ok(
                 profileActivityDetailService.getLikedImages(username, limit, offset, sort, from, to, region, groupId)
         );
     }
@@ -98,7 +98,7 @@ public class ProfileActivityDetailController {
             @RequestParam(required = false) String region
     ) {
         String username = authentication.getName();
-        return ApiResponse.success(
+        return ApiResponse.ok(
                 profileActivityDetailService.getUserVideos(username, limit, offset, sort, from, to, region)
         );
     }
@@ -115,7 +115,7 @@ public class ProfileActivityDetailController {
             @RequestParam(required = false) String groupId
     ) {
         String username = authentication.getName();
-        return ApiResponse.success(
+        return ApiResponse.ok(
                 profileActivityDetailService.getUserImages(username, limit, offset, sort, from, to, region, groupId)
         );
     }
@@ -131,7 +131,7 @@ public class ProfileActivityDetailController {
             @RequestParam(required = false) String region
     ) {
         String username = authentication.getName();
-        return ApiResponse.success(
+        return ApiResponse.ok(
                 profileActivityDetailService.getLikedVideos(username, limit, offset, sort, from, to, region)
         );
     }
@@ -148,7 +148,7 @@ public class ProfileActivityDetailController {
             @RequestParam(required = false) String groupId
     ) {
         String username = authentication.getName();
-        return ApiResponse.success(
+        return ApiResponse.ok(
                 profileActivityDetailService.getLikedImages(username, limit, offset, sort, from, to, region, groupId)
         );
     }
@@ -156,6 +156,6 @@ public class ProfileActivityDetailController {
     @GetMapping("/my/likes/places/map")
     public ApiResponse<LikedPlaceMapResponse> getMyLikedPlacesMap(Authentication authentication) {
         String username = authentication.getName();
-        return ApiResponse.success(profileActivityDetailService.getLikedPlacesMap(username));
+        return ApiResponse.ok(profileActivityDetailService.getLikedPlacesMap(username));
     }
 }

@@ -1,6 +1,6 @@
 package com.plateapp.plate_main.profile.controller;
 
-import com.plateapp.plate_main.common.dto.ApiResponse;
+import com.plateapp.plate_main.common.api.ApiResponse;
 import com.plateapp.plate_main.profile.dto.ProfileActivitySummaryResponse;
 import com.plateapp.plate_main.profile.service.ProfileActivitySummaryService;
 import lombok.RequiredArgsConstructor;
@@ -19,12 +19,12 @@ public class ProfileActivitySummaryController {
 
     @GetMapping("/users/{username}/activity-summary")
     public ApiResponse<ProfileActivitySummaryResponse> getPublicActivitySummary(@PathVariable String username) {
-        return ApiResponse.success(profileActivitySummaryService.getPublicSummary(username));
+        return ApiResponse.ok(profileActivitySummaryService.getPublicSummary(username));
     }
 
     @GetMapping("/my/activity-summary")
     public ApiResponse<ProfileActivitySummaryResponse> getMyActivitySummary(Authentication authentication) {
         String username = authentication.getName();
-        return ApiResponse.success(profileActivitySummaryService.getMySummary(username));
+        return ApiResponse.ok(profileActivitySummaryService.getMySummary(username));
     }
 }

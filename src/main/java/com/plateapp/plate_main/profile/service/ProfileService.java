@@ -29,6 +29,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,6 +54,7 @@ public class ProfileService {
     private final ProfileHistoryService profileHistoryService;
     private final SocialAuthService socialAuthService;
     private final UserPushTokenService userPushTokenService;
+    private final NamedParameterJdbcTemplate jdbcTemplate;
 
     @Transactional(readOnly = true)
     public UserProfileDTO getMyProfile(String username) {
@@ -219,7 +222,7 @@ public class ProfileService {
         long friendsCount = friendRepository.countByUsernameAndStatus(username, "accepted");
         long postsCount = imageFeedRepository.countByUsernameAndUseYn(username, "Y") +
                 storeRepository.countByUsernameAndUseYn(username, "Y");
-        long likesCount = 0;
+        long likesCount = countActiveLikes(username);
         long visitedStoresCount = storeRepository.countByUsernameAndUseYn(username, "Y");
 
         return UserStatsDTO.builder()
@@ -228,6 +231,17 @@ public class ProfileService {
                 .likesCount(likesCount)
                 .visitedStoresCount(visitedStoresCount)
                 .build();
+    }
+
+    private long countActiveLikes(String username) {
+        String sql = """
+                SELECT
+                  (SELECT COUNT(*) FROM fp_50 WHERE username = :username AND use_yn = 'Y' AND deleted_at IS NULL) AS video_like_count,
+                  (SELECT COUNT(*) FROM fp_60 WHERE username = :username AND use_yn = 'Y' AND deleted_at IS NULL) AS image_like_count
+                """;
+        MapSqlParameterSource params = new MapSqlParameterSource("username", username);
+        return jdbcTemplate.queryForObject(sql, params, (rs, rowNum) ->
+                rs.getLong("video_like_count") + rs.getLong("image_like_count"));
     }
 
     @Transactional

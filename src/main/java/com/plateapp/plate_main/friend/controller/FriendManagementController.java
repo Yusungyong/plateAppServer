@@ -1,6 +1,6 @@
 package com.plateapp.plate_main.friend.controller;
 
-import com.plateapp.plate_main.common.dto.ApiResponse;
+import com.plateapp.plate_main.common.api.ApiResponse;
 import com.plateapp.plate_main.common.dto.PagedResponse;
 import com.plateapp.plate_main.friend.dto.*;
 import com.plateapp.plate_main.friend.service.FriendManagementService;
@@ -24,7 +24,7 @@ public class FriendManagementController {
             Authentication authentication) {
         String username = authentication.getName();
         PagedResponse<FriendDto> friends = friendService.getFriends(username, limit, offset);
-        return ApiResponse.success(friends);
+        return ApiResponse.ok(friends);
     }
 
     @GetMapping("/search")
@@ -35,7 +35,7 @@ public class FriendManagementController {
             Authentication authentication) {
         String username = authentication.getName();
         PagedResponse<FriendSearchResultDTO> results = friendService.searchUsers(q, username, limit, offset);
-        return ApiResponse.success(results);
+        return ApiResponse.ok(results);
     }
 
     // Delete friend
@@ -45,7 +45,7 @@ public class FriendManagementController {
             Authentication authentication) {
         String username = authentication.getName();
         friendService.deleteFriend(username, userId);
-        return ApiResponse.success(null);
+        return ApiResponse.ok();
     }
 
     // Sent friend requests
@@ -56,7 +56,7 @@ public class FriendManagementController {
             Authentication authentication) {
         String username = authentication.getName();
         PagedResponse<FriendRequestDTO> requests = friendService.getSentRequests(username, limit, offset);
-        return ApiResponse.success(requests);
+        return ApiResponse.ok(requests);
     }
 
     // Received friend requests
@@ -67,7 +67,7 @@ public class FriendManagementController {
             Authentication authentication) {
         String username = authentication.getName();
         PagedResponse<FriendRequestDTO> requests = friendService.getReceivedRequests(username, limit, offset);
-        return ApiResponse.success(requests);
+        return ApiResponse.ok(requests);
     }
 
     @PostMapping("/requests")
@@ -76,7 +76,7 @@ public class FriendManagementController {
             Authentication authentication) {
         String username = authentication.getName();
         FriendRequestDTO friendRequest = friendService.sendFriendRequest(username, request.getToUserId());
-        return ApiResponse.success(friendRequest);
+        return ApiResponse.ok(friendRequest);
     }
 
     // Cancel friend request
@@ -86,7 +86,7 @@ public class FriendManagementController {
             Authentication authentication) {
         String username = authentication.getName();
         friendService.cancelFriendRequest(requestId, username);
-        return ApiResponse.success(null);
+        return ApiResponse.ok();
     }
 
     // Accept friend request
@@ -96,7 +96,7 @@ public class FriendManagementController {
             Authentication authentication) {
         String username = authentication.getName();
         friendService.acceptFriendRequest(requestId, username);
-        return ApiResponse.success(null);
+        return ApiResponse.ok();
     }
 
     // Reject friend request
@@ -106,6 +106,6 @@ public class FriendManagementController {
             Authentication authentication) {
         String username = authentication.getName();
         friendService.rejectFriendRequest(requestId, username);
-        return ApiResponse.success(null);
+        return ApiResponse.ok();
     }
 }
