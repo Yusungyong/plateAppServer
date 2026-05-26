@@ -21,6 +21,12 @@ public interface ImageFeedRepository extends JpaRepository<Fp400ImageFeed, Integ
 
   List<Fp400ImageFeed> findByFeedIdIn(List<Integer> feedIds);
 
+  Optional<Fp400ImageFeed> findTopByUseYnAndPlaceIdIsNotNullAndStoreNameAndLocationOrderByCreatedAtDescFeedIdDesc(
+          String useYn,
+          String storeName,
+          String location
+  );
+
   @EntityGraph(attributePaths = {"writer"})
   @Query("""
       SELECT f

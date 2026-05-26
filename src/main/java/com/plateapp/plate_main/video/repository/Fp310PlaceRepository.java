@@ -20,4 +20,9 @@ public interface Fp310PlaceRepository extends JpaRepository<Fp310Place, Integer>
             Collection<String> placeIds,
             String useYn
     );
+
+    Optional<Fp310Place> findTopByFormattedAddressStartingWithAndUseYnAndDeletedAtIsNullAndLatitudeIsNotNullAndLongitudeIsNotNullOrderByIdDesc(
+            String formattedAddress,
+            String useYn
+    );
 }

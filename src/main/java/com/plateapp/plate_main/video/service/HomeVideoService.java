@@ -36,6 +36,7 @@ import com.plateapp.plate_main.video.dto.VideoWatchHistoryCreateRequest;
 import com.plateapp.plate_main.video.entity.Fp300Store;
 import com.plateapp.plate_main.video.entity.Fp303WatchHistory;
 import com.plateapp.plate_main.video.entity.Fp310Place;
+import com.plateapp.plate_main.video.service.ContentPlaceResolver.ResolvedPlace;
 import com.plateapp.plate_main.video.repository.Fp300StoreRepository;
 import com.plateapp.plate_main.video.repository.Fp303WatchHistoryRepository;
 import com.plateapp.plate_main.video.repository.Fp310PlaceRepository;
@@ -71,6 +72,7 @@ public class HomeVideoService {
     private final LikeService likeService;
     private final S3UploadService s3UploadService;
     private final HomeVideoRecommendationService homeVideoRecommendationService;
+    private final ContentPlaceResolver contentPlaceResolver;
 
     public Page<HomeVideoThumbnailDTO> getHomeVideoThumbnails(
             int page,
@@ -552,15 +554,23 @@ public class HomeVideoService {
         Long likeCount = context.likeCountMap.getOrDefault(sid, 0L);
         Boolean likedByMe = context.myLikedStoreIdSet.contains(sid);
         Fp310Place place = store.getPlaceId() == null ? null : context.placeMap.get(store.getPlaceId());
+        ResolvedPlace resolvedPlace = contentPlaceResolver.resolve(
+                store.getPlaceId(),
+                store.getStoreName(),
+                store.getAddress()
+        );
+        Double lat = resolvedPlace.lat() != null ? resolvedPlace.lat() : (place == null ? null : place.getLatitude());
+        Double lng = resolvedPlace.lng() != null ? resolvedPlace.lng() : (place == null ? null : place.getLongitude());
+        String resolvedPlaceId = resolvedPlace.placeId() != null ? resolvedPlace.placeId() : store.getPlaceId();
 
         return VideoFeedItemDTO.builder()
                 .storeId(sid)
-                .placeId(store.getPlaceId())
+                .placeId(resolvedPlaceId)
                 .title(title)
                 .storeName(store.getStoreName())
                 .address(store.getAddress())
-                .lat(place == null ? null : place.getLatitude())
-                .lng(place == null ? null : place.getLongitude())
+                .lat(lat)
+                .lng(lng)
                 .fileName(s3UploadService.toVideoUrl(store.getFileName()))
                 .thumbnail(s3UploadService.toImageUrl(store.getThumbnail()))
                 .videoDuration(store.getVideoDuration())

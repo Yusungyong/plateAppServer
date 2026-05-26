@@ -3,7 +3,6 @@ package com.plateapp.plate_main.profile.controller;
 import com.plateapp.plate_main.common.dto.ApiResponse;
 import com.plateapp.plate_main.profile.dto.ChangePasswordRequest;
 import com.plateapp.plate_main.profile.dto.DeleteAccountRequest;
-import com.plateapp.plate_main.profile.dto.DeleteAccountResponse;
 import com.plateapp.plate_main.profile.dto.DeleteSocialAccountRequest;
 import com.plateapp.plate_main.profile.dto.ProfileImageUploadResponse;
 import com.plateapp.plate_main.profile.dto.UpdateProfileRequest;
@@ -82,22 +81,22 @@ public class ProfileController {
     }
 
     @PutMapping("/me/password")
-    public ResponseEntity<ApiResponse<Void>> changePassword(
+    public ResponseEntity<com.plateapp.plate_main.common.api.ApiResponse<Void>> changePassword(
             @Valid @RequestBody ChangePasswordRequest request,
             Authentication authentication) {
         String username = authentication.getName();
         try {
             profileService.changePassword(username, request);
-            return ResponseEntity.ok(ApiResponse.success(null));
+            return ResponseEntity.ok(com.plateapp.plate_main.common.api.ApiResponse.ok(null, "Password changed successfully"));
         } catch (ProfileService.InvalidPasswordException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(ApiResponse.error("INVALID_PASSWORD", e.getMessage()));
+                    .body(com.plateapp.plate_main.common.api.ApiResponse.fail("INVALID_PASSWORD", e.getMessage()));
         } catch (ProfileService.AccountUnavailableException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error("USER_NOT_FOUND", e.getMessage()));
+                    .body(com.plateapp.plate_main.common.api.ApiResponse.fail("USER_NOT_FOUND", e.getMessage()));
         } catch (ProfileService.UnsupportedAccountDeletionException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponse.error("UNSUPPORTED_ACCOUNT_TYPE", e.getMessage()));
+                    .body(com.plateapp.plate_main.common.api.ApiResponse.fail("UNSUPPORTED_ACCOUNT_TYPE", e.getMessage()));
         }
     }
 
@@ -115,45 +114,45 @@ public class ProfileController {
     }
 
     @DeleteMapping("/me")
-    public ResponseEntity<DeleteAccountResponse> deleteAccount(
+    public ResponseEntity<com.plateapp.plate_main.common.api.ApiResponse<Void>> deleteAccount(
             @Valid @RequestBody DeleteAccountRequest request,
             Authentication authentication) {
         String username = authentication.getName();
         try {
             profileService.deleteAccount(username, request.password(), request.reason());
-            return ResponseEntity.ok(DeleteAccountResponse.success("Account deleted successfully"));
+            return ResponseEntity.ok(com.plateapp.plate_main.common.api.ApiResponse.ok(null, "Account deleted successfully"));
         } catch (ProfileService.InvalidPasswordException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(DeleteAccountResponse.fail("INVALID_PASSWORD", e.getMessage()));
+                    .body(com.plateapp.plate_main.common.api.ApiResponse.fail("INVALID_PASSWORD", e.getMessage()));
         } catch (ProfileService.AccountUnavailableException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(DeleteAccountResponse.fail("USER_NOT_FOUND", e.getMessage()));
+                    .body(com.plateapp.plate_main.common.api.ApiResponse.fail("USER_NOT_FOUND", e.getMessage()));
         } catch (ProfileService.UnsupportedAccountDeletionException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(DeleteAccountResponse.fail("UNSUPPORTED_ACCOUNT_TYPE", e.getMessage()));
+                    .body(com.plateapp.plate_main.common.api.ApiResponse.fail("UNSUPPORTED_ACCOUNT_TYPE", e.getMessage()));
         }
     }
 
     @DeleteMapping("/me/social")
-    public ResponseEntity<DeleteAccountResponse> deleteSocialAccount(
+    public ResponseEntity<com.plateapp.plate_main.common.api.ApiResponse<Void>> deleteSocialAccount(
             @RequestBody DeleteSocialAccountRequest request,
             Authentication authentication) {
         String username = authentication.getName();
         try {
             profileService.deleteSocialAccount(username, request);
-            return ResponseEntity.ok(DeleteAccountResponse.success("Social account deleted successfully"));
+            return ResponseEntity.ok(com.plateapp.plate_main.common.api.ApiResponse.ok(null, "Social account deleted successfully"));
         } catch (ProfileService.InvalidSocialDeleteRequestException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(DeleteAccountResponse.fail("INVALID_REQUEST", e.getMessage()));
+                    .body(com.plateapp.plate_main.common.api.ApiResponse.fail("INVALID_REQUEST", e.getMessage()));
         } catch (ProfileService.SocialReauthenticationException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(DeleteAccountResponse.fail(e.getErrorCode(), e.getMessage()));
+                    .body(com.plateapp.plate_main.common.api.ApiResponse.fail(e.getErrorCode(), e.getMessage()));
         } catch (ProfileService.AccountUnavailableException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(DeleteAccountResponse.fail("USER_NOT_FOUND", e.getMessage()));
+                    .body(com.plateapp.plate_main.common.api.ApiResponse.fail("USER_NOT_FOUND", e.getMessage()));
         } catch (ProfileService.UnsupportedAccountDeletionException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(DeleteAccountResponse.fail("UNSUPPORTED_ACCOUNT_TYPE", e.getMessage()));
+                    .body(com.plateapp.plate_main.common.api.ApiResponse.fail("UNSUPPORTED_ACCOUNT_TYPE", e.getMessage()));
         }
     }
 }

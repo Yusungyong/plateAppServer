@@ -25,8 +25,8 @@ import com.plateapp.plate_main.like.repository.FeedLikeRepository;
 import com.plateapp.plate_main.report.repository.ReportRepository;
 import com.plateapp.plate_main.common.s3.S3UploadService;
 import com.plateapp.plate_main.user.entity.Fp100User;
-import com.plateapp.plate_main.video.entity.Fp310Place;
-import com.plateapp.plate_main.video.repository.Fp310PlaceRepository;
+import com.plateapp.plate_main.video.service.ContentPlaceResolver;
+import com.plateapp.plate_main.video.service.ContentPlaceResolver.ResolvedPlace;
 
 @Service
 public class ImageFeedService {
@@ -38,7 +38,7 @@ public class ImageFeedService {
   private final BlockRepository blockRepository;
   private final ReportRepository reportRepository;
   private final S3UploadService s3UploadService;
-  private final Fp310PlaceRepository fp310PlaceRepository;
+  private final ContentPlaceResolver contentPlaceResolver;
 
     private final ImageFeedContextQueryRepository contextQueryRepository;
 
@@ -51,7 +51,7 @@ public class ImageFeedService {
     BlockRepository blockRepository,
     ReportRepository reportRepository,
     S3UploadService s3UploadService,
-    Fp310PlaceRepository fp310PlaceRepository
+    ContentPlaceResolver contentPlaceResolver
   ) {
     this.imageFeedRepository = imageFeedRepository;
     this.commentRepository = commentRepository;
@@ -61,7 +61,7 @@ public class ImageFeedService {
     this.blockRepository = blockRepository;
     this.reportRepository = reportRepository;
     this.s3UploadService = s3UploadService;
-    this.fp310PlaceRepository = fp310PlaceRepository;
+    this.contentPlaceResolver = contentPlaceResolver;
   }
 
   @Transactional(readOnly = true)
@@ -90,7 +90,7 @@ public class ImageFeedService {
     }
 
     List<ImageFeedViewerResponse.ImageItem> images = parseCommaImages(feed.getImages());
-    Fp310Place place = resolvePlace(feed.getPlaceId());
+    ResolvedPlace place = resolvePlace(feed.getPlaceId(), feed.getStoreName(), feed.getLocation());
 
     return new ImageFeedViewerResponse(
       feed.getFeedId(),
@@ -103,10 +103,10 @@ public class ImageFeedService {
 
       feed.getStoreName(),
       feed.getLocation(),
-      feed.getPlaceId(),
+      place.placeId(),
       buildGroupId(feed.getPlaceId(), feed.getStoreName()),
-      place == null ? null : place.getLatitude(),
-      place == null ? null : place.getLongitude(),
+      place.lat(),
+      place.lng(),
 
       feed.getThumbnail(),
 
@@ -276,13 +276,7 @@ public class ImageFeedService {
     return null;
   }
 
-  private Fp310Place resolvePlace(String placeId) {
-    if (placeId == null || placeId.isBlank()) {
-      return null;
-    }
-    return fp310PlaceRepository
-      .findByPlaceIdAndUseYnAndDeletedAtIsNull(placeId, "Y")
-      .filter(place -> place.getLatitude() != null && place.getLongitude() != null)
-      .orElse(null);
+  private ResolvedPlace resolvePlace(String placeId, String storeName, String location) {
+    return contentPlaceResolver.resolve(placeId, storeName, location);
   }
 }

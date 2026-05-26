@@ -245,6 +245,13 @@ public interface Fp300StoreRepository extends JpaRepository<Fp300Store, Integer>
 
     List<Fp300Store> findByStoreIdIn(List<Integer> storeIds);
 
+    Optional<Fp300Store> findTopByUseYnAndOpenYnAndDeletedAtIsNullAndFileNameIsNotNullAndPlaceIdIsNotNullAndStoreNameAndAddressOrderByCreatedAtDescStoreIdDesc(
+            String useYn,
+            String openYn,
+            String storeName,
+            String address
+    );
+
     @Query("""
         select s
         from Fp300Store s

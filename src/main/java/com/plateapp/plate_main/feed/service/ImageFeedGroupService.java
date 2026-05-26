@@ -14,6 +14,8 @@ import com.plateapp.plate_main.feed.entity.Fp400ImageFeed;
 import com.plateapp.plate_main.feed.repository.ImageFeedGroupQueryRepository;
 import com.plateapp.plate_main.feed.repository.ImageFeedRepository;
 import com.plateapp.plate_main.user.entity.Fp100User;
+import com.plateapp.plate_main.video.service.ContentPlaceResolver;
+import com.plateapp.plate_main.video.service.ContentPlaceResolver.ResolvedPlace;
 
 @Service
 public class ImageFeedGroupService {
@@ -22,13 +24,16 @@ public class ImageFeedGroupService {
 
     private final ImageFeedGroupQueryRepository groupQueryRepository;
     private final ImageFeedRepository imageFeedRepository;
+    private final ContentPlaceResolver contentPlaceResolver;
 
     public ImageFeedGroupService(
             ImageFeedGroupQueryRepository groupQueryRepository,
-            ImageFeedRepository imageFeedRepository
+            ImageFeedRepository imageFeedRepository,
+            ContentPlaceResolver contentPlaceResolver
     ) {
         this.groupQueryRepository = groupQueryRepository;
         this.imageFeedRepository = imageFeedRepository;
+        this.contentPlaceResolver = contentPlaceResolver;
     }
 
     @Transactional(readOnly = true)
@@ -71,18 +76,7 @@ public class ImageFeedGroupService {
         }
 
         List<ImageFeedGroupResponse.GroupItem> items = rows.stream()
-                .map(r -> new ImageFeedGroupResponse.GroupItem(
-                        r.groupId(),
-                        r.placeId(),
-                        r.storeName(),
-                        r.address(),
-                        r.lat(),
-                        r.lng(),
-                        r.thumbnail(),
-                        r.imageCount(),
-                        r.latestFeedId(),
-                        r.latestCreatedAt()
-                ))
+                .map(this::toGroupItem)
                 .toList();
 
         String nextCursor = null;
@@ -196,6 +190,22 @@ public class ImageFeedGroupService {
     private int clamp(Integer value, int min, int max, int fallback) {
         if (value == null) return fallback;
         return Math.min(Math.max(value, min), max);
+    }
+
+    private ImageFeedGroupResponse.GroupItem toGroupItem(ImageFeedGroupQueryRepository.GroupRow row) {
+        ResolvedPlace resolvedPlace = contentPlaceResolver.resolve(row.placeId(), row.storeName(), row.address());
+        return new ImageFeedGroupResponse.GroupItem(
+                row.groupId(),
+                resolvedPlace.placeId(),
+                row.storeName(),
+                resolvedPlace.address() != null ? resolvedPlace.address() : row.address(),
+                resolvedPlace.lat() != null ? resolvedPlace.lat() : row.lat(),
+                resolvedPlace.lng() != null ? resolvedPlace.lng() : row.lng(),
+                row.thumbnail(),
+                row.imageCount(),
+                row.latestFeedId(),
+                row.latestCreatedAt()
+        );
     }
 
     private record Cursor(LocalDateTime createdAt, Integer feedId) {}
