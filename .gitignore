@@ -33,3 +33,16 @@ build/
 .vscode/
 
 **/application-local.yaml
+
+### Local runtime / generated artifacts ###
+*.class
+*.log
+server-*.out.log
+server-*.err.log
+lombok.jar
+.m2repo/
+.claude/
+.mvn/apache-maven-*/
+.mvn/apache-maven-*-bin.zip
+SeasonalQueryCheck.java
+SeasonalQueryCheck.class

@@ -32,15 +32,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     public static final String AUTH_ERROR_EXPIRED = "TOKEN_EXPIRED";
     public static final String AUTH_ERROR_INVALID = "TOKEN_INVALID";
 
-    private static final String[] PUBLIC_PATHS = {
-            "/auth/**",
-            "/email/**",
-            "/v3/api-docs/**",
-            "/swagger-ui/**",
-            "/swagger-ui.html",
-            "/swagger-ui/index.html"
-    };
-
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         if (HttpMethod.OPTIONS.matches(request.getMethod())) {
@@ -48,7 +39,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         String path = request.getServletPath();
-        for (String pattern : PUBLIC_PATHS) {
+        for (String pattern : SecurityPaths.PUBLIC_MATCHERS) {
             if (PATH_MATCHER.match(pattern, path)) {
                 return true;
             }

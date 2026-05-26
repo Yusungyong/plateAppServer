@@ -15,7 +15,7 @@ spring:
         format_sql: true
     hibernate:
       ddl-auto: validate
-    show-sql: true
+    show-sql: ${JPA_SHOW_SQL:false}
 
   servlet:
     multipart:
@@ -69,7 +69,7 @@ server:
   tomcat:
     uri-encoding: UTF-8
   error:
-    include-stacktrace: always
+    include-stacktrace: ${SERVER_ERROR_INCLUDE_STACKTRACE:never}
   servlet:
     encoding:
       charset: UTF-8
@@ -111,10 +111,10 @@ aws:
 
 logging:
   level:
-    org.springframework.web.servlet: DEBUG
-    org.springframework.web.method.annotation: TRACE
-    org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver: DEBUG
-    com.plateapp.plate_main.friend: DEBUG
+    org.springframework.web.servlet: ${LOG_LEVEL_SPRING_WEB:INFO}
+    org.springframework.web.method.annotation: ${LOG_LEVEL_SPRING_WEB_METHOD:INFO}
+    org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver: ${LOG_LEVEL_EXCEPTION_HANDLER:INFO}
+    com.plateapp.plate_main.friend: ${LOG_LEVEL_FRIEND:INFO}
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [requestId=%X{requestId}] - %msg%n%wEx"
 
@@ -122,10 +122,16 @@ management:
   endpoints:
     web:
       exposure:
-        include: "*"
+        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:health,info}
   endpoint:
     health:
-      show-details: always
+      show-details: ${MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS:never}
+
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_API_DOCS_ENABLED:false}
+  swagger-ui:
+    enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:false}
 
 openai:
   # api-key:
