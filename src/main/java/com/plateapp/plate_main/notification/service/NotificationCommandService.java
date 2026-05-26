@@ -11,9 +11,11 @@ import com.plateapp.plate_main.notification.repository.Fp23NotificationTargetRep
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class NotificationCommandService {
@@ -156,21 +158,29 @@ public class NotificationCommandService {
             Long replyId
     ) {
         if (receiverUsername == null || receiverUsername.isBlank()) {
+            log.info("Skip notification dispatch: receiver username empty eventType={} actor={}", eventType, actorUsername);
             return;
         }
         if (actorUsername != null && actorUsername.equals(receiverUsername)) {
+            log.info("Skip notification dispatch: actor equals receiver eventType={} username={}", eventType, actorUsername);
             return;
         }
 
         User receiver = userRepository.findById(receiverUsername).orElse(null);
         if (receiver == null || receiver.getUserId() == null) {
+            log.info("Skip notification dispatch: receiver not found eventType={} receiver={}", eventType, receiverUsername);
             return;
         }
 
         Integer actorUserId = actorUsername == null ? null : userRepository.findUserIdByUsername(actorUsername);
         if (actorUserId == null) {
+            log.info("Skip notification dispatch: actor not found eventType={} actor={} receiverUserId={}",
+                    eventType, actorUsername, receiver.getUserId());
             return;
         }
+
+        log.info("Create notification event eventType={} actorUserId={} receiverUserId={} targetType={} targetId={} commentId={} replyId={}",
+                eventType, actorUserId, receiver.getUserId(), targetType, targetId, commentId, replyId);
 
         Fp21NotificationEvent event = new Fp21NotificationEvent();
         event.setEventType(eventType);
@@ -210,7 +220,9 @@ public class NotificationCommandService {
         data.put("actorUserId", String.valueOf(actorUserId));
         data.put("screen", "Notification");
 
-        pushNotificationService.sendToUser(receiver, recipient.getNotificationId(), title, message, data);
+        boolean pushSent = pushNotificationService.sendToUser(receiver, recipient.getNotificationId(), title, message, data);
+        log.info("Notification dispatch completed eventId={} notificationId={} eventType={} receiverUserId={} pushSent={}",
+                event.getEventId(), recipient.getNotificationId(), eventType, receiver.getUserId(), pushSent);
     }
 
     private Map<String, Object> buildMessageParams(

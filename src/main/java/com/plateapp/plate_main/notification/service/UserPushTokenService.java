@@ -6,8 +6,11 @@ import com.plateapp.plate_main.notification.repository.Fp24UserPushTokenReposito
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserPushTokenService {
@@ -21,9 +24,12 @@ public class UserPushTokenService {
     @Transactional(readOnly = true)
     public List<Fp24UserPushToken> findActiveTokens(Integer userId) {
         if (userId == null) {
+            log.info("Find active push tokens skipped: userId null");
             return List.of();
         }
-        return tokenRepository.findByUserIdAndTokenStatusOrderByUpdatedAtDesc(userId, "ACTIVE");
+        List<Fp24UserPushToken> tokens = tokenRepository.findByUserIdAndTokenStatusOrderByUpdatedAtDesc(userId, "ACTIVE");
+        log.info("Find active push tokens userId={} activeTokenCount={}", userId, tokens.size());
+        return tokens;
     }
 
     @Transactional(readOnly = true)
@@ -38,6 +44,7 @@ public class UserPushTokenService {
     @Transactional
     public Fp24UserPushToken upsertLegacyToken(User user, String pushToken) {
         if (user == null || user.getUserId() == null || pushToken == null || pushToken.isBlank()) {
+            log.info("Skip legacy push token upsert: invalid input userId={}", user == null ? null : user.getUserId());
             return null;
         }
         return upsertToken(user, LEGACY_DEVICE_PREFIX + user.getUsername(), LEGACY_PLATFORM, pushToken);
@@ -52,6 +59,10 @@ public class UserPushTokenService {
     public Fp24UserPushToken upsertAppToken(User user, String deviceId, String platform, String pushToken) {
         if (user == null || user.getUserId() == null || deviceId == null || deviceId.isBlank()
                 || pushToken == null || pushToken.isBlank()) {
+            log.info("Skip app push token upsert: invalid input userId={} deviceIdPresent={} tokenPresent={}",
+                    user == null ? null : user.getUserId(),
+                    deviceId != null && !deviceId.isBlank(),
+                    pushToken != null && !pushToken.isBlank());
             return null;
         }
         String resolvedPlatform = (platform == null || platform.isBlank()) ? LOGIN_PLATFORM : platform.trim().toUpperCase();
@@ -64,7 +75,8 @@ public class UserPushTokenService {
             return;
         }
         token.setTokenStatus("INVALID");
-        tokenRepository.save(token);
+        Fp24UserPushToken saved = tokenRepository.save(token);
+        log.info("Push token invalidated userId={} tokenId={}", saved.getUserId(), saved.getTokenId());
     }
 
     private Fp24UserPushToken upsertToken(User user, String deviceId, String platform, String pushToken) {
@@ -76,6 +88,9 @@ public class UserPushTokenService {
         token.setPushToken(pushToken);
         token.setTokenStatus("ACTIVE");
         token.setLastSeenAt(LocalDateTime.now());
-        return tokenRepository.save(token);
+        Fp24UserPushToken saved = tokenRepository.save(token);
+        log.info("Push token upserted userId={} tokenId={} deviceId={} platform={} status={}",
+                saved.getUserId(), saved.getTokenId(), deviceId, platform, saved.getTokenStatus());
+        return saved;
     }
 }

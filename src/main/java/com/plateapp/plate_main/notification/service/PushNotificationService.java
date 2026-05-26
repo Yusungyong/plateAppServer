@@ -30,30 +30,46 @@ public class PushNotificationService {
     public boolean sendToUsername(String receiverUsername, Long notificationId, String title, String body, Map<String, String> data) {
         return userRepository.findById(receiverUsername)
                 .map(user -> sendToUser(user, notificationId, title, body, data))
-                .orElse(false);
+                .orElseGet(() -> {
+                    log.info("Skip push send: receiver username not found notificationId={} receiver={}", notificationId, receiverUsername);
+                    return false;
+                });
     }
 
     public boolean sendToUser(User receiver, Long notificationId, String title, String body, Map<String, String> data) {
         if (receiver == null || receiver.getUsername() == null || receiver.getUsername().isBlank() || receiver.getUserId() == null) {
+            log.info("Skip push send: invalid receiver notificationId={}", notificationId);
             return false;
         }
 
         FirebaseMessaging firebaseMessaging = firebaseMessagingProvider.getIfAvailable();
         if (firebaseMessaging == null) {
-            log.info("Skip push send: FirebaseMessaging bean unavailable for user={}", receiver.getUsername());
+            log.info("Skip push send: FirebaseMessaging bean unavailable notificationId={} receiverUserId={}",
+                    notificationId, receiver.getUserId());
             return false;
         }
 
         List<Fp24UserPushToken> activeTokens = new ArrayList<>(userPushTokenService.findActiveTokens(receiver.getUserId()));
         if (activeTokens.isEmpty()) {
-            log.debug("Skip push send: no active token for user={}", receiver.getUsername());
+            log.info("Skip push send: no active token notificationId={} receiverUserId={}",
+                    notificationId, receiver.getUserId());
             return false;
         }
+
+        log.info("Push send start notificationId={} receiverUserId={} activeTokenCount={} dataType={} targetType={} targetId={}",
+                notificationId,
+                receiver.getUserId(),
+                activeTokens.size(),
+                data == null ? null : data.get("type"),
+                data == null ? null : data.get("targetType"),
+                data == null ? null : data.get("targetId"));
 
         boolean sent = false;
         for (Fp24UserPushToken token : activeTokens) {
             sent |= sendToToken(receiver, token, notificationId, title, body, data, firebaseMessaging);
         }
+        log.info("Push send completed notificationId={} receiverUserId={} activeTokenCount={} anySent={}",
+                notificationId, receiver.getUserId(), activeTokens.size(), sent);
         return sent;
     }
 
@@ -78,8 +94,14 @@ public class PushNotificationService {
         try {
             String messageId = firebaseMessaging.send(message);
             saveDeliveryLog(token, notificationId, "SUCCESS", messageId, null, null);
-            log.info("Push sent user={} tokenId={} messageId={} data={}",
-                    receiver.getUsername(), token.getTokenId(), messageId, data);
+            log.info("Push token send success notificationId={} receiverUserId={} tokenId={} messageId={} dataType={} targetType={} targetId={}",
+                    notificationId,
+                    receiver.getUserId(),
+                    token.getTokenId(),
+                    messageId,
+                    data == null ? null : data.get("type"),
+                    data == null ? null : data.get("targetType"),
+                    data == null ? null : data.get("targetId"));
             return true;
         } catch (FirebaseMessagingException e) {
             saveDeliveryLog(
@@ -90,12 +112,15 @@ public class PushNotificationService {
                     e.getMessagingErrorCode() == null ? null : e.getMessagingErrorCode().name(),
                     e.getMessage()
             );
-            log.warn("Push send failed user={} tokenId={} errorCode={} message={}",
-                    receiver.getUsername(),
+            log.warn("Push token send failed notificationId={} receiverUserId={} tokenId={} errorCode={} message={}",
+                    notificationId,
+                    receiver.getUserId(),
                     token.getTokenId(),
                     e.getMessagingErrorCode(),
                     e.getMessage());
             if (shouldInvalidateToken(e)) {
+                log.info("Invalidate push token notificationId={} receiverUserId={} tokenId={} errorCode={}",
+                        notificationId, receiver.getUserId(), token.getTokenId(), e.getMessagingErrorCode());
                 userPushTokenService.invalidateToken(token);
             }
             return false;
