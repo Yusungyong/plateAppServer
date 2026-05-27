@@ -80,7 +80,8 @@ public class UserPushTokenService {
     }
 
     private Fp24UserPushToken upsertToken(User user, String deviceId, String platform, String pushToken) {
-        Fp24UserPushToken token = tokenRepository.findByUserIdAndDeviceId(user.getUserId(), deviceId)
+        Fp24UserPushToken token = tokenRepository.findByPushToken(pushToken)
+                .or(() -> tokenRepository.findByUserIdAndDeviceId(user.getUserId(), deviceId))
                 .orElseGet(Fp24UserPushToken::new);
         token.setUserId(user.getUserId());
         token.setDeviceId(deviceId);
