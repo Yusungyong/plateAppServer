@@ -21,7 +21,7 @@ public class Fp460FeedComment {
   @Column(name = "content", nullable = false, columnDefinition = "text")
   private String content;
 
-  @Column(name = "use_yn", nullable = false, columnDefinition = "bpchar(1)")
+  @Column(name = "use_yn", nullable = false, length = 1)
   private String useYn = "Y";
 
   @Column(name = "deleted_at")

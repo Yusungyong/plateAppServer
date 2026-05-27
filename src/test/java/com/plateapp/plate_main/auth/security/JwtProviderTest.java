@@ -17,8 +17,8 @@ class JwtProviderTest {
     @Test
     void accessTokenContainsAccessType() {
         JwtProvider provider = new JwtProvider(SECRET);
-        ReflectionTestUtils.setField(provider, "accessExpire", 1000L);
-        ReflectionTestUtils.setField(provider, "refreshExpire", 2000L);
+        ReflectionTestUtils.setField(provider, "accessExpire", 60000L);
+        ReflectionTestUtils.setField(provider, "refreshExpire", 120000L);
 
         String token = provider.createAccessToken("tester@example.com", "993");
 
@@ -32,8 +32,8 @@ class JwtProviderTest {
     @Test
     void refreshTokenContainsRefreshType() {
         JwtProvider provider = new JwtProvider(SECRET);
-        ReflectionTestUtils.setField(provider, "accessExpire", 1000L);
-        ReflectionTestUtils.setField(provider, "refreshExpire", 2000L);
+        ReflectionTestUtils.setField(provider, "accessExpire", 60000L);
+        ReflectionTestUtils.setField(provider, "refreshExpire", 120000L);
 
         String token = provider.createRefreshToken("tester@example.com");
 
@@ -44,8 +44,8 @@ class JwtProviderTest {
     @Test
     void superAdminRoleReceivesAdminAccessPermission() {
         JwtProvider provider = new JwtProvider(SECRET);
-        ReflectionTestUtils.setField(provider, "accessExpire", 1000L);
-        ReflectionTestUtils.setField(provider, "refreshExpire", 2000L);
+        ReflectionTestUtils.setField(provider, "accessExpire", 60000L);
+        ReflectionTestUtils.setField(provider, "refreshExpire", 120000L);
 
         String token = provider.createAccessToken("tester@example.com", "SUPER_ADMIN");
 
@@ -56,8 +56,8 @@ class JwtProviderTest {
     @Test
     void validateReturnsFalseForMalformedToken() {
         JwtProvider provider = new JwtProvider(SECRET);
-        ReflectionTestUtils.setField(provider, "accessExpire", 1000L);
-        ReflectionTestUtils.setField(provider, "refreshExpire", 2000L);
+        ReflectionTestUtils.setField(provider, "accessExpire", 60000L);
+        ReflectionTestUtils.setField(provider, "refreshExpire", 120000L);
 
         assertFalse(provider.validate("not-a-jwt"));
     }

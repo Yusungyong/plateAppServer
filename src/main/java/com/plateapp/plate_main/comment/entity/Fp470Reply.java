@@ -31,7 +31,7 @@ public class Fp470Reply {
   @Column(name = "content", nullable = false, columnDefinition = "text")
   private String content;
 
-  @Column(name = "use_yn", nullable = false, columnDefinition = "bpchar(1)")
+  @Column(name = "use_yn", nullable = false, length = 1)
   @JdbcTypeCode(SqlTypes.CHAR)
   private String useYn = "Y";
 

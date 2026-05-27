@@ -18,7 +18,7 @@ public class Fp60FeedLike {
   @Column(name = "feed_id", nullable = false)
   private Integer feedId;
 
-  @Column(name = "use_yn", nullable = false, columnDefinition = "bpchar(1)")
+  @Column(name = "use_yn", nullable = false, length = 1)
   private String useYn = "Y";
 
   @Column(name = "deleted_at")

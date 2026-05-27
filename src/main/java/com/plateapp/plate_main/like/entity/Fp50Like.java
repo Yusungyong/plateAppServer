@@ -28,7 +28,7 @@ public class Fp50Like {
   private Fp50LikeId id;
 
   // bpchar(1) 대응: 'Y' / 'N'
-  @Column(name = "use_yn", nullable = false, length = 1, columnDefinition = "bpchar(1)")
+  @Column(name = "use_yn", nullable = false, length = 1)
   private String useYn;
 
   @Column(name = "deleted_at")
