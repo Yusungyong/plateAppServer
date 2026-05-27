@@ -13,6 +13,8 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
@@ -24,7 +26,7 @@ public class NotificationCommandService {
     private final Fp22NotificationRecipientRepository recipientRepository;
     private final Fp23NotificationTargetRepository targetRepository;
     private final UserRepository userRepository;
-    private final PushNotificationService pushNotificationService;
+    private final NotificationDispatchAsyncService notificationDispatchAsyncService;
 
     @Transactional
     public void notifyStoreLike(String actorUsername, String receiverUsername, Integer storeId) {
@@ -220,9 +222,59 @@ public class NotificationCommandService {
         data.put("actorUserId", String.valueOf(actorUserId));
         data.put("screen", "Notification");
 
-        boolean pushSent = pushNotificationService.sendToUser(receiver, recipient.getNotificationId(), title, message, data);
-        log.info("Notification dispatch completed eventId={} notificationId={} eventType={} receiverUserId={} pushSent={}",
-                event.getEventId(), recipient.getNotificationId(), eventType, receiver.getUserId(), pushSent);
+        schedulePushAfterCommit(
+                receiverUsername,
+                receiver.getUserId(),
+                event.getEventId(),
+                recipient.getNotificationId(),
+                eventType,
+                title,
+                message,
+                data
+        );
+        log.info("Notification dispatch scheduled eventId={} notificationId={} eventType={} receiverUserId={}",
+                event.getEventId(), recipient.getNotificationId(), eventType, receiver.getUserId());
+    }
+
+    private void schedulePushAfterCommit(
+            String receiverUsername,
+            Integer receiverUserId,
+            Long eventId,
+            Long notificationId,
+            String eventType,
+            String title,
+            String message,
+            Map<String, String> data
+    ) {
+        Map<String, String> dispatchData = Map.copyOf(data);
+        Runnable dispatch = () -> notificationDispatchAsyncService.sendPushAsync(
+                receiverUsername,
+                receiverUserId,
+                eventId,
+                notificationId,
+                eventType,
+                title,
+                message,
+                dispatchData
+        );
+
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            log.info("Notification push dispatch scheduled without active transaction eventId={} notificationId={} eventType={} receiverUserId={}",
+                    eventId, notificationId, eventType, receiverUserId);
+            dispatch.run();
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                log.info("Notification transaction committed; scheduling async push eventId={} notificationId={} eventType={} receiverUserId={}",
+                        eventId, notificationId, eventType, receiverUserId);
+                dispatch.run();
+            }
+        });
+        log.info("Notification push dispatch registered after commit eventId={} notificationId={} eventType={} receiverUserId={}",
+                eventId, notificationId, eventType, receiverUserId);
     }
 
     private Map<String, Object> buildMessageParams(
