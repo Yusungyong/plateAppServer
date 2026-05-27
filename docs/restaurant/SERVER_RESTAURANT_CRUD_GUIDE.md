@@ -1,7 +1,7 @@
 # 식당 등록 관리자 CRUD 서버 구현 가이드
 
 작성일: 2026-05-21  
-전제 SQL: `db/restaurant_registration_schema.sql`
+전제 SQL: `../sql/restaurant_registration_schema.sql`
 
 ## 1. 대상 테이블
 
@@ -339,7 +339,7 @@ RESTAURANT_MANAGE
 서버 DB에 테이블을 만들 때 아래 파일을 실행합니다.
 
 ```bash
-psql -h <host> -U <user> -d <database> -f db/restaurant_registration_schema.sql
+psql -h <host> -U <user> -d <database> -f docs/sql/restaurant_registration_schema.sql
 ```
 
 마이그레이션 도구를 쓴다면 해당 SQL을 Flyway 또는 Liquibase migration 파일로 옮겨 적용하면 됩니다.
