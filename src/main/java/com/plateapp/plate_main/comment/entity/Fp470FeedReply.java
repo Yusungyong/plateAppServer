@@ -3,6 +3,9 @@ package com.plateapp.plate_main.comment.entity;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 @Entity
 @Table(name = "fp_470")
 public class Fp470FeedReply {
@@ -22,6 +25,7 @@ public class Fp470FeedReply {
   private String content;
 
   @Column(name = "use_yn", nullable = false, length = 1)
+  @JdbcTypeCode(SqlTypes.CHAR)
   private String useYn = "Y";
 
   @Column(name = "deleted_at")
