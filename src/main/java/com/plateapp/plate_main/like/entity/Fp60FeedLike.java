@@ -1,5 +1,8 @@
 package com.plateapp.plate_main.like.entity;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import jakarta.persistence.*;
 import java.io.Serializable;
 import java.time.LocalDateTime;
@@ -19,6 +22,7 @@ public class Fp60FeedLike {
   private Integer feedId;
 
   @Column(name = "use_yn", nullable = false, length = 1)
+  @JdbcTypeCode(SqlTypes.CHAR)
   private String useYn = "Y";
 
   @Column(name = "deleted_at")

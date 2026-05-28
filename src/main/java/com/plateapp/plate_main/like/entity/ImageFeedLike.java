@@ -1,10 +1,24 @@
 package com.plateapp.plate_main.like.entity;
 
-import jakarta.persistence.*;
-import lombok.*;
-
 import java.io.Serializable;
 import java.time.LocalDateTime;
+
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.IdClass;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "fp_60")
@@ -16,17 +30,17 @@ import java.time.LocalDateTime;
 @IdClass(ImageFeedLike.ImageFeedLikeId.class)
 public class ImageFeedLike {
 
-    // fp_60: 이미지 피드 좋아요
     @Id
     @Column(name = "feed_id")
     private Integer imageFeedId;
 
     @Id
     @Column(name = "username")
-    private String userId; // 이름은 유지하지만 값은 username 사용
+    private String userId;
 
     @Column(name = "use_yn", length = 1)
-    private String useYn; // Y=활성, N=비활성(소프트 삭제)
+    @JdbcTypeCode(SqlTypes.CHAR)
+    private String useYn;
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;

@@ -3,6 +3,9 @@ package com.plateapp.plate_main.like.entity;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
@@ -29,6 +32,7 @@ public class Fp50Like {
 
   // bpchar(1) 대응: 'Y' / 'N'
   @Column(name = "use_yn", nullable = false, length = 1)
+  @JdbcTypeCode(SqlTypes.CHAR)
   private String useYn;
 
   @Column(name = "deleted_at")
