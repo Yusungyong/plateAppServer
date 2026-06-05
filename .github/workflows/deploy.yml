@@ -66,6 +66,7 @@ jobs:
               --application-name "${{ env.CODEDEPLOY_APP }}" \
               --deployment-group-name "${{ env.CODEDEPLOY_GROUP }}" \
               --s3-location "bucket=${{ env.S3_BUCKET }},key=deployments/${{ github.sha }}.zip,bundleType=zip" \
+              --file-exists-behavior OVERWRITE \
               --query deploymentId \
               --output text
           )
@@ -83,7 +84,7 @@ jobs:
             aws deploy get-deployment --deployment-id "${deployment_id}" --output json || true
             echo "::endgroup::"
 
-            target_ids="$(aws deploy list-deployment-targets --deployment-id "${deployment_id}" --query 'targetIds[]' --output text 2>/dev/null || true)"
+            target_ids="$(aws deploy list-deployment-targets --deployment-id "${deployment_id}" --query 'targetIds[]' --output text || true)"
             if [ -n "${target_ids}" ] && [ "${target_ids}" != "None" ]; then
               echo "::group::CodeDeploy target diagnostics"
               # shellcheck disable=SC2086
@@ -91,6 +92,18 @@ jobs:
               echo "::endgroup::"
             else
               echo "No CodeDeploy target IDs were returned for ${deployment_id}."
+            fi
+
+            instance_ids="$(aws deploy list-deployment-instances --deployment-id "${deployment_id}" --query 'instancesList[]' --output text || true)"
+            if [ -n "${instance_ids}" ] && [ "${instance_ids}" != "None" ]; then
+              echo "::group::CodeDeploy EC2 instance diagnostics"
+              for instance_id in ${instance_ids}; do
+                echo "Deployment instance diagnostics for ${instance_id}"
+                aws deploy get-deployment-instance --deployment-id "${deployment_id}" --instance-id "${instance_id}" --output json || true
+              done
+              echo "::endgroup::"
+            else
+              echo "No CodeDeploy EC2 instance IDs were returned for ${deployment_id}."
             fi
           }
 
