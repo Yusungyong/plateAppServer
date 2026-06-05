@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import com.plateapp.plate_main.common.api.ApiResponse;
+import com.plateapp.plate_main.common.security.RateLimitException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -128,6 +129,12 @@ public class GlobalExceptionHandler {
         ErrorCode ec = ErrorCode.AUTH_FORBIDDEN;
         return ResponseEntity.status(ec.getStatus())
                 .body(ApiResponse.fail(ec.getCode(), ec.getDefaultMessage()));
+    }
+
+    @ExceptionHandler(RateLimitException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRateLimit(RateLimitException e) {
+        return ResponseEntity.status(429)
+                .body(ApiResponse.fail("COMMON_429", e.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)

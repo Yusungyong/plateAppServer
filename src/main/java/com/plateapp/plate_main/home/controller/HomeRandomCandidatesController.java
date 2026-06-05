@@ -27,8 +27,9 @@ public class HomeRandomCandidatesController {
             @RequestParam(value = "isGuest", required = false, defaultValue = "false") boolean isGuest,
             @RequestParam(value = "guestId", required = false) String guestId
     ) {
-        String resolvedUsername = isGuest ? null : resolveUsername(username);
-        return homeRandomCandidatesService.getRecent(limit, include, resolvedUsername, isGuest, guestId);
+        String resolvedUsername = resolveUsername(isGuest);
+        boolean resolvedGuest = resolvedUsername == null && isGuest;
+        return homeRandomCandidatesService.getRecent(limit, include, resolvedUsername, resolvedGuest, guestId);
     }
 
     @GetMapping("/nearby")
@@ -42,20 +43,21 @@ public class HomeRandomCandidatesController {
             @RequestParam(value = "isGuest", required = false, defaultValue = "false") boolean isGuest,
             @RequestParam(value = "guestId", required = false) String guestId
     ) {
-        String resolvedUsername = isGuest ? null : resolveUsername(username);
-        return homeRandomCandidatesService.getNearby(lat, lng, radius, limit, include, resolvedUsername, isGuest, guestId);
+        String resolvedUsername = resolveUsername(isGuest);
+        boolean resolvedGuest = resolvedUsername == null && isGuest;
+        return homeRandomCandidatesService.getNearby(lat, lng, radius, limit, include, resolvedUsername, resolvedGuest, guestId);
     }
 
-    private String resolveUsername(String usernameParam) {
-        if (usernameParam != null && !usernameParam.isBlank()) {
-            return usernameParam;
-        }
+    private String resolveUsername(boolean isGuest) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.isAuthenticated()) {
             String name = auth.getName();
             if (name != null && !name.isBlank() && !"anonymousUser".equalsIgnoreCase(name)) {
                 return name;
             }
+        }
+        if (isGuest) {
+            return null;
         }
         return null;
     }

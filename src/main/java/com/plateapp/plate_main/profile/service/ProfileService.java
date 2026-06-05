@@ -28,7 +28,9 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -39,6 +41,16 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 @RequiredArgsConstructor
 public class ProfileService {
+
+    private static final long MAX_PROFILE_IMAGE_BYTES = 10L * 1024 * 1024;
+    private static final Set<String> ALLOWED_IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp", "heic", "heif");
+    private static final Set<String> ALLOWED_IMAGE_CONTENT_TYPES = Set.of(
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "image/heic",
+            "image/heif"
+    );
 
     private final UserRepository userRepository;
     private final Fp150FriendRepository friendRepository;
@@ -122,6 +134,7 @@ public class ProfileService {
 
     @Transactional
     public ProfileImageUploadResponse uploadProfileImage(String username, MultipartFile file) {
+        validateProfileImage(file);
         User user = userRepository.findById(username)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
@@ -409,7 +422,42 @@ public class ProfileService {
         String safeName = (originalName == null || originalName.isBlank()) ? fallback : originalName;
         int dot = safeName.lastIndexOf('.');
         String baseName = dot > 0 ? safeName.substring(0, dot) : safeName;
+        baseName = baseName.replaceAll("[^A-Za-z0-9._-]", "_");
+        if (baseName.isBlank()) {
+            baseName = "profile";
+        }
         return baseName + ".jpg";
+    }
+
+    private void validateProfileImage(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Profile image is required");
+        }
+        if (file.getSize() > MAX_PROFILE_IMAGE_BYTES) {
+            throw new IllegalArgumentException("Profile image must be 10MB or less");
+        }
+
+        String extension = extension(file.getOriginalFilename());
+        if (!ALLOWED_IMAGE_EXTENSIONS.contains(extension)) {
+            throw new IllegalArgumentException("Unsupported profile image extension");
+        }
+
+        String contentType = file.getContentType();
+        if (contentType != null && !contentType.isBlank()
+                && !ALLOWED_IMAGE_CONTENT_TYPES.contains(contentType.toLowerCase(Locale.ROOT))) {
+            throw new IllegalArgumentException("Unsupported profile image content type");
+        }
+    }
+
+    private String extension(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return "";
+        }
+        int dot = filename.lastIndexOf('.');
+        if (dot < 0 || dot == filename.length() - 1) {
+            return "";
+        }
+        return filename.substring(dot + 1).toLowerCase(Locale.ROOT);
     }
 
     private void deleteTempFile(Path path) {

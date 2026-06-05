@@ -8,6 +8,7 @@ import com.plateapp.plate_main.auth.repository.RefreshTokenRepository;
 import com.plateapp.plate_main.auth.repository.UserRepository;
 import com.plateapp.plate_main.auth.security.PlateAuthorities;
 import com.plateapp.plate_main.auth.security.JwtProvider;
+import com.plateapp.plate_main.auth.security.RefreshTokenHasher;
 import com.plateapp.plate_main.common.error.ErrorCode;
 import com.plateapp.plate_main.notification.service.UserPushTokenService;
 import io.jsonwebtoken.ExpiredJwtException;
@@ -105,7 +106,7 @@ public class AuthService {
                     RefreshToken.builder()
                             .username(username)
                             .userId(user.getUserId())
-                            .refreshToken(refreshToken)
+                            .refreshToken(RefreshTokenHasher.sha256(refreshToken))
                             .expiryDate(refreshExpiry)
                             .deviceId(deviceId)
                             .createdAt(OffsetDateTime.now(ZoneOffset.UTC))
@@ -134,7 +135,9 @@ public class AuthService {
     @Transactional
     public AuthTokens refresh(String refreshToken) {
 
-        RefreshToken saved = refreshTokenRepository.findByRefreshToken(refreshToken)
+        String refreshTokenHash = RefreshTokenHasher.sha256(refreshToken);
+        RefreshToken saved = refreshTokenRepository.findByRefreshToken(refreshTokenHash)
+                .or(() -> refreshTokenRepository.findByRefreshToken(refreshToken))
                 .orElseThrow(() -> new AuthException(ErrorCode.AUTH_REFRESH_INVALID));
 
         if (saved.getExpiryDate().isBefore(OffsetDateTime.now(ZoneOffset.UTC))) {
@@ -168,7 +171,7 @@ public class AuthService {
         Date refreshExpDate = jwtProvider.getExpiration(newRefresh);
         OffsetDateTime refreshExpiry = refreshExpDate.toInstant().atOffset(ZoneOffset.UTC);
 
-        saved.setRefreshToken(newRefresh);
+        saved.setRefreshToken(RefreshTokenHasher.sha256(newRefresh));
         saved.setExpiryDate(refreshExpiry);
         saved.setUserId(user.getUserId());
         refreshTokenRepository.save(saved);

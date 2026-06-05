@@ -1,6 +1,7 @@
 // src/main/java/com/plateapp/platemain/common/email/controller/EmailVerifyController.java
 package com.plateapp.plate_main.common.email.controller;
 
+import java.time.Duration;
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -14,7 +15,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.plateapp.plate_main.common.email.dto.EmailVerifyVO;
 import com.plateapp.plate_main.common.email.service.EmailVerifyService;
+import com.plateapp.plate_main.common.security.RateLimitService;
 
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -23,13 +26,22 @@ import lombok.RequiredArgsConstructor;
 public class EmailVerifyController {
 
     private final EmailVerifyService emailVerifyService;
+    private final RateLimitService rateLimitService;
     private static final Logger logger = LoggerFactory.getLogger(EmailVerifyController.class);
 
     /**
      * 이메일로 인증 코드 발송
      */
     @PostMapping("/send-verification")
-    public ResponseEntity<?> sendVerificationEmail(@RequestBody EmailVerifyVO emailVerifyVO) {
+    public ResponseEntity<?> sendVerificationEmail(
+            @RequestBody EmailVerifyVO emailVerifyVO,
+            HttpServletRequest httpRequest
+    ) {
+        rateLimitService.check(
+                "email:send-verification:" + rateLimitService.clientIp(httpRequest) + ":" + rateLimitService.identity(emailVerifyVO.getEmail()),
+                3,
+                Duration.ofMinutes(10)
+        );
         try {
             emailVerifyService.sendVerificationEmail(emailVerifyVO);
             // 유저가 없더라도 동일 응답 (보안상 계정 존재 여부 노출 방지)
@@ -48,7 +60,15 @@ public class EmailVerifyController {
      * 사용자가 입력한 인증 코드 검증
      */
     @PostMapping("/verify")
-    public ResponseEntity<?> verifyEmail(@RequestBody EmailVerifyVO emailVerifyVO) {
+    public ResponseEntity<?> verifyEmail(
+            @RequestBody EmailVerifyVO emailVerifyVO,
+            HttpServletRequest httpRequest
+    ) {
+        rateLimitService.check(
+                "email:verify:" + rateLimitService.clientIp(httpRequest) + ":" + rateLimitService.identity(emailVerifyVO.getEmail()),
+                10,
+                Duration.ofMinutes(10)
+        );
         try {
             boolean ok = emailVerifyService.verifyEmail(emailVerifyVO);
 
@@ -58,8 +78,7 @@ public class EmailVerifyController {
                         Map.of("success", true, "message", "이메일 인증 성공!")
                 );
             } else {
-                logger.warn("이메일 {} 인증 실패 (입력 코드: {})",
-                        emailVerifyVO.getEmail(), emailVerifyVO.getVerificationCode());
+                logger.warn("이메일 {} 인증 실패", emailVerifyVO.getEmail());
                 return ResponseEntity.badRequest()
                         .body(Map.of("success", false, "message", "인증 코드가 올바르지 않거나 만료되었습니다."));
             }
@@ -74,8 +93,16 @@ public class EmailVerifyController {
      * 아이디 찾기
      */
     @PostMapping("/find-id")
-    public ResponseEntity<?> findId(@RequestBody Map<String, String> request) {
+    public ResponseEntity<?> findId(
+            @RequestBody Map<String, String> request,
+            HttpServletRequest httpRequest
+    ) {
         String email = request.get("email");
+        rateLimitService.check(
+                "email:find-id:" + rateLimitService.clientIp(httpRequest) + ":" + rateLimitService.identity(email),
+                5,
+                Duration.ofMinutes(30)
+        );
         String username = emailVerifyService.findUsernameByEmail(email);
 
         if (username != null) {

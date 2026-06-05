@@ -479,11 +479,10 @@ public class HomeVideoService {
 
         String username = req.getUsername();
         if (username == null || username.isBlank()) {
-            String guestId = req.getGuestId() != null ? req.getGuestId() : "UNKNOWN";
-            username = "GUEST_" + guestId;
+            throw new AppException(ErrorCode.AUTH_UNAUTHORIZED, "Authenticated username is required");
         }
 
-        boolean isGuest = Boolean.TRUE.equals(req.getIsGuest());
+        boolean isGuest = false;
 
         Fp303WatchHistory history = new Fp303WatchHistory();
         history.setStoreId(req.getStoreId());

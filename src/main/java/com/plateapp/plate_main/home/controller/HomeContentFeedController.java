@@ -85,6 +85,6 @@ public class HomeContentFeedController {
         if (isGuest) {
             return null;
         }
-        return usernameParam != null && !usernameParam.isBlank() ? usernameParam : null;
+        return null;
     }
 }

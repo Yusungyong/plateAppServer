@@ -21,9 +21,11 @@ import com.plateapp.plate_main.common.email.service.EmailVerifyService;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class EmailVerifyServiceImpl implements EmailVerifyService {
 
     private final EmailVerificationRepository emailVerificationRepository;
@@ -78,7 +80,7 @@ public class EmailVerifyServiceImpl implements EmailVerifyService {
 
         emailVerificationRepository.save(verification);
 
-        System.out.println("[INFO] 이메일 인증코드 생성 및 저장 완료. email=" + email + ", code=" + code);
+        // Do not log verification codes; they can be used to reset credentials.
     }
 
 
@@ -101,7 +103,7 @@ public class EmailVerifyServiceImpl implements EmailVerifyService {
             mailSender.send(message);
         } catch (Exception e) {
             // 🔴 개발 단계에서는 그냥 로그만 찍고 진행 (클라이언트에 500 안 던지도록)
-            System.err.println("[WARN] 이메일 전송 실패: " + e.getMessage());
+            log.warn("이메일 전송 실패: {}", e.getMessage());
             // e.printStackTrace(); // 필요하면 자세히
         }
     }

@@ -16,6 +16,8 @@ import org.springframework.validation.annotation.Validated;
 
 import jakarta.validation.Valid;
 
+import com.plateapp.plate_main.common.error.AppException;
+import com.plateapp.plate_main.common.error.ErrorCode;
 import com.plateapp.plate_main.video.dto.HomeVideoThumbnailDTO;
 import com.plateapp.plate_main.video.dto.VideoFeedItemDTO;
 import com.plateapp.plate_main.video.dto.VideoWatchHistoryCreateRequest;
@@ -67,8 +69,12 @@ public class HomeVideoController {
     // Video watch history API
     @PostMapping("/video-watch-history")
     public ResponseEntity<Void> createVideoWatchHistory(
-            @RequestBody @Valid VideoWatchHistoryCreateRequest request
+            @RequestBody @Valid VideoWatchHistoryCreateRequest request,
+            Authentication authentication
     ) {
+        request.setUsername(currentUsername(authentication));
+        request.setIsGuest(false);
+        request.setGuestId(null);
         homeVideoService.saveWatchHistory(request);
         return ResponseEntity.ok().build();
     }
@@ -99,6 +105,17 @@ public class HomeVideoController {
         if (Boolean.TRUE.equals(isGuest)) {
             return null;
         }
-        return usernameParam;
+        return null;
+    }
+
+    private String currentUsername(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new AppException(ErrorCode.AUTH_UNAUTHORIZED, "Unauthorized");
+        }
+        String username = authentication.getName();
+        if (username == null || username.isBlank() || "anonymousUser".equalsIgnoreCase(username)) {
+            throw new AppException(ErrorCode.AUTH_UNAUTHORIZED, "Unauthorized");
+        }
+        return username;
     }
 }

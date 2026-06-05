@@ -31,7 +31,7 @@ public class ImageFeedController {
           @RequestParam(name = "isGuest", required = false) Boolean isGuest,
           @RequestParam(name = "guestId", required = false) String guestId
   ) {
-    return ApiResponse.ok(imageFeedService.getViewer(feedId, resolveUsername(username, isGuest, guestId)));
+    return ApiResponse.ok(imageFeedService.getViewer(feedId, resolveUsername(isGuest, guestId)));
   }
 
   // ✅ 추가: 선택한 피드 기준 위치 반경 내 피드ID 스트립
@@ -44,15 +44,12 @@ public class ImageFeedController {
       @RequestParam(name = "isGuest", required = false) Boolean isGuest,
       @RequestParam(name = "guestId", required = false) String guestId
   ) {
-    return ApiResponse.ok(imageFeedService.getContext(baseFeedId, radiusM, limit, resolveUsername(username, isGuest, guestId)));
+    return ApiResponse.ok(imageFeedService.getContext(baseFeedId, radiusM, limit, resolveUsername(isGuest, guestId)));
   }
 
-  private String resolveUsername(String usernameParam, Boolean isGuest, String guestId) {
+  private String resolveUsername(Boolean isGuest, String guestId) {
     if (Boolean.TRUE.equals(isGuest)) {
       return null;
-    }
-    if (usernameParam != null && !usernameParam.isBlank()) {
-      return usernameParam;
     }
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth != null && auth.isAuthenticated()) {

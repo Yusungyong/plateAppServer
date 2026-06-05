@@ -1,5 +1,7 @@
 package com.plateapp.plate_main.friend.controller;
 
+import com.plateapp.plate_main.common.error.AppException;
+import com.plateapp.plate_main.common.error.ErrorCode;
 import com.plateapp.plate_main.friend.dto.FriendDto;
 import com.plateapp.plate_main.friend.dto.FriendListResponse;
 import com.plateapp.plate_main.friend.dto.FriendRequests.CreateFriendRequest;
@@ -14,6 +16,7 @@ import com.plateapp.plate_main.friend.service.FriendService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,10 +37,13 @@ public class FriendController {
 
     @GetMapping
     public ResponseEntity<FriendListResponse> list(
-            @RequestParam("username") String username,
-            @RequestParam(value = "status", required = false) String status
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "status", required = false) String status,
+            Authentication authentication
     ) {
-        return ResponseEntity.ok(new FriendListResponse(friendService.list(username, status)));
+        String currentUsername = currentUsername(authentication);
+        requireRequestedUser(username, currentUsername);
+        return ResponseEntity.ok(new FriendListResponse(friendService.list(currentUsername, status)));
     }
 
     @GetMapping("/search")
@@ -53,49 +59,71 @@ public class FriendController {
             @PathVariable("username") String username,
             @RequestParam(value = "friendName", required = false) String friendName,
             @RequestParam(value = "cursor", required = false) Integer cursor,
-            @RequestParam(value = "limit", defaultValue = "20") int limit
+            @RequestParam(value = "limit", defaultValue = "20") int limit,
+            Authentication authentication
     ) {
-        return ResponseEntity.ok(friendService.listVisits(username, friendName, cursor, limit));
+        String currentUsername = currentUsername(authentication);
+        requireRequestedUser(username, currentUsername);
+        return ResponseEntity.ok(friendService.listVisits(currentUsername, friendName, cursor, limit));
     }
 
     @GetMapping("/{username}/recent-stores")
     public ResponseEntity<RecentStoreResponse> recentStores(
             @PathVariable("username") String username,
-            @RequestParam(value = "limit", defaultValue = "3") int limit
+            @RequestParam(value = "limit", defaultValue = "3") int limit,
+            Authentication authentication
     ) {
-        return ResponseEntity.ok(friendService.listRecentStores(username, limit));
+        String currentUsername = currentUsername(authentication);
+        requireRequestedUser(username, currentUsername);
+        return ResponseEntity.ok(friendService.listRecentStores(currentUsername, limit));
     }
 
     @GetMapping("/suggest")
     public ResponseEntity<FriendListResponse> suggest(
-            @RequestParam("username") String username,
+            @RequestParam(value = "username", required = false) String username,
             @RequestParam("keyword") String keyword,
             @RequestParam(value = "status", defaultValue = "cd_002") String status,
             @RequestParam(value = "limit", defaultValue = "10") int limit,
-            @RequestParam(value = "offset", defaultValue = "0") int offset
+            @RequestParam(value = "offset", defaultValue = "0") int offset,
+            Authentication authentication
     ) {
-        return ResponseEntity.ok(new FriendListResponse(friendService.suggest(username, keyword, status, limit, offset)));
+        String currentUsername = currentUsername(authentication);
+        requireRequestedUser(username, currentUsername);
+        return ResponseEntity.ok(new FriendListResponse(friendService.suggest(currentUsername, keyword, status, limit, offset)));
     }
 
     @GetMapping("/stores/{storeId}/friend-visits")
     public ResponseEntity<FriendStoreVisitDto> storeFriendVisits(
             @PathVariable("storeId") Integer storeId,
-            @RequestParam("username") String username
+            @RequestParam(value = "username", required = false) String username,
+            Authentication authentication
     ) {
-        return ResponseEntity.ok(friendService.getStoreFriendVisits(username, storeId));
+        String currentUsername = currentUsername(authentication);
+        requireRequestedUser(username, currentUsername);
+        return ResponseEntity.ok(friendService.getStoreFriendVisits(currentUsername, storeId));
     }
 
     @GetMapping("/{username}/stores/{storeId}/visits")
     public ResponseEntity<FriendStoreVisitDto> userStoreFriendVisits(
             @PathVariable("username") String username,
-            @PathVariable("storeId") Integer storeId
+            @PathVariable("storeId") Integer storeId,
+            Authentication authentication
     ) {
-        return ResponseEntity.ok(friendService.getStoreFriendVisits(username, storeId));
+        String currentUsername = currentUsername(authentication);
+        requireRequestedUser(username, currentUsername);
+        return ResponseEntity.ok(friendService.getStoreFriendVisits(currentUsername, storeId));
     }
 
     @PostMapping
-    public ResponseEntity<FriendDto> add(@RequestBody CreateFriendRequest request) {
-        return ResponseEntity.ok(friendService.add(request));
+    public ResponseEntity<FriendDto> add(
+            @RequestBody CreateFriendRequest request,
+            Authentication authentication
+    ) {
+        String currentUsername = currentUsername(authentication);
+        if (request != null) {
+            requireRequestedUser(request.username(), currentUsername);
+        }
+        return ResponseEntity.ok(friendService.add(currentUsername, request));
     }
 
     @GetMapping("/{username}/{friendName}/visits")
@@ -103,31 +131,57 @@ public class FriendController {
             @PathVariable("username") String username,
             @PathVariable("friendName") String friendName,
             @RequestParam(value = "cursor", required = false) Integer cursor,
-            @RequestParam(value = "limit", defaultValue = "20") int limit
+            @RequestParam(value = "limit", defaultValue = "20") int limit,
+            Authentication authentication
     ) {
-        return ResponseEntity.ok(friendService.listFriendVisits(username, friendName, cursor, limit));
+        String currentUsername = currentUsername(authentication);
+        requireRequestedUser(username, currentUsername);
+        return ResponseEntity.ok(friendService.listFriendVisits(currentUsername, friendName, cursor, limit));
     }
 
     @GetMapping("/{username}/scheduled-visits")
     public ResponseEntity<ScheduledVisitResponse> scheduledVisits(
             @PathVariable("username") String username,
             @RequestParam(value = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
-            @RequestParam(value = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate
+            @RequestParam(value = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            Authentication authentication
     ) {
-        return ResponseEntity.ok(friendService.listScheduledVisits(username, fromDate, toDate));
+        String currentUsername = currentUsername(authentication);
+        requireRequestedUser(username, currentUsername);
+        return ResponseEntity.ok(friendService.listScheduledVisits(currentUsername, fromDate, toDate));
     }
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<FriendDto> updateStatus(
             @PathVariable Integer id,
-            @RequestBody UpdateStatusRequest request
+            @RequestBody UpdateStatusRequest request,
+            Authentication authentication
     ) {
-        return ResponseEntity.ok(friendService.updateStatus(id, request.status()));
+        return ResponseEntity.ok(friendService.updateStatus(id, currentUsername(authentication), request.status()));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Integer id) {
-        friendService.delete(id);
+    public ResponseEntity<Void> delete(@PathVariable Integer id, Authentication authentication) {
+        friendService.delete(id, currentUsername(authentication));
         return ResponseEntity.noContent().build();
+    }
+
+    private String currentUsername(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new AppException(ErrorCode.AUTH_UNAUTHORIZED, "Unauthorized");
+        }
+        String username = authentication.getName();
+        if (username == null || username.isBlank() || "anonymousUser".equalsIgnoreCase(username)) {
+            throw new AppException(ErrorCode.AUTH_UNAUTHORIZED, "Unauthorized");
+        }
+        return username;
+    }
+
+    private void requireRequestedUser(String requestedUsername, String currentUsername) {
+        if (requestedUsername != null
+                && !requestedUsername.isBlank()
+                && !requestedUsername.equals(currentUsername)) {
+            throw new AppException(ErrorCode.AUTH_FORBIDDEN, "Cannot access another user's friend data");
+        }
     }
 }

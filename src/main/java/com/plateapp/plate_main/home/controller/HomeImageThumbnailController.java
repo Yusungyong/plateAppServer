@@ -33,32 +33,31 @@ public class HomeImageThumbnailController {
       @RequestParam(name = "guestId", required = false) String guestId,
       @RequestParam(name = "groupId", required = false) String groupId
   ) {
+    String resolvedUsername = resolveUsername(isGuest);
+    boolean resolvedGuest = resolvedUsername == null && Boolean.TRUE.equals(isGuest);
     return ApiResponse.ok(homeService.getLatestThumbs(
         size,
         sortType,
         lat,
         lng,
         radius,
-        resolveUsername(username, isGuest, guestId),
-        Boolean.TRUE.equals(isGuest),
+        resolvedUsername,
+        resolvedGuest,
         guestId,
         groupId
     ));
   }
 
-  private String resolveUsername(String usernameParam, Boolean isGuest, String guestId) {
-    if (Boolean.TRUE.equals(isGuest)) {
-      return null;
-    }
-    if (usernameParam != null && !usernameParam.isBlank()) {
-      return usernameParam;
-    }
+  private String resolveUsername(Boolean isGuest) {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth != null && auth.isAuthenticated()) {
       String name = auth.getName();
       if (name != null && !name.isBlank() && !"anonymousUser".equalsIgnoreCase(name)) {
         return name;
       }
+    }
+    if (Boolean.TRUE.equals(isGuest)) {
+      return null;
     }
     return null;
   }

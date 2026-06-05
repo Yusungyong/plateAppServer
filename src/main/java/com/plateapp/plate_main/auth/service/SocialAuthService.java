@@ -47,6 +47,7 @@ import com.plateapp.plate_main.auth.repository.SocialSignupSessionRepository;
 import com.plateapp.plate_main.auth.repository.UserRepository;
 import com.plateapp.plate_main.auth.security.JwtProvider;
 import com.plateapp.plate_main.auth.security.PlateAuthorities;
+import com.plateapp.plate_main.auth.security.RefreshTokenHasher;
 import com.plateapp.plate_main.common.error.ErrorCode;
 import com.plateapp.plate_main.notification.service.UserPushTokenService;
 
@@ -588,7 +589,7 @@ public class SocialAuthService {
                 RefreshToken.builder()
                         .username(user.getUsername())
                         .userId(user.getUserId())
-                        .refreshToken(refreshToken)
+                        .refreshToken(RefreshTokenHasher.sha256(refreshToken))
                         .expiryDate(refreshExpiry)
                         .deviceId(deviceId)
                         .createdAt(OffsetDateTime.now(ZoneOffset.UTC))

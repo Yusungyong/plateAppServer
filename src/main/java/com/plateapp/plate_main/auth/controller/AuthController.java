@@ -18,10 +18,12 @@ import com.plateapp.plate_main.auth.service.AuthService;
 import com.plateapp.plate_main.auth.service.AuthService.AuthTokens;
 import com.plateapp.plate_main.auth.service.SocialAuthService;
 import com.plateapp.plate_main.common.api.ApiResponse;
+import com.plateapp.plate_main.common.security.RateLimitService;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -33,6 +35,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final SocialAuthService socialAuthService;
+    private final RateLimitService rateLimitService;
 
     @PostMapping("/signup")
     public ResponseEntity<ApiResponse<Void>> signup(@Valid @RequestBody SignupRequest req) {
@@ -46,6 +49,11 @@ public class AuthController {
             HttpServletRequest httpRequest
     ) {
         String ip = extractClientIp(httpRequest);
+        rateLimitService.check(
+                "auth:login:" + ip + ":" + rateLimitService.identity(req.username()),
+                10,
+                Duration.ofMinutes(10)
+        );
 
         AuthTokens tokens = authService.login(
                 req.username(),
@@ -63,7 +71,15 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<ApiResponse<AuthTokens>> refresh(@Valid @RequestBody RefreshRequest req) {
+    public ResponseEntity<ApiResponse<AuthTokens>> refresh(
+            @Valid @RequestBody RefreshRequest req,
+            HttpServletRequest httpRequest
+    ) {
+        rateLimitService.check(
+                "auth:refresh:" + rateLimitService.clientIp(httpRequest),
+                60,
+                Duration.ofMinutes(1)
+        );
         AuthTokens tokens = authService.refresh(req.refreshToken());
         return ResponseEntity.ok(ApiResponse.ok(tokens));
     }

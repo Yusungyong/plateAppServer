@@ -37,7 +37,7 @@ public class MapNearbyController {
         lng,
         radius,
         limit,
-        resolveUsername(username, isGuest, guestId),
+        resolveUsername(isGuest, guestId),
         groupId,
         category
     ));
@@ -58,7 +58,7 @@ public class MapNearbyController {
         lat,
         lng,
         limit,
-        resolveUsername(username, isGuest, guestId)
+        resolveUsername(isGuest, guestId)
     ));
   }
 
@@ -72,12 +72,9 @@ public class MapNearbyController {
     return ResponseEntity.ok(mapNearbyService.suggest(keyword, limit));
   }
 
-  private String resolveUsername(String usernameParam, Boolean isGuest, String guestId) {
+  private String resolveUsername(Boolean isGuest, String guestId) {
     if (Boolean.TRUE.equals(isGuest)) {
       return null;
-    }
-    if (usernameParam != null && !usernameParam.isBlank()) {
-      return usernameParam;
     }
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth != null && auth.isAuthenticated()) {

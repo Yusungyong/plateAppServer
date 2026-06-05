@@ -1,5 +1,7 @@
 package com.plateapp.plate_main.friend.service;
 
+import com.plateapp.plate_main.common.error.AppException;
+import com.plateapp.plate_main.common.error.ErrorCode;
 import com.plateapp.plate_main.friend.dto.FriendDto;
 import com.plateapp.plate_main.friend.dto.FriendRequests.CreateFriendRequest;
 import com.plateapp.plate_main.friend.dto.FriendSearchDto;
@@ -68,25 +70,31 @@ public class FriendService {
 
     @Transactional
     public FriendDto add(CreateFriendRequest request) {
-        if (request.username() == null || request.username().isBlank()
+        if (request == null) {
+            throw new IllegalArgumentException("username and friendName are required");
+        }
+        return add(request.username(), request);
+    }
+
+    @Transactional
+    public FriendDto add(String username, CreateFriendRequest request) {
+        if (request == null || username == null || username.isBlank()
                 || request.friendName() == null || request.friendName().isBlank()) {
             throw new IllegalArgumentException("username and friendName are required");
         }
 
         Fp150Friend friend = repository
-                .findByUsernameAndFriendName(request.username(), request.friendName())
+                .findByUsernameAndFriendName(username, request.friendName())
                 .orElseGet(Fp150Friend::new);
 
-        friend.setUsername(request.username());
-        friend.setUserId(resolveUserId(request.username()));
+        friend.setUsername(username);
+        friend.setUserId(resolveUserId(username));
         friend.setFriendName(request.friendName());
         friend.setFriendUserId(resolveUserId(request.friendName()));
-        friend.setStatus(request.status() != null && !request.status().isBlank()
-                ? request.status()
-                : (friend.getStatus() != null ? friend.getStatus() : "pending"));
-        friend.setInitiatorUsername(request.initiatorUsername() != null && !request.initiatorUsername().isBlank()
-                ? request.initiatorUsername()
-                : request.username());
+        friend.setStatus(friend.getStatus() != null && !friend.getStatus().isBlank()
+                ? friend.getStatus()
+                : "pending");
+        friend.setInitiatorUsername(username);
         friend.setInitiatorUserId(resolveUserId(friend.getInitiatorUsername()));
         friend.setMessage(request.message());
 
@@ -97,13 +105,19 @@ public class FriendService {
 
     @Transactional
     public FriendDto updateStatus(Integer id, String status) {
+        return updateStatus(id, null, status);
+    }
+
+    @Transactional
+    public FriendDto updateStatus(Integer id, String username, String status) {
         if (status == null || status.isBlank()) {
             throw new IllegalArgumentException("status is required");
         }
         Fp150Friend friend = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("friend not found: " + id));
+        requireOwner(friend, username);
         friend.setStatus(status);
-        if ("cd_002".equalsIgnoreCase(status)) {
+        if ("cd_002".equalsIgnoreCase(status) || "accepted".equalsIgnoreCase(status)) {
             friend.setAcceptedAt(java.time.LocalDateTime.now());
         }
         Fp150Friend saved = repository.save(friend);
@@ -113,6 +127,18 @@ public class FriendService {
 
     @Transactional
     public void delete(Integer id) {
+        delete(id, null);
+    }
+
+    @Transactional
+    public void delete(Integer id, String username) {
+        if (username != null && !username.isBlank()) {
+            Fp150Friend friend = repository.findById(id)
+                    .orElseThrow(() -> new IllegalArgumentException("friend not found: " + id));
+            requireOwner(friend, username);
+            repository.delete(friend);
+            return;
+        }
         repository.deleteById(id);
     }
 
@@ -366,5 +392,14 @@ public class FriendService {
         return memberRepository.findById(username)
                 .map(Fp100User::getUserId)
                 .orElse(null);
+    }
+
+    private void requireOwner(Fp150Friend friend, String username) {
+        if (username == null || username.isBlank()) {
+            return;
+        }
+        if (!username.equals(friend.getUsername())) {
+            throw new AppException(ErrorCode.AUTH_FORBIDDEN, "Cannot modify another user's friend data");
+        }
     }
 }

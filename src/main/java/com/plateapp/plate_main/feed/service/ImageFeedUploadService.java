@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,16 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 @RequiredArgsConstructor
 public class ImageFeedUploadService {
+
+    private static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;
+    private static final Set<String> ALLOWED_IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp", "heic", "heif");
+    private static final Set<String> ALLOWED_IMAGE_CONTENT_TYPES = Set.of(
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "image/heic",
+            "image/heif"
+    );
 
     private final ImageFeedRepository imageFeedRepository;
     private final FeedCommentRepository feedCommentRepository;
@@ -446,6 +457,7 @@ public class ImageFeedUploadService {
     }
 
     private String processAndUploadImage(MultipartFile file) {
+        validateImageFile(file);
         String storedFileName = safeStoredImageFileName(file.getOriginalFilename(), "image.jpg");
         String relativePath = buildRelativePath(storedFileName);
         String thumbRelativePath = buildThumbnailRelativePath(relativePath);
@@ -481,6 +493,37 @@ public class ImageFeedUploadService {
             return null;
         }
         return imageProcessingService.resizeCropCenterToTempFile(sourcePath, 300, 300, "jpg");
+    }
+
+    private void validateImageFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("image file is required");
+        }
+        if (file.getSize() > MAX_IMAGE_BYTES) {
+            throw new IllegalArgumentException("image file must be 10MB or less");
+        }
+
+        String extension = extension(file.getOriginalFilename());
+        if (!ALLOWED_IMAGE_EXTENSIONS.contains(extension)) {
+            throw new IllegalArgumentException("unsupported image extension");
+        }
+
+        String contentType = file.getContentType();
+        if (contentType != null && !contentType.isBlank()
+                && !ALLOWED_IMAGE_CONTENT_TYPES.contains(contentType.toLowerCase(Locale.ROOT))) {
+            throw new IllegalArgumentException("unsupported image content type");
+        }
+    }
+
+    private String extension(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return "";
+        }
+        int dot = filename.lastIndexOf('.');
+        if (dot < 0 || dot == filename.length() - 1) {
+            return "";
+        }
+        return filename.substring(dot + 1).toLowerCase(Locale.ROOT);
     }
 
     private void uploadFile(Path filePath, String relativePath) throws IOException {

@@ -21,8 +21,12 @@ public class MyProfileService {
 
     @Transactional(readOnly = true)
     public MyProfileResponse getProfile(MyProfileRequest request) {
-        String username = request.username();
-        boolean includeStats = Boolean.TRUE.equals(request.includeStats());
+        return getProfile(request.username(), request.includeStats());
+    }
+
+    @Transactional(readOnly = true)
+    public MyProfileResponse getProfile(String username, Boolean includeStatsValue) {
+        boolean includeStats = Boolean.TRUE.equals(includeStatsValue);
 
         User user = userRepository.findById(username)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자: " + username));
