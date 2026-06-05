@@ -16,6 +16,7 @@ env:
   CODEDEPLOY_APP: plate-app-server
   CODEDEPLOY_GROUP: plate-main-deploy-group
   ROLE_ARN: arn:aws:iam::174977828951:role/GitHubActions-CodeDeploy
+  CODEDEPLOY_PRINT_TARGET_DIAGNOSTICS: "false"
 
 jobs:
   deploy:
@@ -83,6 +84,12 @@ jobs:
             echo "::group::CodeDeploy deployment details"
             aws deploy get-deployment --deployment-id "${deployment_id}" --output json || true
             echo "::endgroup::"
+
+            if [ "${{ env.CODEDEPLOY_PRINT_TARGET_DIAGNOSTICS }}" != "true" ]; then
+              echo "Skipping CodeDeploy target diagnostics because CODEDEPLOY_PRINT_TARGET_DIAGNOSTICS is not true."
+              echo "To enable it, grant the diagnostic IAM permissions documented in docs/deploy/codedeploy-actions-permissions.md."
+              return
+            fi
 
             target_error_file="$(mktemp)"
             target_ids="$(aws deploy list-deployment-targets --deployment-id "${deployment_id}" --query 'targetIds[]' --output text 2>"${target_error_file}" || true)"
