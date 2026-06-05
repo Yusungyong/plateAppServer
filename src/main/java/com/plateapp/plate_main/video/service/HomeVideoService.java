@@ -24,6 +24,7 @@ import com.plateapp.plate_main.common.error.AppException;
 import com.plateapp.plate_main.common.error.ErrorCode;
 import com.plateapp.plate_main.common.s3.S3UploadService;
 import com.plateapp.plate_main.block.repository.BlockRepository;
+import com.plateapp.plate_main.home.service.HomeImpressionService;
 import com.plateapp.plate_main.report.repository.ReportRepository;
 import com.plateapp.plate_main.like.service.LikeService;
 import com.plateapp.plate_main.recommendation.service.HomeVideoRecommendationService;
@@ -73,6 +74,7 @@ public class HomeVideoService {
     private final S3UploadService s3UploadService;
     private final HomeVideoRecommendationService homeVideoRecommendationService;
     private final ContentPlaceResolver contentPlaceResolver;
+    private final HomeImpressionService homeImpressionService;
 
     public Page<HomeVideoThumbnailDTO> getHomeVideoThumbnails(
             int page,
@@ -214,8 +216,8 @@ public class HomeVideoService {
             return new PageImpl<>(Collections.emptyList(), pageable, Math.min(originalTotal, ranked.size()));
         }
 
-        int end = Math.min(offset + pageable.getPageSize(), ranked.size());
-        List<HomeVideoThumbnailDTO> content = ranked.subList(offset, end);
+        Set<Integer> recentStoreIds = homeImpressionService.findRecentVideoStoreIds(username, isGuest, guestId);
+        List<HomeVideoThumbnailDTO> content = sliceRankedVideos(ranked, offset, pageable.getPageSize(), recentStoreIds);
         homeVideoRecommendationService.logHomeServing(
                 requestId,
                 username,
@@ -234,6 +236,28 @@ public class HomeVideoService {
         );
         long total = Math.min(originalTotal, ranked.size());
         return new PageImpl<>(content, pageable, total);
+    }
+
+    private List<HomeVideoThumbnailDTO> sliceRankedVideos(
+            List<HomeVideoThumbnailDTO> ranked,
+            int offset,
+            int limit,
+            Set<Integer> recentStoreIds
+    ) {
+        if (ranked == null || ranked.isEmpty() || offset >= ranked.size()) {
+            return Collections.emptyList();
+        }
+        List<HomeVideoThumbnailDTO> content = new ArrayList<>();
+        int index = Math.max(0, offset);
+        while (index < ranked.size() && content.size() < limit) {
+            HomeVideoThumbnailDTO item = ranked.get(index);
+            index++;
+            Integer storeId = item.getStoreId();
+            if (storeId == null || !recentStoreIds.contains(storeId)) {
+                content.add(item);
+            }
+        }
+        return content;
     }
 
     private List<HomeVideoThumbnailDTO> buildRankedHomeThumbnails(

@@ -40,6 +40,8 @@ public class HomeImageThumbnailController {
         lng,
         radius,
         resolveUsername(username, isGuest, guestId),
+        Boolean.TRUE.equals(isGuest),
+        guestId,
         groupId
     ));
   }

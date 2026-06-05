@@ -64,6 +64,8 @@ class HomeContentFeedServiceTest {
     private ReportRepository reportRepository;
     @Mock
     private S3UploadService s3UploadService;
+    @Mock
+    private HomeImpressionService homeImpressionService;
 
     private HomeContentFeedService service;
 
@@ -80,7 +82,8 @@ class HomeContentFeedServiceTest {
                 replyRepository,
                 blockRepository,
                 reportRepository,
-                s3UploadService
+                s3UploadService,
+                homeImpressionService
         );
 
         when(blockRepository.findBlockedUsernames(anyString())).thenReturn(List.of());
@@ -93,6 +96,8 @@ class HomeContentFeedServiceTest {
         when(videoCommentRepository.countActiveByStoreIds(anyList())).thenReturn(List.of());
         when(feedCommentRepository.countActiveByFeedIds(anyList())).thenReturn(List.of());
         when(replyRepository.countActiveByFeedIds(anyList())).thenReturn(List.of());
+        when(homeImpressionService.loadRecentExclusion(anyString(), org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(HomeImpressionExclusion.empty());
 
         when(s3UploadService.toImageUrl(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
         when(s3UploadService.toVideoUrl(anyString())).thenAnswer(invocation -> invocation.getArgument(0));

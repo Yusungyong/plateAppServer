@@ -42,17 +42,20 @@ public class HomeImageThumbnailService {
   private final BlockRepository blockRepository;
   private final ReportRepository reportRepository;
   private final Fp310PlaceRepository fp310PlaceRepository;
+  private final HomeImpressionService homeImpressionService;
 
   public HomeImageThumbnailService(
       Fp400FeedRepository feedRepository,
       BlockRepository blockRepository,
       ReportRepository reportRepository,
-      Fp310PlaceRepository fp310PlaceRepository
+      Fp310PlaceRepository fp310PlaceRepository,
+      HomeImpressionService homeImpressionService
   ) {
     this.feedRepository = feedRepository;
     this.blockRepository = blockRepository;
     this.reportRepository = reportRepository;
     this.fp310PlaceRepository = fp310PlaceRepository;
+    this.homeImpressionService = homeImpressionService;
   }
 
   @Transactional(readOnly = true)
@@ -63,6 +66,8 @@ public class HomeImageThumbnailService {
       Double lng,
       Double radius,
       String username,
+      boolean isGuest,
+      String guestId,
       String groupId
   ) {
     if (size < 1 || size > IMAGE_HOME_SIZE_MAX) {
@@ -102,8 +107,9 @@ public class HomeImageThumbnailService {
     List<Fp400Feed> filteredFeeds = feeds.stream()
         .filter(feed -> excluded.isEmpty() || feed.getUsername() == null || !excluded.contains(feed.getUsername()))
         .toList();
+    Set<Integer> recentFeedNos = homeImpressionService.findRecentImageFeedNos(username, isGuest, guestId);
 
-    return new HomeImageThumbnailResponse(rerankFeeds(filteredFeeds, size, lat, lng, safeRadius));
+    return new HomeImageThumbnailResponse(rerankFeeds(filteredFeeds, size, lat, lng, safeRadius, recentFeedNos));
   }
 
   private int resolveCandidateFetchSize(int size) {
@@ -128,7 +134,8 @@ public class HomeImageThumbnailService {
       int size,
       Double lat,
       Double lng,
-      Double radiusMeters
+      Double radiusMeters,
+      Set<Integer> recentFeedNos
   ) {
     if (feeds.isEmpty()) {
       return List.of();
@@ -141,6 +148,7 @@ public class HomeImageThumbnailService {
         .toList();
 
     return diversify(scored).stream()
+        .filter(candidate -> candidate.feed().getFeedNo() == null || !recentFeedNos.contains(candidate.feed().getFeedNo()))
         .limit(size)
         .map(candidate -> toItem(candidate.feed()))
         .toList();

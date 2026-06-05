@@ -35,41 +35,53 @@ public class HomeRandomCandidatesService {
     private final BlockRepository blockRepository;
     private final ReportRepository reportRepository;
     private final S3UploadService s3UploadService;
+    private final HomeImpressionService homeImpressionService;
 
     public HomeRandomCandidatesService(
             Fp300StoreRepository storeRepository,
             Fp400FeedRepository feedRepository,
             BlockRepository blockRepository,
             ReportRepository reportRepository,
-            S3UploadService s3UploadService
+            S3UploadService s3UploadService,
+            HomeImpressionService homeImpressionService
     ) {
         this.storeRepository = storeRepository;
         this.feedRepository = feedRepository;
         this.blockRepository = blockRepository;
         this.reportRepository = reportRepository;
         this.s3UploadService = s3UploadService;
+        this.homeImpressionService = homeImpressionService;
     }
 
     @Transactional(readOnly = true)
-    public HomeRandomCandidatesResponse getRecent(int limit, String include, String username) {
+    public HomeRandomCandidatesResponse getRecent(int limit, String include, String username, boolean isGuest, String guestId) {
         int safeLimit = normalizeLimit(limit);
+        int candidateLimit = normalizeCandidateLimit(safeLimit);
         IncludeType type = IncludeType.from(include);
         Set<String> excluded = loadExcludedUsernames(username);
+        HomeImpressionExclusion impressionExclusion =
+                homeImpressionService.loadRecentExclusion(username, isGuest, guestId);
 
         List<HomeRandomCandidatesResponse.Item> items = new ArrayList<>();
         if (type.includeVideo()) {
-            List<Fp300Store> videos = storeRepository.findLatestForHome(PageRequest.of(0, safeLimit));
+            List<Fp300Store> videos = storeRepository.findLatestForHome(PageRequest.of(0, candidateLimit));
             for (Fp300Store store : videos) {
                 if (!excluded.isEmpty() && store.getUsername() != null && excluded.contains(store.getUsername())) {
+                    continue;
+                }
+                if (store.getStoreId() != null && impressionExclusion.videoStoreIds().contains(store.getStoreId())) {
                     continue;
                 }
                 items.add(toVideoItem(store));
             }
         }
         if (type.includeImage()) {
-            List<Fp400Feed> feeds = feedRepository.findLatestForHomeByGroup(null, null, PageRequest.of(0, safeLimit));
+            List<Fp400Feed> feeds = feedRepository.findLatestForHomeByGroup(null, null, PageRequest.of(0, candidateLimit));
             for (Fp400Feed feed : feeds) {
                 if (!excluded.isEmpty() && feed.getUsername() != null && excluded.contains(feed.getUsername())) {
+                    continue;
+                }
+                if (feed.getFeedNo() != null && impressionExclusion.imageFeedNos().contains(feed.getFeedNo())) {
                     continue;
                 }
                 items.add(toImageItem(feed));
@@ -90,12 +102,17 @@ public class HomeRandomCandidatesService {
             Double radius,
             int limit,
             String include,
-            String username
+            String username,
+            boolean isGuest,
+            String guestId
     ) {
         int safeLimit = normalizeLimit(limit);
+        int candidateLimit = normalizeCandidateLimit(safeLimit);
         double safeRadius = normalizeRadius(radius);
         IncludeType type = IncludeType.from(include);
         Set<String> excluded = loadExcludedUsernames(username);
+        HomeImpressionExclusion impressionExclusion =
+                homeImpressionService.loadRecentExclusion(username, isGuest, guestId);
 
         List<HomeRandomCandidatesResponse.Item> items = new ArrayList<>();
         if (type.includeVideo()) {
@@ -104,10 +121,13 @@ public class HomeRandomCandidatesService {
                     lng,
                     safeRadius,
                     null,
-                    safeLimit
+                    candidateLimit
             );
             for (Fp300Store store : videos) {
                 if (!excluded.isEmpty() && store.getUsername() != null && excluded.contains(store.getUsername())) {
+                    continue;
+                }
+                if (store.getStoreId() != null && impressionExclusion.videoStoreIds().contains(store.getStoreId())) {
                     continue;
                 }
                 items.add(toVideoItem(store));
@@ -120,10 +140,13 @@ public class HomeRandomCandidatesService {
                 safeRadius,
                 null,
                 null,
-                PageRequest.of(0, safeLimit)
+                PageRequest.of(0, candidateLimit)
             );
             for (Fp400Feed feed : feeds) {
                 if (!excluded.isEmpty() && feed.getUsername() != null && excluded.contains(feed.getUsername())) {
+                    continue;
+                }
+                if (feed.getFeedNo() != null && impressionExclusion.imageFeedNos().contains(feed.getFeedNo())) {
                     continue;
                 }
                 items.add(toImageItem(feed));
@@ -142,6 +165,10 @@ public class HomeRandomCandidatesService {
             return LIMIT_DEFAULT;
         }
         return Math.min(limit, LIMIT_MAX);
+    }
+
+    private int normalizeCandidateLimit(int safeLimit) {
+        return Math.min(Math.max(safeLimit * 3, safeLimit), LIMIT_MAX);
     }
 
     private double normalizeRadius(Double radius) {

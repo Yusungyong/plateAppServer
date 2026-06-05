@@ -63,6 +63,7 @@ public class HomeContentFeedService {
     private final BlockRepository blockRepository;
     private final ReportRepository reportRepository;
     private final S3UploadService s3UploadService;
+    private final HomeImpressionService homeImpressionService;
 
     public HomeContentFeedService(
             Fp300StoreRepository videoRepository,
@@ -75,7 +76,8 @@ public class HomeContentFeedService {
             ReplyRepository replyRepository,
             BlockRepository blockRepository,
             ReportRepository reportRepository,
-            S3UploadService s3UploadService
+            S3UploadService s3UploadService,
+            HomeImpressionService homeImpressionService
     ) {
         this.videoRepository = videoRepository;
         this.imageRepository = imageRepository;
@@ -88,6 +90,7 @@ public class HomeContentFeedService {
         this.blockRepository = blockRepository;
         this.reportRepository = reportRepository;
         this.s3UploadService = s3UploadService;
+        this.homeImpressionService = homeImpressionService;
     }
 
     @Transactional(readOnly = true)
@@ -108,6 +111,8 @@ public class HomeContentFeedService {
 
         String actorUsername = isGuest ? null : blankToNull(username);
         Set<String> excludedUsernames = loadExcludedUsernames(actorUsername);
+        HomeImpressionExclusion impressionExclusion =
+                homeImpressionService.loadRecentExclusion(actorUsername, isGuest, guestId);
 
         List<Fp300Store> videos = videoRepository.findLatestForHome(PageRequest.of(0, candidateSize));
         List<Fp400Feed> images = imageRepository.findLatestForHomeByGroup(null, null, PageRequest.of(0, candidateSize));
@@ -133,17 +138,13 @@ public class HomeContentFeedService {
                 .map(ScoredContent::item)
                 .toList();
 
-        int end = Math.min(offset + safeLimit, ranked.size());
-        List<HomeContentFeedItem> items = offset >= ranked.size()
-                ? List.of()
-                : ranked.subList(offset, end);
-        String nextCursor = end < ranked.size() ? encodeOffset(end) : null;
+        FeedPage page = sliceByCursor(ranked, offset, safeLimit, impressionExclusion);
 
         return new HomeContentFeedResponse(
                 "home-content-" + UUID.randomUUID(),
                 LocalDateTime.now(),
-                items,
-                nextCursor
+                page.items(),
+                page.nextCursor()
         );
     }
 
@@ -171,6 +172,8 @@ public class HomeContentFeedService {
 
         String actorUsername = isGuest ? null : blankToNull(username);
         Set<String> excludedUsernames = loadExcludedUsernames(actorUsername);
+        HomeImpressionExclusion impressionExclusion =
+                homeImpressionService.loadRecentExclusion(actorUsername, isGuest, guestId);
 
         List<Fp300Store> videos = videoRepository.findLatestForHome(PageRequest.of(0, candidateSize));
         List<Fp400Feed> images = imageRepository.findLatestForHomeByGroup(null, null, PageRequest.of(0, candidateSize));
@@ -199,18 +202,50 @@ public class HomeContentFeedService {
                 .filter(item -> matchesItem(item, normalizedKeyword))
                 .toList();
 
-        int end = Math.min(offset + safeLimit, ranked.size());
-        List<HomeContentFeedItem> items = offset >= ranked.size()
-                ? List.of()
-                : ranked.subList(offset, end);
-        String nextCursor = end < ranked.size() ? encodeOffset(end) : null;
+        FeedPage page = sliceByCursor(ranked, offset, safeLimit, impressionExclusion);
 
         return new HomeContentFeedResponse(
                 "home-content-search-" + UUID.randomUUID(),
                 LocalDateTime.now(),
-                items,
-                nextCursor
+                page.items(),
+                page.nextCursor()
         );
+    }
+
+    private FeedPage sliceByCursor(
+            List<HomeContentFeedItem> ranked,
+            int offset,
+            int limit,
+            HomeImpressionExclusion impressionExclusion
+    ) {
+        if (offset >= ranked.size()) {
+            return new FeedPage(List.of(), null);
+        }
+
+        List<HomeContentFeedItem> items = new ArrayList<>();
+        int index = Math.max(0, offset);
+        while (index < ranked.size() && items.size() < limit) {
+            HomeContentFeedItem item = ranked.get(index);
+            index++;
+            if (!isRecentlyImpressed(item, impressionExclusion)) {
+                items.add(item);
+            }
+        }
+        String nextCursor = index < ranked.size() ? encodeOffset(index) : null;
+        return new FeedPage(items, nextCursor);
+    }
+
+    private boolean isRecentlyImpressed(HomeContentFeedItem item, HomeImpressionExclusion impressionExclusion) {
+        if (item == null || impressionExclusion == null) {
+            return false;
+        }
+        if (TYPE_VIDEO.equals(item.contentType()) && item.storeId() != null) {
+            return impressionExclusion.videoStoreIds().contains(item.storeId());
+        }
+        if (TYPE_IMAGE.equals(item.contentType()) && item.imageFeedId() != null) {
+            return impressionExclusion.imageFeedNos().contains(item.imageFeedId());
+        }
+        return false;
     }
 
     private FeedContext loadContext(List<Fp300Store> videos, List<Fp400Feed> images, String username) {
@@ -555,6 +590,12 @@ public class HomeContentFeedService {
             Map<Integer, Long> imageLikeCounts,
             Map<Integer, Long> imageCommentCounts,
             Set<Integer> likedImageIds
+    ) {
+    }
+
+    private record FeedPage(
+            List<HomeContentFeedItem> items,
+            String nextCursor
     ) {
     }
 

@@ -80,6 +80,7 @@ public class SecurityConfig {
                 ).permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/qna").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/home/video-events").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/home/impressions").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/detail/*/public-profile").authenticated()
 
                 .requestMatchers("/api/admin/member-monitoring/**").hasAnyAuthority(

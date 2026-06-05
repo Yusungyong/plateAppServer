@@ -23,9 +23,12 @@ public class HomeRandomCandidatesController {
     public HomeRandomCandidatesResponse getRecent(
             @RequestParam(value = "limit", required = false, defaultValue = "50") int limit,
             @RequestParam(value = "include", required = false, defaultValue = "all") String include,
-            @RequestParam(value = "username", required = false) String username
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "isGuest", required = false, defaultValue = "false") boolean isGuest,
+            @RequestParam(value = "guestId", required = false) String guestId
     ) {
-        return homeRandomCandidatesService.getRecent(limit, include, resolveUsername(username));
+        String resolvedUsername = isGuest ? null : resolveUsername(username);
+        return homeRandomCandidatesService.getRecent(limit, include, resolvedUsername, isGuest, guestId);
     }
 
     @GetMapping("/nearby")
@@ -35,9 +38,12 @@ public class HomeRandomCandidatesController {
             @RequestParam(value = "radius", required = false) Double radius,
             @RequestParam(value = "limit", required = false, defaultValue = "50") int limit,
             @RequestParam(value = "include", required = false, defaultValue = "all") String include,
-            @RequestParam(value = "username", required = false) String username
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "isGuest", required = false, defaultValue = "false") boolean isGuest,
+            @RequestParam(value = "guestId", required = false) String guestId
     ) {
-        return homeRandomCandidatesService.getNearby(lat, lng, radius, limit, include, resolveUsername(username));
+        String resolvedUsername = isGuest ? null : resolveUsername(username);
+        return homeRandomCandidatesService.getNearby(lat, lng, radius, limit, include, resolvedUsername, isGuest, guestId);
     }
 
     private String resolveUsername(String usernameParam) {
