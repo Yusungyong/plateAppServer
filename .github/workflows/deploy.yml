@@ -78,6 +78,22 @@ jobs:
           deployment_id="${{ steps.codedeploy.outputs.deployment_id }}"
           echo "Waiting for CodeDeploy deployment: ${deployment_id}"
 
+          print_deployment_diagnostics() {
+            echo "::group::CodeDeploy deployment details"
+            aws deploy get-deployment --deployment-id "${deployment_id}" --output json || true
+            echo "::endgroup::"
+
+            target_ids="$(aws deploy list-deployment-targets --deployment-id "${deployment_id}" --query 'targetIds[]' --output text 2>/dev/null || true)"
+            if [ -n "${target_ids}" ] && [ "${target_ids}" != "None" ]; then
+              echo "::group::CodeDeploy target diagnostics"
+              # shellcheck disable=SC2086
+              aws deploy batch-get-deployment-targets --deployment-id "${deployment_id}" --target-ids ${target_ids} --output json || true
+              echo "::endgroup::"
+            else
+              echo "No CodeDeploy target IDs were returned for ${deployment_id}."
+            fi
+          }
+
           for attempt in $(seq 1 90); do
             status=$(aws deploy get-deployment --deployment-id "${deployment_id}" --query 'deploymentInfo.status' --output text)
             overview=$(aws deploy get-deployment --deployment-id "${deployment_id}" --query 'deploymentInfo.deploymentOverview' --output json)
@@ -91,6 +107,7 @@ jobs:
               Failed|Stopped)
                 echo "CodeDeploy deployment ${status}: ${deployment_id}"
                 aws deploy get-deployment --deployment-id "${deployment_id}" --query 'deploymentInfo.errorInformation' --output json || true
+                print_deployment_diagnostics
                 exit 1
                 ;;
             esac
@@ -99,5 +116,5 @@ jobs:
           done
 
           echo "Timed out waiting for CodeDeploy deployment: ${deployment_id}"
-          aws deploy get-deployment --deployment-id "${deployment_id}" --output json || true
+          print_deployment_diagnostics
           exit 1

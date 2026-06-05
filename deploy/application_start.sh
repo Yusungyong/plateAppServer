@@ -7,6 +7,20 @@ log() {
 
 APP_DIR="/opt/plate-main"
 SERVICE_FILE="/etc/systemd/system/plate-main.service"
+ENV_FILE="/etc/plate-main.env"
+
+required_env_keys=(JWT_SECRET APPLE_CLIENT_ID GOOGLE_CLIENT_ID)
+missing_env_keys=()
+for key in "${required_env_keys[@]}"; do
+  if ! grep -Eq "^[[:space:]]*${key}=" "$ENV_FILE" 2>/dev/null; then
+    missing_env_keys+=("$key")
+  fi
+done
+
+if [ ${#missing_env_keys[@]} -gt 0 ]; then
+  log "Missing required environment keys in ${ENV_FILE}: ${missing_env_keys[*]}"
+  exit 1
+fi
 
 if [ ! -f "$SERVICE_FILE" ]; then
   log "Systemd service file does not exist. Creating ${SERVICE_FILE}"
