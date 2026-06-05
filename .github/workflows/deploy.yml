@@ -58,8 +58,46 @@ jobs:
         run: aws s3api put-object --bucket ${{ env.S3_BUCKET }} --key deployments/${{ github.sha }}.zip --body deployment.zip
 
       - name: Create CodeDeploy deployment
-        run: >
-          aws deploy create-deployment
-          --application-name ${{ env.CODEDEPLOY_APP }}
-          --deployment-group-name ${{ env.CODEDEPLOY_GROUP }}
-          --s3-location bucket=${{ env.S3_BUCKET }},key=deployments/${{ github.sha }}.zip,bundleType=zip
+        id: codedeploy
+        run: |
+          set -euo pipefail
+          deployment_id=$(
+            aws deploy create-deployment \
+              --application-name "${{ env.CODEDEPLOY_APP }}" \
+              --deployment-group-name "${{ env.CODEDEPLOY_GROUP }}" \
+              --s3-location "bucket=${{ env.S3_BUCKET }},key=deployments/${{ github.sha }}.zip,bundleType=zip" \
+              --query deploymentId \
+              --output text
+          )
+          echo "deployment_id=${deployment_id}" >> "$GITHUB_OUTPUT"
+          echo "Created CodeDeploy deployment: ${deployment_id}"
+
+      - name: Wait for CodeDeploy deployment
+        run: |
+          set -euo pipefail
+          deployment_id="${{ steps.codedeploy.outputs.deployment_id }}"
+          echo "Waiting for CodeDeploy deployment: ${deployment_id}"
+
+          for attempt in $(seq 1 90); do
+            status=$(aws deploy get-deployment --deployment-id "${deployment_id}" --query 'deploymentInfo.status' --output text)
+            overview=$(aws deploy get-deployment --deployment-id "${deployment_id}" --query 'deploymentInfo.deploymentOverview' --output json)
+            echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] attempt=${attempt}/90 status=${status} overview=${overview}"
+
+            case "${status}" in
+              Succeeded)
+                echo "CodeDeploy deployment succeeded: ${deployment_id}"
+                exit 0
+                ;;
+              Failed|Stopped)
+                echo "CodeDeploy deployment ${status}: ${deployment_id}"
+                aws deploy get-deployment --deployment-id "${deployment_id}" --query 'deploymentInfo.errorInformation' --output json || true
+                exit 1
+                ;;
+            esac
+
+            sleep 10
+          done
+
+          echo "Timed out waiting for CodeDeploy deployment: ${deployment_id}"
+          aws deploy get-deployment --deployment-id "${deployment_id}" --output json || true
+          exit 1
