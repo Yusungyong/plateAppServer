@@ -19,6 +19,10 @@ public enum ErrorCode {
     AUTH_UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "AUTH_401", "인증이 필요합니다."),
     AUTH_FORBIDDEN(HttpStatus.FORBIDDEN, "AUTH_403", "권한이 없습니다."),
     AUTH_TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "AUTH_402", "토큰이 만료되었습니다."),
+    AUTH_SOCIAL_TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "AUTH_SOCIAL_TOKEN_INVALID", "소셜 로그인 토큰을 검증하지 못했습니다."),
+    AUTH_SOCIAL_AUDIENCE_MISMATCH(HttpStatus.UNAUTHORIZED, "AUTH_SOCIAL_AUDIENCE_MISMATCH", "허용되지 않은 소셜 로그인 클라이언트입니다."),
+    AUTH_SOCIAL_PROVIDER_USER_NOT_FOUND(HttpStatus.UNAUTHORIZED, "AUTH_SOCIAL_PROVIDER_USER_NOT_FOUND", "소셜 로그인 사용자 정보를 찾을 수 없습니다."),
+    AUTH_SOCIAL_ACCOUNT_BLOCKED(HttpStatus.FORBIDDEN, "AUTH_SOCIAL_ACCOUNT_BLOCKED", "사용할 수 없는 소셜 계정입니다."),
 
     // ✅ refresh 전용 (추가)
     AUTH_REFRESH_EXPIRED(HttpStatus.UNAUTHORIZED, "AUTH_411", "리프레시 토큰이 만료되었습니다."),

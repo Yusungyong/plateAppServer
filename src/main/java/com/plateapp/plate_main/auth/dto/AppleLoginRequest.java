@@ -15,5 +15,13 @@ public class AppleLoginRequest {
 
     private String deviceId;
 
+    private String deviceModel;
+
+    private String os;
+
+    private String osVersion;
+
+    private String appVersion;
+
     private String fcmToken;
 }

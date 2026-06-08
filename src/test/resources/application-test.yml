@@ -11,6 +11,8 @@ spring:
 
 google:
   client-id: test-google-client
+  android-client-id: test-google-android-client
+  allowed-client-ids:
 
 apple:
   client-id: test-apple-client

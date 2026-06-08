@@ -83,6 +83,12 @@ public class SocialAuthService {
     @Value("${google.client-id}")
     private String googleClientId;
 
+    @Value("${google.android-client-id:}")
+    private String googleAndroidClientId;
+
+    @Value("${google.allowed-client-ids:}")
+    private String googleAllowedClientIds;
+
     private static final Duration SIGNUP_SESSION_TTL = Duration.ofMinutes(30);
 
     public SocialAuthResponse loginWithApple(AppleLoginRequest request, String ipAddress) {
@@ -108,7 +114,8 @@ public class SocialAuthService {
                         extractAppleNickname(request.getUser()),
                         payload
                 );
-                logSocialLogin(extractSocialUsername(request.getUser(), provider), null, "SIGNUP_REQUIRED", null, ipAddress);
+                logSocialLogin(extractSocialUsername(request.getUser(), provider), null, "SIGNUP_REQUIRED", null, ipAddress,
+                        request.getDeviceId(), request.getDeviceModel(), request.getOs(), request.getOsVersion(), request.getAppVersion());
                 return SocialAuthResponse.signupRequired(
                         session.getSignupToken(),
                         provider,
@@ -120,10 +127,12 @@ public class SocialAuthService {
 
             TokenPair tokens = issueTokens(user, request.getDeviceId());
             userPushTokenService.upsertLoginToken(user, request.getDeviceId(), request.getFcmToken());
-            logSocialLogin(user, "SUCCESS", null, ipAddress);
+            logSocialLogin(user, "SUCCESS", null, ipAddress,
+                    request.getDeviceId(), request.getDeviceModel(), request.getOs(), request.getOsVersion(), request.getAppVersion());
             return SocialAuthResponse.loginSuccess(tokens.accessToken(), tokens.refreshToken(), user);
         } catch (RuntimeException e) {
-            logSocialLogin(extractSocialUsername(request.getUser(), provider), null, "FAIL", provider + "_LOGIN_FAILED", ipAddress);
+            logSocialLogin(extractSocialUsername(request.getUser(), provider), null, "FAIL", provider + "_LOGIN_FAILED", ipAddress,
+                    request.getDeviceId(), request.getDeviceModel(), request.getOs(), request.getOsVersion(), request.getAppVersion());
             throw e;
         }
     }
@@ -268,7 +277,7 @@ public class SocialAuthService {
         String provider = "KAKAO";
         try {
             if (request.getAccessToken() == null || request.getAccessToken().isBlank()) {
-                throw new IllegalArgumentException("accessToken is empty.");
+                throw socialTokenInvalid();
             }
 
             KakaoUserResponse kakaoUser = getKakaoUserInfo(request.getAccessToken());
@@ -299,7 +308,8 @@ public class SocialAuthService {
                         nickname,
                         kakaoUser
                 );
-                logSocialLogin(null, null, "SIGNUP_REQUIRED", null, ipAddress);
+                logSocialLogin(null, null, "SIGNUP_REQUIRED", null, ipAddress,
+                        request.getDeviceId(), request.getDeviceModel(), request.getOs(), request.getOsVersion(), request.getAppVersion());
                 return SocialAuthResponse.signupRequired(
                         session.getSignupToken(),
                         provider,
@@ -311,10 +321,12 @@ public class SocialAuthService {
 
             TokenPair tokens = issueTokens(user, request.getDeviceId());
             userPushTokenService.upsertLoginToken(user, request.getDeviceId(), request.getFcmToken());
-            logSocialLogin(user, "SUCCESS", null, ipAddress);
+            logSocialLogin(user, "SUCCESS", null, ipAddress,
+                    request.getDeviceId(), request.getDeviceModel(), request.getOs(), request.getOsVersion(), request.getAppVersion());
             return SocialAuthResponse.loginSuccess(tokens.accessToken(), tokens.refreshToken(), user);
         } catch (RuntimeException e) {
-            logSocialLogin(null, null, "FAIL", provider + "_LOGIN_FAILED", ipAddress);
+            logSocialLogin(null, null, "FAIL", provider + "_LOGIN_FAILED", ipAddress,
+                    request.getDeviceId(), request.getDeviceModel(), request.getOs(), request.getOsVersion(), request.getAppVersion());
             throw e;
         }
     }
@@ -322,7 +334,7 @@ public class SocialAuthService {
     @Transactional(readOnly = true)
     public String verifyKakaoReauthentication(String accessToken) {
         if (accessToken == null || accessToken.isBlank()) {
-            throw new IllegalArgumentException("accessToken is empty.");
+            throw socialTokenInvalid();
         }
         KakaoUserResponse kakaoUser = getKakaoUserInfo(accessToken);
         return String.valueOf(kakaoUser.getId());
@@ -342,11 +354,17 @@ public class SocialAuthService {
                     KakaoUserResponse.class
             );
 
-            return response.getBody();
+            KakaoUserResponse kakaoUser = response.getBody();
+            if (kakaoUser == null || kakaoUser.getId() == null) {
+                throw socialProviderUserNotFound();
+            }
+            return kakaoUser;
+        } catch (AuthException e) {
+            throw e;
         } catch (HttpClientErrorException e) {
-            throw new IllegalArgumentException("Kakao token verify failed: " + e.getStatusCode(), e);
+            throw socialTokenInvalid();
         } catch (Exception e) {
-            throw new IllegalArgumentException("Kakao token verify failed.", e);
+            throw socialTokenInvalid();
         }
     }
 
@@ -382,14 +400,14 @@ public class SocialAuthService {
         String provider = "GOOGLE";
         try {
             if (request.getIdToken() == null || request.getIdToken().isBlank()) {
-                throw new IllegalArgumentException("Google idToken is empty.");
-            }
-            if (googleClientId == null || googleClientId.isBlank()) {
-                throw new IllegalStateException("google.client-id is not configured.");
+                throw socialTokenInvalid();
             }
 
             GoogleIdTokenPayload payload = parseAndValidateGoogleToken(request.getIdToken());
-            String providerUserId = payload.getSub();
+            String providerUserId = trimToNull(payload.getSub());
+            if (providerUserId == null) {
+                throw socialProviderUserNotFound();
+            }
 
             var socialOpt =
                     socialAccountRepository.findByProviderAndProviderUserId(provider, providerUserId);
@@ -411,7 +429,8 @@ public class SocialAuthService {
                         name,
                         payload
                 );
-                logSocialLogin(null, null, "SIGNUP_REQUIRED", null, ipAddress);
+                logSocialLogin(null, null, "SIGNUP_REQUIRED", null, ipAddress,
+                        request.getDeviceId(), request.getDeviceModel(), request.getOs(), request.getOsVersion(), request.getAppVersion());
                 return SocialAuthResponse.signupRequired(
                         session.getSignupToken(),
                         provider,
@@ -423,10 +442,12 @@ public class SocialAuthService {
 
             TokenPair tokens = issueTokens(user, request.getDeviceId());
             userPushTokenService.upsertLoginToken(user, request.getDeviceId(), request.getFcmToken());
-            logSocialLogin(user, "SUCCESS", null, ipAddress);
+            logSocialLogin(user, "SUCCESS", null, ipAddress,
+                    request.getDeviceId(), request.getDeviceModel(), request.getOs(), request.getOsVersion(), request.getAppVersion());
             return SocialAuthResponse.loginSuccess(tokens.accessToken(), tokens.refreshToken(), user);
         } catch (RuntimeException e) {
-            logSocialLogin(null, null, "FAIL", provider + "_LOGIN_FAILED", ipAddress);
+            logSocialLogin(null, null, "FAIL", provider + "_LOGIN_FAILED", ipAddress,
+                    request.getDeviceId(), request.getDeviceModel(), request.getOs(), request.getOsVersion(), request.getAppVersion());
             throw e;
         }
     }
@@ -434,9 +455,12 @@ public class SocialAuthService {
     @Transactional(readOnly = true)
     public String verifyGoogleReauthentication(String idToken) {
         if (idToken == null || idToken.isBlank()) {
-            throw new IllegalArgumentException("Google idToken is empty.");
+            throw socialTokenInvalid();
         }
         GoogleIdTokenPayload payload = parseAndValidateGoogleToken(idToken);
+        if (payload.getSub() == null || payload.getSub().isBlank()) {
+            throw socialProviderUserNotFound();
+        }
         return payload.getSub();
     }
 
@@ -573,6 +597,31 @@ public class SocialAuthService {
         logSocialLogin(user != null ? user.getUsername() : null, user != null ? user.getUserId() : null, status, failReason, ipAddress);
     }
 
+    private void logSocialLogin(
+            User user,
+            String status,
+            String failReason,
+            String ipAddress,
+            String deviceId,
+            String deviceModel,
+            String os,
+            String osVersion,
+            String appVersion
+    ) {
+        logSocialLogin(
+                user != null ? user.getUsername() : null,
+                user != null ? user.getUserId() : null,
+                status,
+                failReason,
+                ipAddress,
+                deviceId,
+                deviceModel,
+                os,
+                osVersion,
+                appVersion
+        );
+    }
+
     private TokenPair issueTokens(User user, String deviceId) {
         String accessToken = jwtProvider.createAccessToken(user.getUsername(), normalizeRole(user.getRole()));
         String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
@@ -602,17 +651,32 @@ public class SocialAuthService {
     private record TokenPair(String accessToken, String refreshToken) {}
 
     private void logSocialLogin(String username, Integer userId, String status, String failReason, String ipAddress) {
+        logSocialLogin(username, userId, status, failReason, ipAddress, null, null, null, null, null);
+    }
+
+    private void logSocialLogin(
+            String username,
+            Integer userId,
+            String status,
+            String failReason,
+            String ipAddress,
+            String deviceId,
+            String deviceModel,
+            String os,
+            String osVersion,
+            String appVersion
+    ) {
         loginHistoryService.log(
                 username != null && !username.isBlank() ? username : "social-user",
                 userId,
                 status,
                 failReason,
                 ipAddress,
-                null,
-                null,
-                null,
-                null,
-                null
+                deviceId,
+                deviceModel,
+                os,
+                osVersion,
+                appVersion
         );
     }
 
@@ -623,36 +687,75 @@ public class SocialAuthService {
         return provider.toLowerCase() + "-social-user";
     }
 
+    private AuthException socialTokenInvalid() {
+        return new AuthException(ErrorCode.AUTH_SOCIAL_TOKEN_INVALID);
+    }
+
+    private AuthException socialAudienceMismatch() {
+        return new AuthException(ErrorCode.AUTH_SOCIAL_AUDIENCE_MISMATCH);
+    }
+
+    private AuthException socialProviderUserNotFound() {
+        return new AuthException(ErrorCode.AUTH_SOCIAL_PROVIDER_USER_NOT_FOUND);
+    }
+
+    private List<String> allowedGoogleClientIds() {
+        Collection<String> values = new java.util.LinkedHashSet<>();
+        addGoogleClientIds(values, googleClientId);
+        addGoogleClientIds(values, googleAndroidClientId);
+        addGoogleClientIds(values, googleAllowedClientIds);
+        return values.stream().toList();
+    }
+
+    private void addGoogleClientIds(Collection<String> values, String rawValue) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return;
+        }
+        for (String value : rawValue.split(",")) {
+            String trimmed = value.trim();
+            if (!trimmed.isBlank()) {
+                values.add(trimmed);
+            }
+        }
+    }
+
     private GoogleIdTokenPayload parseAndValidateGoogleToken(String idToken) {
         try {
+            List<String> allowedClientIds = allowedGoogleClientIds();
+            if (allowedClientIds.isEmpty()) {
+                throw new IllegalStateException("google client ids are not configured.");
+            }
+
             String url = "https://oauth2.googleapis.com/tokeninfo?id_token=" + idToken;
 
             var response = restTemplate.getForEntity(url, GoogleIdTokenPayload.class);
             GoogleIdTokenPayload payload = response.getBody();
 
             if (payload == null) {
-                throw new IllegalArgumentException("Google token payload empty.");
+                throw socialTokenInvalid();
             }
 
             if (!"accounts.google.com".equals(payload.getIss())
                     && !"https://accounts.google.com".equals(payload.getIss())) {
-                throw new IllegalArgumentException("Invalid Google token issuer.");
+                throw socialTokenInvalid();
             }
 
-            if (!googleClientId.equals(payload.getAud())) {
-                throw new IllegalArgumentException("aud mismatch. (google)");
+            if (!allowedClientIds.contains(payload.getAud())) {
+                throw socialAudienceMismatch();
             }
 
             long now = Instant.now().getEpochSecond();
             if (payload.getExp() != null && payload.getExp() < now) {
-                throw new IllegalArgumentException("Google idToken expired.");
+                throw socialTokenInvalid();
             }
 
             return payload;
+        } catch (AuthException e) {
+            throw e;
         } catch (HttpClientErrorException e) {
-            throw new IllegalArgumentException("Google token verify failed: " + e.getStatusCode(), e);
+            throw socialTokenInvalid();
         } catch (Exception e) {
-            throw new IllegalArgumentException("Google token parse/verify failed.", e);
+            throw socialTokenInvalid();
         }
     }
 

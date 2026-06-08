@@ -141,6 +141,8 @@ apple:
 
 google:
   client-id: ${GOOGLE_CLIENT_ID:}
+  android-client-id: ${GOOGLE_ANDROID_CLIENT_ID:398195276422-4hosgi2odjcq47hoqhrk5lc37eo5dcbi.apps.googleusercontent.com}
+  allowed-client-ids: ${GOOGLE_ALLOWED_CLIENT_IDS:}
 
 firebase:
   enabled: ${FIREBASE_ENABLED:false}
