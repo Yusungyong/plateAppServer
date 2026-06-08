@@ -31,6 +31,12 @@ public enum ErrorCode {
     // USER (예시)
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_404", "사용자를 찾을 수 없습니다."),
 
+    // SEASON FOOD
+    SEASON_FOOD_INVALID_MONTH(HttpStatus.BAD_REQUEST, "SEASON_FOOD_INVALID_MONTH", "month must be between 1 and 12."),
+    SEASON_FOOD_NOT_FOUND(HttpStatus.NOT_FOUND, "SEASON_FOOD_NOT_FOUND", "Season food ingredient not found."),
+    SEASON_REGION_NOT_FOUND(HttpStatus.NOT_FOUND, "SEASON_REGION_NOT_FOUND", "Season region not found."),
+    SEASON_CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "SEASON_CATEGORY_NOT_FOUND", "Season food category not found."),
+
     // VIDEO/COMMENT 등
     VIDEO_NOT_FOUND(HttpStatus.NOT_FOUND, "VIDEO_404", "동영상을 찾을 수 없습니다."),
     COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "COMMENT_404", "댓글을 찾을 수 없습니다.");

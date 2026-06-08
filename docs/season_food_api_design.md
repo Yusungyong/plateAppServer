@@ -12,6 +12,30 @@
 
 ---
 
+## 구현 상태
+
+기준일: 2026-06-08
+
+- [x] `GET /api/season-foods` 구현 완료
+- [x] `GET /api/season-foods/{ingredientId}` 구현 완료
+- [x] `GET /api/season-food-categories` 구현 완료
+- [x] `GET /api/season-regions` 구현 완료
+- [x] 위 4개 조회 API를 `com.plateapp.plate_main.seasonfood` 패키지에 생성
+- [x] 위 4개 조회 API를 Spring Security 공개 GET 경로에 추가
+- [ ] `GET /api/season-foods/{ingredientId}/stores` 미구현: `fp_340` ~ `fp_343` 매칭 스키마와 배치 결과 필요
+- [ ] `GET /api/season-stores/nearby` 미구현: `fp_340` ~ `fp_343` 매칭 스키마와 위치 정렬 정책 필요
+- [ ] `GET /api/stores/{storeId}/season-foods` 미구현: 매장-제철음식 매칭 결과 필요
+- [ ] `GET /api/season-stores/home` 미구현: 홈 섹션 정책과 매칭 결과 필요
+- [ ] 관리자 매칭 API 미구현: 키워드 사전, 매칭 후보, 확정/제외, 재빌드 배치 스키마 필요
+
+운영 반영 전 선행 조건:
+
+1. `docs/sql/season_food_schema_fp_330_339.sql`의 `DROP TABLE ... CASCADE` 제거 또는 개발용 SQL 분리
+2. `fp_330` ~ `fp_339` 테이블을 운영 마이그레이션으로 적용
+3. seed 코드 누락값(`REASON:TASTE_PEAK`, `COOKING_TYPE:PAN_FRIED`) 보강
+
+---
+
 ## 1. API 계층 구분
 
 제철음식 API는 두 계층으로 나눈다.
