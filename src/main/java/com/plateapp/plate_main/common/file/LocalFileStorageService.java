@@ -20,9 +20,9 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class LocalFileStorageService {
 
-    private static final long MAX_SEASONAL_IMAGE_BYTES = 10L * 1024 * 1024;
-    private static final Set<String> SEASONAL_IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp", "gif");
-    private static final Set<String> SEASONAL_IMAGE_CONTENT_TYPES = Set.of(
+    private static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;
+    private static final Set<String> IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp", "gif");
+    private static final Set<String> IMAGE_CONTENT_TYPES = Set.of(
             "image/jpeg",
             "image/png",
             "image/webp",
@@ -40,39 +40,11 @@ public class LocalFileStorageService {
         this.publicBasePath = normalizeBasePath(publicBasePath);
     }
 
-    public String storeSeasonalImage(MultipartFile file, String bucket) {
-        if (file == null || file.isEmpty()) {
-            throw new AppException(ErrorCode.COMMON_INVALID_INPUT, "업로드 파일이 비어 있습니다.");
-        }
-        String originalFilename = file.getOriginalFilename() == null ? "upload.bin" : file.getOriginalFilename();
-        String safeFilename = UUID.randomUUID().toString().replace("-", "") + "-" + sanitizeFilename(originalFilename);
-        LocalDate today = LocalDate.now();
-        Path relativePath = Paths.get(
-                "seasonal",
-                bucket,
-                String.valueOf(today.getYear()),
-                String.format("%02d", today.getMonthValue()),
-                String.format("%02d", today.getDayOfMonth()),
-                safeFilename
-        );
-        Path targetPath = rootPath.resolve(relativePath).normalize();
-
-        try {
-            Files.createDirectories(targetPath.getParent());
-            try (InputStream inputStream = file.getInputStream()) {
-                Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
-            }
-            return toPublicUrl(relativePath);
-        } catch (IOException e) {
-            throw new AppException(ErrorCode.COMMON_INTERNAL_ERROR, "NAS 이미지 저장에 실패했습니다.");
-        }
-    }
-
     public String storeRestaurantFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new AppException(ErrorCode.COMMON_INVALID_INPUT, "Upload file is required.");
         }
-        validateSeasonalImage(file);
+        validateImageFile(file);
         String originalFilename = file.getOriginalFilename() == null ? "upload.bin" : file.getOriginalFilename();
         String safeFilename = UUID.randomUUID().toString().replace("-", "") + "-" + sanitizeFilename(originalFilename);
         LocalDate today = LocalDate.now();
@@ -107,7 +79,7 @@ public class LocalFileStorageService {
         try {
             Files.deleteIfExists(rootPath.resolve(relativePath).normalize());
         } catch (IOException e) {
-            throw new AppException(ErrorCode.COMMON_INTERNAL_ERROR, "NAS 이미지 삭제에 실패했습니다.");
+            throw new AppException(ErrorCode.COMMON_INTERNAL_ERROR, "File delete failed.");
         }
     }
 
@@ -142,19 +114,19 @@ public class LocalFileStorageService {
         return filename.replaceAll("[^A-Za-z0-9._-]", "_");
     }
 
-    private void validateSeasonalImage(MultipartFile file) {
-        if (file.getSize() > MAX_SEASONAL_IMAGE_BYTES) {
-            throw new AppException(ErrorCode.COMMON_INVALID_INPUT, "Seasonal image must be 10MB or less.");
+    private void validateImageFile(MultipartFile file) {
+        if (file.getSize() > MAX_IMAGE_BYTES) {
+            throw new AppException(ErrorCode.COMMON_INVALID_INPUT, "Image must be 10MB or less.");
         }
 
         String extension = extension(file.getOriginalFilename());
-        if (!SEASONAL_IMAGE_EXTENSIONS.contains(extension)) {
+        if (!IMAGE_EXTENSIONS.contains(extension)) {
             throw new AppException(ErrorCode.COMMON_INVALID_INPUT, "Only image files are allowed.");
         }
 
         String contentType = file.getContentType();
         if (contentType != null && !contentType.isBlank()
-                && !SEASONAL_IMAGE_CONTENT_TYPES.contains(contentType.toLowerCase(Locale.ROOT))) {
+                && !IMAGE_CONTENT_TYPES.contains(contentType.toLowerCase(Locale.ROOT))) {
             throw new AppException(ErrorCode.COMMON_INVALID_INPUT, "Only image files are allowed.");
         }
     }

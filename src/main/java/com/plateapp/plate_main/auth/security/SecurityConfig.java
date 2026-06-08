@@ -65,8 +65,6 @@ public class SecurityConfig {
                     "/api/home/image-thumbnails",
                     "/api/home/content-feed",
                     "/api/home/feed",
-                    "/api/home/seasonal",
-                    "/api/home/seasonal/*",
                     "/api/faqs",
                     "/api/faqs/*",
                     "/api/qna",
