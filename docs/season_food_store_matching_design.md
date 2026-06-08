@@ -6,6 +6,29 @@
 
 ---
 
+## 구현 상태
+
+기준일: 2026-06-08
+
+- [x] `fp_340` ~ `fp_343` 비파괴 생성 SQL 추가: `docs/sql/season_food_store_matching_schema_fp_340_343.sql`
+- [x] 공개 조회 API 구현 완료
+  - `GET /api/season-foods/{ingredientId}/stores`
+  - `GET /api/season-stores/nearby`
+  - `GET /api/stores/{storeId}/season-foods`
+  - `GET /api/season-stores/home`
+- [x] 관리자 운영 API 구현 완료
+  - 키워드 사전 목록/등록/수정/비활성화
+  - 매칭 후보 목록/상세/근거 조회
+  - 매칭 확정/제외
+- [ ] 자동 매칭 배치 미구현
+  - `fp_320`, `restaurant_menus`, `fp_400`, `fp_300` 텍스트 스캔
+  - `fp_341`, `fp_342` 재빌드
+  - `POST /api/admin/season-store-matches/rebuild`
+
+현재 구현된 API는 `fp_341_season_store_match`에 적재된 매칭 캐시를 조회한다. 운영 또는 로컬 DB에서 `fp_340` ~ `fp_343` 테이블이 없으면 서버는 500 대신 `SEASON_STORE_MATCH_NOT_READY`를 반환한다.
+
+---
+
 ## 1. 배경
 
 기존 제철음식 문서는 `fp_333_ingredient`를 중심으로 식재료, 제철 기간, 월별 점수, 제철 이유, 활용 요리를 관리한다.

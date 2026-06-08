@@ -7,8 +7,49 @@
 - `docs/season_food_api_design.md`
 - `docs/season_food_store_matching_design.md`
 - `docs/sql/season_food_schema_fp_330_339.sql`
+- `docs/sql/season_food_store_matching_schema_fp_340_343.sql`
 
 목적: 프론트에서 제철음식 목록, 상세, 카테고리, 지역, 제철음식 파는 집 화면을 구현할 때 필요한 API 호출 방식과 응답 필드를 정리한다.
+
+---
+
+## 구현 상태
+
+기준일: 2026-06-08
+
+프론트에서 호출 가능한 공개 API는 아래 8개다.
+
+| 상태 | API | 용도 |
+|---|---|---|
+| 구현 완료 | `GET /api/season-foods` | 제철음식 목록 |
+| 구현 완료 | `GET /api/season-foods/{ingredientId}` | 제철음식 상세 |
+| 구현 완료 | `GET /api/season-food-categories` | 카테고리 트리 |
+| 구현 완료 | `GET /api/season-regions` | 지역 트리 |
+| 구현 완료 | `GET /api/season-foods/{ingredientId}/stores` | 특정 제철음식을 파는 집 목록 |
+| 구현 완료 | `GET /api/season-stores/nearby` | 내 주변 제철음식 파는 집 |
+| 구현 완료 | `GET /api/stores/{storeId}/season-foods` | 집 상세의 제철 메뉴 배지 |
+| 구현 완료 | `GET /api/season-stores/home` | 홈용 제철 집 섹션 |
+
+관리자 화면용 API도 구현되어 있다.
+
+| 상태 | API | 용도 |
+|---|---|---|
+| 구현 완료 | `GET /api/admin/season-match-keywords` | 매칭 키워드 목록 |
+| 구현 완료 | `POST /api/admin/season-match-keywords` | 매칭 키워드 등록 |
+| 구현 완료 | `PUT /api/admin/season-match-keywords/{keywordId}` | 매칭 키워드 수정 |
+| 구현 완료 | `DELETE /api/admin/season-match-keywords/{keywordId}` | 매칭 키워드 비활성화 |
+| 구현 완료 | `GET /api/admin/season-store-matches` | 매칭 후보 목록 |
+| 구현 완료 | `GET /api/admin/season-store-matches/{matchId}` | 매칭 후보 상세/근거 |
+| 구현 완료 | `POST /api/admin/season-store-matches/{matchId}/confirm` | 매칭 확정 |
+| 구현 완료 | `POST /api/admin/season-store-matches/{matchId}/reject` | 매칭 제외 |
+| 미구현 | `POST /api/admin/season-store-matches/rebuild` | 자동 매칭 배치 재생성 |
+
+주의사항:
+
+1. `fp_330` ~ `fp_339` 테이블이 있어야 제철음식 정보 API가 정상 동작한다.
+2. `fp_340` ~ `fp_343` 테이블과 `fp_341` 매칭 캐시 데이터가 있어야 집 추천/매칭 API가 의미 있는 결과를 반환한다.
+3. `fp_340` ~ `fp_343` 테이블이 없으면 매칭 API는 `409 SEASON_STORE_MATCH_NOT_READY`를 반환한다.
+4. 공개 조회 API는 인증 없이 호출 가능하다. 관리자 API는 기존 `/api/admin/**` 권한 정책을 따른다.
 
 ---
 
@@ -557,7 +598,181 @@ GET /api/season-stores/home?month=12&lat=37.5665&lng=126.9780&limit=10
 
 ---
 
-## 10. TypeScript 타입 예시
+## 10. 관리자 매칭 운영 API
+
+관리자 화면에서 제철음식-집 매칭 품질을 운영하기 위한 API다. 모든 요청은 기존 `/api/admin/**` 권한 정책을 따르므로 관리자 access token이 필요하다.
+
+### 10.1 키워드 사전 목록
+
+```http
+GET /api/admin/season-match-keywords?ingredientId=ING_GUL&keywordType=ALIAS&keyword=생굴&page=0&size=20
+```
+
+Query Parameters:
+
+| 이름 | 타입 | 필수 | 기본값 | 설명 |
+|---|---|---:|---|---|
+| `ingredientId` | string | N | null | 식재료 필터 |
+| `keywordType` | string | N | null | `BASE`, `ALIAS`, `DISH`, `MENU`, `EXCLUDE` |
+| `keyword` | string | N | null | 키워드 검색어 |
+| `page` | number | N | 0 | 0부터 시작 |
+| `size` | number | N | 20 | 최대 50 |
+
+응답 `data`:
+
+```json
+{
+  "items": [
+    {
+      "keywordId": 1,
+      "ingredientId": "ING_GUL",
+      "ingredientName": "굴",
+      "keyword": "생굴",
+      "keywordType": "ALIAS",
+      "matchWeight": 1.2,
+      "exactMatch": false,
+      "description": "굴 별칭",
+      "useYn": "Y",
+      "createdAt": "2026-06-08T12:00:00Z",
+      "updatedAt": null
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "hasNext": false
+}
+```
+
+### 10.2 키워드 등록/수정/비활성화
+
+```http
+POST /api/admin/season-match-keywords
+PUT /api/admin/season-match-keywords/{keywordId}
+DELETE /api/admin/season-match-keywords/{keywordId}
+```
+
+등록/수정 요청 Body:
+
+```json
+{
+  "ingredientId": "ING_GUL",
+  "keyword": "생굴",
+  "keywordType": "ALIAS",
+  "matchWeight": 1.2,
+  "exactMatch": false,
+  "description": "굴 별칭"
+}
+```
+
+`DELETE`는 실제 삭제가 아니라 `useYn = "N"` 비활성화로 처리한다.
+
+### 10.3 매칭 후보 목록
+
+```http
+GET /api/admin/season-store-matches?ingredientId=ING_GUL&status=AUTO&source=FP320_MENU&keyword=굴국밥&page=0&size=20
+```
+
+Query Parameters:
+
+| 이름 | 타입 | 필수 | 기본값 | 설명 |
+|---|---|---:|---|---|
+| `ingredientId` | string | N | null | 식재료 필터 |
+| `status` | string | N | null | `AUTO`, `CONFIRMED`, `REJECTED` |
+| `source` | string | N | null | `FP320_MENU`, `RESTAURANT_MENU`, `FEED`, `VIDEO`, `MIXED`, `MANUAL` |
+| `keyword` | string | N | null | 집 이름, 메뉴명, 매칭 키워드 검색 |
+| `page` | number | N | 0 | 0부터 시작 |
+| `size` | number | N | 20 | 최대 50 |
+
+응답 `data.items[]`:
+
+```json
+{
+  "matchId": 1001,
+  "ingredientId": "ING_GUL",
+  "ingredientName": "굴",
+  "storeId": 123,
+  "restaurantId": null,
+  "placeId": "google-place-id",
+  "storeName": "통영굴마을",
+  "representativeMenuName": "굴국밥",
+  "matchScore": 142.5,
+  "seasonScore": 95,
+  "evidenceCount": 2,
+  "matchStatus": "AUTO",
+  "matchSource": "FP320_MENU",
+  "matchedKeywords": "굴국밥,굴",
+  "generatedAt": "2026-06-08T12:00:00Z",
+  "expiresAt": null
+}
+```
+
+### 10.4 매칭 후보 상세/근거
+
+```http
+GET /api/admin/season-store-matches/{matchId}
+```
+
+응답 `data`:
+
+```json
+{
+  "match": {
+    "matchId": 1001,
+    "ingredientId": "ING_GUL",
+    "ingredientName": "굴",
+    "storeId": 123,
+    "storeName": "통영굴마을",
+    "representativeMenuName": "굴국밥",
+    "matchStatus": "AUTO",
+    "matchSource": "FP320_MENU"
+  },
+  "evidence": [
+    {
+      "evidenceId": 2001,
+      "targetType": "FP320_MENU",
+      "targetId": "MENU_123",
+      "matchedField": "item_name",
+      "matchedKeyword": "굴국밥",
+      "matchedText": "통영 굴국밥",
+      "fieldWeight": 1.0,
+      "keywordWeight": 1.5,
+      "score": 150.0,
+      "createdAt": "2026-06-08T12:00:00Z"
+    }
+  ]
+}
+```
+
+### 10.5 매칭 확정/제외
+
+```http
+POST /api/admin/season-store-matches/{matchId}/confirm
+POST /api/admin/season-store-matches/{matchId}/reject
+```
+
+확정 요청 Body:
+
+```json
+{
+  "representativeMenuName": "굴국밥",
+  "representativeImageUrl": "https://...",
+  "note": "운영자 확인 완료"
+}
+```
+
+제외 요청 Body:
+
+```json
+{
+  "note": "굴비 메뉴라 굴 매칭에서 제외"
+}
+```
+
+성공 시 응답은 `GET /api/admin/season-store-matches/{matchId}`와 같은 상세 형태다.
+
+---
+
+## 11. TypeScript 타입 예시
 
 ```ts
 export type ApiResponse<T> = {
@@ -635,13 +850,108 @@ export type SeasonStoreItem = {
   matchStatus?: string;
   matchSource?: string;
 };
+
+export type IngredientStoreResponse = {
+  ingredient: {
+    ingredientId: string;
+    name: string;
+    seasonScore?: number | null;
+    isPeak: boolean;
+  };
+  items: SeasonStoreItem[];
+  page: number;
+  size: number;
+  hasNext: boolean;
+};
+
+export type NearbySeasonStoresResponse = {
+  month: number;
+  items: Array<{
+    ingredientId: string;
+    ingredientName: string;
+    storeId?: number | null;
+    restaurantId?: number | null;
+    placeId?: string | null;
+    storeName: string;
+    representativeMenuName?: string | null;
+    representativeImageUrl?: string | null;
+    seasonScore?: number | null;
+    isPeak: boolean;
+    distanceM?: number | null;
+    reasonText?: string | null;
+  }>;
+};
+
+export type StoreSeasonFoodsResponse = {
+  storeId: number;
+  items: Array<{
+    ingredientId: string;
+    ingredientName: string;
+    representativeMenuName?: string | null;
+    seasonScore?: number | null;
+    isPeak: boolean;
+    reasonText?: string | null;
+  }>;
+};
+
+export type HomeSeasonStoresResponse = {
+  sections: Array<{
+    sectionId: string;
+    title: string;
+    ingredientId: string;
+    items: Array<{
+      matchId: number;
+      storeId?: number | null;
+      restaurantId?: number | null;
+      placeId?: string | null;
+      storeName: string;
+      representativeMenuName?: string | null;
+      thumbnailUrl?: string | null;
+      distanceM?: number | null;
+      reasonText?: string | null;
+    }>;
+  }>;
+};
+
+export type SeasonMatchKeyword = {
+  keywordId: number;
+  ingredientId: string;
+  ingredientName: string;
+  keyword: string;
+  keywordType: "BASE" | "ALIAS" | "DISH" | "MENU" | "EXCLUDE";
+  matchWeight: number;
+  exactMatch: boolean;
+  description?: string | null;
+  useYn: "Y" | "N";
+  createdAt: string;
+  updatedAt?: string | null;
+};
+
+export type SeasonStoreMatchAdminItem = {
+  matchId: number;
+  ingredientId: string;
+  ingredientName: string;
+  storeId?: number | null;
+  restaurantId?: number | null;
+  placeId?: string | null;
+  storeName?: string | null;
+  representativeMenuName?: string | null;
+  matchScore: number;
+  seasonScore?: number | null;
+  evidenceCount: number;
+  matchStatus: "AUTO" | "CONFIRMED" | "REJECTED";
+  matchSource: "FP320_MENU" | "RESTAURANT_MENU" | "FEED" | "VIDEO" | "MIXED" | "MANUAL";
+  matchedKeywords?: string | null;
+  generatedAt: string;
+  expiresAt?: string | null;
+};
 ```
 
 ---
 
-## 11. 화면별 추천 호출 흐름
+## 12. 화면별 추천 호출 흐름
 
-### 11.1 제철음식 홈
+### 12.1 제철음식 홈
 
 ```text
 1. GET /api/season-foods?month={currentMonth}
@@ -649,14 +959,14 @@ export type SeasonStoreItem = {
 3. 위치 권한이 없으면 제철음식 목록만 표시하거나 기본 홈 섹션 호출
 ```
 
-### 11.2 제철음식 상세
+### 12.2 제철음식 상세
 
 ```text
 1. GET /api/season-foods/{ingredientId}?month={currentMonth}
 2. 하단에 파는 집 섹션이 필요하면 GET /api/season-foods/{ingredientId}/stores
 ```
 
-### 11.3 집 상세
+### 12.3 집 상세
 
 ```text
 1. 기존 집 상세 API 호출
@@ -664,7 +974,7 @@ export type SeasonStoreItem = {
 3. 응답 items가 있으면 제철 메뉴 배지 노출
 ```
 
-### 11.4 지도/주변
+### 12.4 지도/주변
 
 ```text
 1. 위치 권한 확인
@@ -674,9 +984,9 @@ export type SeasonStoreItem = {
 
 ---
 
-## 12. 빈 결과 처리
+## 13. 빈 결과 처리
 
-### 12.1 목록이 비어 있는 경우
+### 13.1 목록이 비어 있는 경우
 
 ```json
 {
@@ -694,7 +1004,9 @@ export type SeasonStoreItem = {
 
 프론트는 오류로 처리하지 않는다.
 
-### 12.2 매칭 API가 아직 준비되지 않은 경우
+### 13.2 매칭 API가 아직 준비되지 않은 경우
+
+서버 코드는 구현되어 있지만 로컬/운영 DB에 `fp_340` ~ `fp_343` 테이블이 없거나 `fp_341` 매칭 캐시가 아직 준비되지 않은 경우다.
 
 ```json
 {
@@ -708,7 +1020,7 @@ export type SeasonStoreItem = {
 
 ---
 
-## 13. 에러 처리 가이드
+## 14. 에러 처리 가이드
 
 | errorCode | 프론트 처리 |
 |---|---|
@@ -721,7 +1033,7 @@ export type SeasonStoreItem = {
 
 ---
 
-## 14. MVP 우선순위
+## 15. MVP 우선순위
 
 프론트 입장에서 1차 구현 우선순위는 다음과 같다.
 
@@ -733,5 +1045,5 @@ export type SeasonStoreItem = {
 5. GET /api/stores/{storeId}/season-foods
 ```
 
-`/stores`, `/nearby`, `/home` 계열은 서버의 `fp_340` ~ `fp_343` 매칭 테이블 구현 이후 붙인다.
+`/stores`, `/nearby`, `/home` 계열은 서버 구현이 완료되어 있다. 프론트에서는 `SEASON_STORE_MATCH_NOT_READY`가 오면 해당 섹션만 숨기고, `fp_341` 매칭 캐시가 채워진 환경에서는 정상 노출한다.
 

@@ -7,6 +7,7 @@
 - `docs/season_food_server_share.md`
 - `docs/season_food_store_matching_design.md`
 - `docs/season_food_frontend_api_guide.md`
+- `docs/sql/season_food_store_matching_schema_fp_340_343.sql`
 
 목적: `fp_330` ~ `fp_339` 제철음식 본체 스키마와 제철음식 판매 집 매칭 구조를 기준으로 서버 API 경계, 응답 규격, 구현 순서를 정의한다.
 
@@ -22,17 +23,22 @@
 - [x] `GET /api/season-regions` 구현 완료
 - [x] 위 4개 조회 API를 `com.plateapp.plate_main.seasonfood` 패키지에 생성
 - [x] 위 4개 조회 API를 Spring Security 공개 GET 경로에 추가
-- [ ] `GET /api/season-foods/{ingredientId}/stores` 미구현: `fp_340` ~ `fp_343` 매칭 스키마와 배치 결과 필요
-- [ ] `GET /api/season-stores/nearby` 미구현: `fp_340` ~ `fp_343` 매칭 스키마와 위치 정렬 정책 필요
-- [ ] `GET /api/stores/{storeId}/season-foods` 미구현: 매장-제철음식 매칭 결과 필요
-- [ ] `GET /api/season-stores/home` 미구현: 홈 섹션 정책과 매칭 결과 필요
-- [ ] 관리자 매칭 API 미구현: 키워드 사전, 매칭 후보, 확정/제외, 재빌드 배치 스키마 필요
+- [x] `docs/sql/season_food_store_matching_schema_fp_340_343.sql` 추가: `fp_340` ~ `fp_343` 비파괴 생성 SQL
+- [x] `GET /api/season-foods/{ingredientId}/stores` 구현 완료: `fp_341` 매칭 캐시 조회 기반
+- [x] `GET /api/season-stores/nearby` 구현 완료: `fp_341` + `fp_310` 거리 정렬 기반
+- [x] `GET /api/stores/{storeId}/season-foods` 구현 완료: 매장 상세 제철 배지 조회
+- [x] `GET /api/season-stores/home` 구현 완료: 매칭 캐시 기반 홈 섹션 조회
+- [x] 관리자 키워드 API 구현 완료: 목록, 등록, 수정, 비활성화
+- [x] 관리자 매칭 후보 API 구현 완료: 목록, 상세/근거, 확정, 제외
+- [ ] `POST /api/admin/season-store-matches/rebuild` 미구현: 자동 매칭 배치 로직 필요
 
 운영 반영 전 선행 조건:
 
 1. `docs/sql/season_food_schema_fp_330_339.sql`의 `DROP TABLE ... CASCADE` 제거 또는 개발용 SQL 분리
 2. `fp_330` ~ `fp_339` 테이블을 운영 마이그레이션으로 적용
-3. seed 코드 누락값(`REASON:TASTE_PEAK`, `COOKING_TYPE:PAN_FRIED`) 보강
+3. `docs/sql/season_food_store_matching_schema_fp_340_343.sql`을 운영 마이그레이션으로 적용
+4. seed 코드 누락값(`REASON:TASTE_PEAK`, `COOKING_TYPE:PAN_FRIED`) 보강
+5. 매칭 캐시(`fp_341`)를 채우는 자동 배치 또는 수동 적재 절차 준비
 
 ---
 

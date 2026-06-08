@@ -36,6 +36,10 @@ public enum ErrorCode {
     SEASON_FOOD_NOT_FOUND(HttpStatus.NOT_FOUND, "SEASON_FOOD_NOT_FOUND", "Season food ingredient not found."),
     SEASON_REGION_NOT_FOUND(HttpStatus.NOT_FOUND, "SEASON_REGION_NOT_FOUND", "Season region not found."),
     SEASON_CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "SEASON_CATEGORY_NOT_FOUND", "Season food category not found."),
+    SEASON_STORE_MATCH_NOT_READY(HttpStatus.CONFLICT, "SEASON_STORE_MATCH_NOT_READY", "Season store match data is not ready."),
+    SEASON_STORE_MATCH_NOT_FOUND(HttpStatus.NOT_FOUND, "SEASON_STORE_MATCH_NOT_FOUND", "Season store match not found."),
+    SEASON_KEYWORD_DUPLICATED(HttpStatus.CONFLICT, "SEASON_KEYWORD_DUPLICATED", "Season match keyword is duplicated."),
+    SEASON_KEYWORD_INVALID(HttpStatus.BAD_REQUEST, "SEASON_KEYWORD_INVALID", "Season match keyword is invalid."),
 
     // VIDEO/COMMENT 등
     VIDEO_NOT_FOUND(HttpStatus.NOT_FOUND, "VIDEO_404", "동영상을 찾을 수 없습니다."),
