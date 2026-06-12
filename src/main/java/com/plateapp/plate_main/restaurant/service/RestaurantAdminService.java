@@ -192,7 +192,7 @@ public class RestaurantAdminService {
                 menuId,
                 mediaType,
                 usageType,
-                normalizeRequired(request.fileUrl(), "media[].fileUrl is required"),
+                requireMediaObjectKey(request.fileUrl()),
                 normalizeNullable(request.originalName()),
                 normalizeNullable(request.mimeType()),
                 fileSizeBytes,
@@ -241,6 +241,7 @@ public class RestaurantAdminService {
                 .filter(media -> MEDIA_IMAGE.equals(media.getMediaType()))
                 .min(Comparator.comparing(RestaurantMedia::getDisplayOrder).thenComparing(RestaurantMedia::getId))
                 .map(RestaurantMedia::getFileUrl)
+                .map(s3UploadService::toDeliveryUrl)
                 .orElse(null);
         return new RestaurantAdminDtos.RestaurantListItem(
                 restaurant.getId(),
@@ -270,7 +271,7 @@ public class RestaurantAdminService {
                 media.getId(),
                 media.getMediaType(),
                 media.getUsageType(),
-                media.getFileUrl(),
+                s3UploadService.toDeliveryUrl(media.getFileUrl()),
                 media.getOriginalName(),
                 media.getMimeType(),
                 media.getFileSizeBytes(),
@@ -399,7 +400,7 @@ public class RestaurantAdminService {
     private Set<String> loadRestaurantMediaUrls(Long restaurantId) {
         return mediaRepository.findByRestaurantIdOrderByDisplayOrderAscIdAsc(restaurantId).stream()
                 .map(RestaurantMedia::getFileUrl)
-                .map(this::normalizeNullable)
+                .map(this::toMediaObjectKey)
                 .filter(url -> url != null)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
@@ -420,7 +421,7 @@ public class RestaurantAdminService {
     private void addMediaUrl(Set<String> urls, RestaurantAdminDtos.RestaurantMediaRequest media) {
         String url = media == null ? null : normalizeNullable(media.fileUrl());
         if (url != null) {
-            urls.add(url);
+            urls.add(requireMediaObjectKey(url));
         }
     }
 
@@ -433,11 +434,29 @@ public class RestaurantAdminService {
     private void deleteMediaObjects(Set<String> mediaUrls) {
         for (String mediaUrl : mediaUrls) {
             try {
-                s3UploadService.deleteObjectByUrl(mediaUrl);
+                s3UploadService.deleteObjectByKey(mediaUrl);
             } catch (RuntimeException e) {
-                log.warn("Failed to delete restaurant media from S3. fileUrl={}", mediaUrl, e);
+                log.warn("Failed to delete restaurant media from S3. objectKey={}", mediaUrl, e);
             }
         }
+    }
+
+    private String requireMediaObjectKey(String fileUrl) {
+        String normalized = normalizeRequired(fileUrl, "media[].fileUrl is required");
+        String objectKey = normalizeNullable(s3UploadService.toObjectKey(normalized));
+        if (objectKey == null) {
+            throw new AppException(ErrorCode.COMMON_INVALID_INPUT, "media[].fileUrl must be a valid S3 or CDN URL.");
+        }
+        return objectKey;
+    }
+
+    private String toMediaObjectKey(String fileUrl) {
+        String normalized = normalizeNullable(fileUrl);
+        if (normalized == null) {
+            return null;
+        }
+        String objectKey = normalizeNullable(s3UploadService.toObjectKey(normalized));
+        return objectKey == null ? normalized : objectKey;
     }
 
     private <T> List<T> nullToEmpty(List<T> values) {

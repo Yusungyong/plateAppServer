@@ -29,11 +29,12 @@ public class RestaurantAdminFileService {
 
     public RestaurantAdminDtos.RestaurantFileUploadResponse upload(MultipartFile file) {
         validateFile(file);
-        String fileUrl = uploadToS3(file);
+        String contentType = contentTypeForExtension(extension(file.getOriginalFilename()));
+        String objectKey = uploadToS3(file);
         return new RestaurantAdminDtos.RestaurantFileUploadResponse(
-                fileUrl,
+                s3UploadService.toDeliveryUrl(objectKey),
                 file.getOriginalFilename(),
-                file.getContentType(),
+                contentType,
                 file.getSize()
         );
     }
@@ -70,17 +71,31 @@ public class RestaurantAdminFileService {
     }
 
     private String uploadToS3(MultipartFile file) {
-        String storedFilename = UUID.randomUUID().toString().replace("-", "") + "." + extension(file.getOriginalFilename());
+        String extension = extension(file.getOriginalFilename());
+        String storedFilename = UUID.randomUUID().toString().replace("-", "") + "." + extension;
         try {
-            return s3UploadService.uploadStreamWithPrefix(
+            return s3UploadService.uploadStreamKeyWithPrefix(
                     restaurantFilePrefix,
                     storedFilename,
                     file.getInputStream(),
                     file.getSize(),
-                    file.getContentType()
+                    contentTypeForExtension(extension)
             );
         } catch (IOException e) {
             throw new AppException(ErrorCode.COMMON_INTERNAL_ERROR, "Restaurant file upload failed.");
         }
+    }
+
+    private String contentTypeForExtension(String extension) {
+        return switch (extension) {
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "png" -> "image/png";
+            case "webp" -> "image/webp";
+            case "gif" -> "image/gif";
+            case "mp4" -> "video/mp4";
+            case "mov" -> "video/quicktime";
+            case "webm" -> "video/webm";
+            default -> "application/octet-stream";
+        };
     }
 }

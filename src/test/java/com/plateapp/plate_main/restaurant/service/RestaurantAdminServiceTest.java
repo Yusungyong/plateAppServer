@@ -1,6 +1,7 @@
 package com.plateapp.plate_main.restaurant.service;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -29,6 +30,9 @@ class RestaurantAdminServiceTest {
     private static final String OLD_URL = "https://foodplayerbucket.s3.ap-northeast-2.amazonaws.com/restaurants/old.jpg";
     private static final String KEEP_URL = "https://foodplayerbucket.s3.ap-northeast-2.amazonaws.com/restaurants/keep.jpg";
     private static final String NEW_URL = "https://foodplayerbucket.s3.ap-northeast-2.amazonaws.com/restaurants/new.jpg";
+    private static final String OLD_KEY = "restaurants/old.jpg";
+    private static final String KEEP_KEY = "restaurants/keep.jpg";
+    private static final String NEW_KEY = "restaurants/new.jpg";
 
     @Mock
     private RestaurantRepository restaurantRepository;
@@ -66,12 +70,15 @@ class RestaurantAdminServiceTest {
                 .thenReturn(List.of(media(OLD_URL), media(KEEP_URL)));
         when(categoryRepository.save(any(RestaurantCategory.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(mediaRepository.save(any(RestaurantMedia.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(s3UploadService.toObjectKey(OLD_URL)).thenReturn(OLD_KEY);
+        when(s3UploadService.toObjectKey(KEEP_URL)).thenReturn(KEEP_KEY);
+        when(s3UploadService.toObjectKey(NEW_URL)).thenReturn(NEW_KEY);
 
         service.updateRestaurant(1L, upsertRequest(List.of(mediaRequest(KEEP_URL, 0), mediaRequest(NEW_URL, 1))));
 
-        verify(s3UploadService).deleteObjectByUrl(OLD_URL);
-        verify(s3UploadService, never()).deleteObjectByUrl(KEEP_URL);
-        verify(s3UploadService, never()).deleteObjectByUrl(NEW_URL);
+        verify(s3UploadService).deleteObjectByKey(OLD_KEY);
+        verify(s3UploadService, never()).deleteObjectByKey(KEEP_KEY);
+        verify(s3UploadService, never()).deleteObjectByKey(NEW_KEY);
     }
 
     @Test
@@ -80,12 +87,14 @@ class RestaurantAdminServiceTest {
         when(restaurantRepository.findById(1L)).thenReturn(Optional.of(restaurant));
         when(mediaRepository.findByRestaurantIdOrderByDisplayOrderAscIdAsc(1L))
                 .thenReturn(List.of(media(OLD_URL), media(KEEP_URL)));
+        when(s3UploadService.toObjectKey(OLD_URL)).thenReturn(OLD_KEY);
+        when(s3UploadService.toObjectKey(KEEP_URL)).thenReturn(KEEP_KEY);
 
         service.deleteRestaurant(1L);
 
         verify(restaurantRepository).delete(restaurant);
-        verify(s3UploadService).deleteObjectByUrl(OLD_URL);
-        verify(s3UploadService).deleteObjectByUrl(KEEP_URL);
+        verify(s3UploadService).deleteObjectByKey(OLD_KEY);
+        verify(s3UploadService).deleteObjectByKey(KEEP_KEY);
     }
 
     @Test
@@ -96,10 +105,12 @@ class RestaurantAdminServiceTest {
                 .thenReturn(List.of(media(KEEP_URL)));
         when(categoryRepository.save(any(RestaurantCategory.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(mediaRepository.save(any(RestaurantMedia.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(s3UploadService.toObjectKey(KEEP_URL)).thenReturn(KEEP_KEY);
 
         service.updateRestaurant(1L, upsertRequest(List.of(mediaRequest(KEEP_URL, 0))));
 
-        verify(s3UploadService, never()).deleteObjectByUrl(KEEP_URL);
+        verify(mediaRepository).save(argThat(media -> KEEP_KEY.equals(media.getFileUrl())));
+        verify(s3UploadService, never()).deleteObjectByKey(KEEP_KEY);
     }
 
     private Restaurant restaurant(Long id) {

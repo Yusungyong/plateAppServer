@@ -21,6 +21,7 @@ public class S3UploadService {
     private final S3Client s3Client;
     private final String bucket;
     private final String baseUrl;
+    private final String cdnBaseUrl;
     private final String bucketHost;
     private final String videoPrefix;
     private final String imagePrefix;
@@ -32,6 +33,7 @@ public class S3UploadService {
             S3Client s3Client,
             @Value("${aws.s3.bucket}") String bucket,
             @Value("${aws.s3.base-url:https://s3.amazonaws.com}") String baseUrl,
+            @Value("${aws.s3.cdn-base-url:}") String cdnBaseUrl,
             @Value("${aws.s3.videoFilePath:}") String videoPrefix,
             @Value("${aws.s3.imageFilePath:}") String imagePrefix,
             @Value("${aws.s3.feedImagePath:}") String feedImagePrefix,
@@ -41,7 +43,8 @@ public class S3UploadService {
     ) {
         this.s3Client = s3Client;
         this.bucket = bucket;
-        this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        this.baseUrl = normalizeBaseUrl(baseUrl);
+        this.cdnBaseUrl = normalizeBaseUrl(cdnBaseUrl);
         this.bucketHost = "https://" + bucket + ".s3." + region + ".amazonaws.com";
         this.videoPrefix = normalizePrefix(videoPrefix);
         this.imagePrefix = normalizePrefix(imagePrefix);
@@ -71,6 +74,17 @@ public class S3UploadService {
     }
 
     public String uploadStreamWithPrefix(String prefix, String originalFilename, InputStream inputStream, long contentLength, String contentType) {
+        String key = uploadStreamKeyWithPrefix(prefix, originalFilename, inputStream, contentLength, contentType);
+        return buildPublicUrl(key);
+    }
+
+    public String uploadStreamKeyWithPrefix(
+            String prefix,
+            String originalFilename,
+            InputStream inputStream,
+            long contentLength,
+            String contentType
+    ) {
         String safeName = (originalFilename == null || originalFilename.isBlank())
                 ? "upload.bin"
                 : originalFilename;
@@ -86,7 +100,7 @@ public class S3UploadService {
                 .build();
 
         s3Client.putObject(putRequest, RequestBody.fromInputStream(inputStream, contentLength));
-        return buildPublicUrl(key);
+        return key;
     }
 
     public String uploadProfileImage(String originalFilename, InputStream inputStream, long contentLength, String contentType) {
@@ -255,6 +269,24 @@ public class S3UploadService {
         return buildPublicUrl(key);
     }
 
+    public String toObjectKey(String objectUrlOrKey) {
+        return extractKey(objectUrlOrKey);
+    }
+
+    public String toDeliveryUrl(String objectUrlOrKey) {
+        if (objectUrlOrKey == null || objectUrlOrKey.isBlank()) {
+            return objectUrlOrKey;
+        }
+        String key = extractKey(objectUrlOrKey);
+        if (key == null || key.isBlank()) {
+            return objectUrlOrKey;
+        }
+        if (!cdnBaseUrl.isBlank()) {
+            return cdnBaseUrl + "/" + key;
+        }
+        return buildPublicUrl(key);
+    }
+
     public void deleteVideoObject(String storedPath) {
         if (storedPath == null || storedPath.isBlank()) {
             return;
@@ -322,6 +354,18 @@ public class S3UploadService {
         if (!objectUrl.contains("://")) {
             return objectUrl.startsWith("/") ? objectUrl.substring(1) : objectUrl;
         }
+        String cdnKey = stripBaseUrl(objectUrl, cdnBaseUrl);
+        if (cdnKey != null) {
+            return cdnKey;
+        }
+        String baseUrlKey = stripBaseUrl(objectUrl, baseUrl);
+        if (baseUrlKey != null) {
+            return baseUrlKey;
+        }
+        String bucketHostKey = stripBaseUrl(objectUrl, bucketHost);
+        if (bucketHostKey != null) {
+            return bucketHostKey;
+        }
         try {
             URI uri = URI.create(objectUrl);
             String path = uri.getPath();
@@ -334,6 +378,26 @@ public class S3UploadService {
         }
     }
 
+    private String stripBaseUrl(String objectUrl, String candidateBaseUrl) {
+        if (candidateBaseUrl == null || candidateBaseUrl.isBlank()) {
+            return null;
+        }
+        String prefix = candidateBaseUrl + "/";
+        if (!objectUrl.startsWith(prefix)) {
+            return null;
+        }
+        String key = objectUrl.substring(prefix.length());
+        int queryIndex = key.indexOf('?');
+        if (queryIndex >= 0) {
+            key = key.substring(0, queryIndex);
+        }
+        int fragmentIndex = key.indexOf('#');
+        if (fragmentIndex >= 0) {
+            key = key.substring(0, fragmentIndex);
+        }
+        return key.isBlank() ? null : key;
+    }
+
     private String normalizePrefix(String prefix) {
         if (prefix == null || prefix.isBlank()) {
             return "";
@@ -343,5 +407,16 @@ public class S3UploadService {
             cleaned += "/";
         }
         return cleaned;
+    }
+
+    private String normalizeBaseUrl(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String normalized = value.trim();
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
     }
 }

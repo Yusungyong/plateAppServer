@@ -98,6 +98,7 @@ aws:
     region: ap-northeast-2
     bucket: foodplayerbucket
     base-url: https://foodplayerbucket.s3.ap-northeast-2.amazonaws.com
+    cdn-base-url: ${AWS_S3_CDN_BASE_URL:}
     videoFilePath: foodvideos/
     imageFilePath: foodimages/
     feedImagePath: FeedImages/
