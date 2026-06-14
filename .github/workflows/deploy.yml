@@ -5,10 +5,12 @@ on:
     workflows: ["CI"]
     types:
       - completed
+    branches: ["main"]
 
 permissions:
   id-token: write
   contents: read
+  actions: read
 
 env:
   AWS_REGION: ap-northeast-2
@@ -16,35 +18,46 @@ env:
   CODEDEPLOY_APP: plate-app-server
   CODEDEPLOY_GROUP: plate-main-deploy-group
   ROLE_ARN: arn:aws:iam::174977828951:role/GitHubActions-CodeDeploy
-  CODEDEPLOY_PRINT_TARGET_DIAGNOSTICS: "false"
+  CODEDEPLOY_WAIT_ATTEMPTS: "90"
+  CODEDEPLOY_WAIT_SECONDS: "5"
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
 
 jobs:
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up JDK
-        uses: actions/setup-java@v5.2.0
         with:
-          distribution: temurin
-          java-version: "17"
-          cache: maven
+          ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Prepare mvnw
-        run: chmod +x mvnw
-
-      - name: Build
-        run: ./mvnw -B -DskipTests package
+      - name: Download tested app jar
+        uses: actions/download-artifact@v4
+        with:
+          name: app-jar
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: build-artifact
 
       - name: Prepare scripts
         run: chmod +x deploy/*.sh
 
       - name: Prepare bundle
-        run: cp target/*.jar app.jar
+        run: |
+          set -euo pipefail
+          jar_count="$(find build-artifact -maxdepth 1 -type f -name '*.jar' | wc -l | tr -d ' ')"
+          if [ "${jar_count}" != "1" ]; then
+            echo "Expected exactly one jar artifact, found ${jar_count}."
+            find build-artifact -maxdepth 2 -type f -print
+            exit 1
+          fi
+          cp "$(find build-artifact -maxdepth 1 -type f -name '*.jar' -print -quit)" app.jar
 
       - name: Package deployment bundle
         run: zip -r deployment.zip appspec.yml deploy app.jar
@@ -56,7 +69,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Upload to S3
-        run: aws s3api put-object --bucket ${{ env.S3_BUCKET }} --key deployments/${{ github.sha }}.zip --body deployment.zip
+        run: aws s3api put-object --bucket ${{ env.S3_BUCKET }} --key deployments/${{ github.event.workflow_run.head_sha }}.zip --body deployment.zip
 
       - name: Create CodeDeploy deployment
         id: codedeploy
@@ -66,8 +79,9 @@ jobs:
             aws deploy create-deployment \
               --application-name "${{ env.CODEDEPLOY_APP }}" \
               --deployment-group-name "${{ env.CODEDEPLOY_GROUP }}" \
-              --s3-location "bucket=${{ env.S3_BUCKET }},key=deployments/${{ github.sha }}.zip,bundleType=zip" \
+              --s3-location "bucket=${{ env.S3_BUCKET }},key=deployments/${{ github.event.workflow_run.head_sha }}.zip,bundleType=zip" \
               --file-exists-behavior OVERWRITE \
+              --description "GitHub Actions deploy ${{ github.event.workflow_run.head_sha }}" \
               --query deploymentId \
               --output text
           )
@@ -85,12 +99,6 @@ jobs:
             aws deploy get-deployment --deployment-id "${deployment_id}" --output json || true
             echo "::endgroup::"
 
-            if [ "${{ env.CODEDEPLOY_PRINT_TARGET_DIAGNOSTICS }}" != "true" ]; then
-              echo "Skipping CodeDeploy target diagnostics because CODEDEPLOY_PRINT_TARGET_DIAGNOSTICS is not true."
-              echo "To enable it, grant the diagnostic IAM permissions documented in docs/deploy/codedeploy-actions-permissions.md."
-              return
-            fi
-
             target_error_file="$(mktemp)"
             target_ids="$(aws deploy list-deployment-targets --deployment-id "${deployment_id}" --query 'targetIds[]' --output text 2>"${target_error_file}" || true)"
             if [ -s "${target_error_file}" ]; then
@@ -98,6 +106,7 @@ jobs:
               cat "${target_error_file}"
             fi
             if [ -n "${target_ids}" ] && [ "${target_ids}" != "None" ]; then
+              echo "CodeDeploy target IDs: ${target_ids}"
               echo "::group::CodeDeploy target diagnostics"
               # shellcheck disable=SC2086
               aws deploy batch-get-deployment-targets --deployment-id "${deployment_id}" --target-ids ${target_ids} --output json || true
@@ -113,6 +122,7 @@ jobs:
               cat "${instance_error_file}"
             fi
             if [ -n "${instance_ids}" ] && [ "${instance_ids}" != "None" ]; then
+              echo "CodeDeploy EC2 instance IDs: ${instance_ids}"
               echo "::group::CodeDeploy EC2 instance diagnostics"
               for instance_id in ${instance_ids}; do
                 echo "Deployment instance diagnostics for ${instance_id}"
@@ -124,10 +134,10 @@ jobs:
             fi
           }
 
-          for attempt in $(seq 1 90); do
+          for attempt in $(seq 1 "${CODEDEPLOY_WAIT_ATTEMPTS}"); do
             status=$(aws deploy get-deployment --deployment-id "${deployment_id}" --query 'deploymentInfo.status' --output text)
             overview=$(aws deploy get-deployment --deployment-id "${deployment_id}" --query 'deploymentInfo.deploymentOverview' --output json)
-            echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] attempt=${attempt}/90 status=${status} overview=${overview}"
+            echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] attempt=${attempt}/${CODEDEPLOY_WAIT_ATTEMPTS} status=${status} overview=${overview}"
 
             case "${status}" in
               Succeeded)
@@ -142,7 +152,7 @@ jobs:
                 ;;
             esac
 
-            sleep 10
+            sleep "${CODEDEPLOY_WAIT_SECONDS}"
           done
 
           echo "Timed out waiting for CodeDeploy deployment: ${deployment_id}"

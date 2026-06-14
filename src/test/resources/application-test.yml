@@ -1,4 +1,8 @@
+debug: false
+
 spring:
+  main:
+    banner-mode: off
   datasource:
     url: jdbc:h2:mem:plate_test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
@@ -8,6 +12,7 @@ spring:
     hibernate:
       ddl-auto: create-drop
     show-sql: false
+    open-in-view: false
 
 google:
   client-id: test-google-client
@@ -24,3 +29,14 @@ jwt:
 
 firebase:
   enabled: false
+
+logging:
+  level:
+    root: WARN
+    org.hibernate.dialect.Dialect: ERROR
+    org.hibernate.orm.deprecation: ERROR
+    org.hibernate.SQL: WARN
+    org.springframework.boot.autoconfigure: WARN
+    org.springframework.boot.autoconfigure.orm.jpa.JpaBaseConfiguration$JpaWebConfiguration: ERROR
+    org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration: ERROR
+    org.springframework.test.context: WARN

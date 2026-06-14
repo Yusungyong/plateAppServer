@@ -2,12 +2,23 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: ["main"]
   pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DEBUG: "false"
 
     steps:
       - name: Checkout
@@ -23,5 +34,13 @@ jobs:
       - name: Prepare mvnw
         run: chmod +x mvnw
 
-      - name: Run tests
-        run: ./mvnw -B test
+      - name: Test and package
+        run: ./mvnw -B -Ddebug=false clean package
+
+      - name: Upload app jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-jar
+          path: target/*.jar
+          if-no-files-found: error
+          retention-days: 3
