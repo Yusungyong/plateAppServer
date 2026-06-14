@@ -28,10 +28,10 @@ public class JwtProvider {
 
     private final Key key;
 
-    @Value("${jwt.access-expire}")
+    @Value("${jwt.access-expire:3600000}")
     private long accessExpire;
 
-    @Value("${jwt.refresh-expire}")
+    @Value("${jwt.refresh-expire:1209600000}")
     private long refreshExpire;
 
     public JwtProvider(@Value("${jwt.secret}") String secret) {

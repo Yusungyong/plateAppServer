@@ -6,6 +6,10 @@ server:
   error:
     include-stacktrace: always
 
+jwt:
+  access-expire: 3600000
+  refresh-expire: 1209600000
+
 logging:
   level:
     org.springframework.web.servlet: DEBUG
