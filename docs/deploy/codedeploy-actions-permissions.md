@@ -21,6 +21,30 @@ Add these actions to the role policy:
 }
 ```
 
+AWS Console path:
+
+1. IAM > Roles > `GitHubActions-CodeDeploy`
+2. Add permissions > Create inline policy
+3. JSON tab에 아래 정책 추가
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "codedeploy:ListDeploymentTargets",
+        "codedeploy:BatchGetDeploymentTargets",
+        "codedeploy:ListDeploymentInstances",
+        "codedeploy:GetDeploymentInstance"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
 If your IAM policy must be tightly scoped, start with the deployment group ARN below and fall back to `"*"` only if AWS reports that the action does not support that resource scope.
 
 `arn:aws:codedeploy:ap-northeast-2:174977828951:deploymentgroup:plate-app-server/plate-main-deploy-group`

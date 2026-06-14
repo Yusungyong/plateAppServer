@@ -103,7 +103,7 @@ jobs:
             target_ids="$(aws deploy list-deployment-targets --deployment-id "${deployment_id}" --query 'targetIds[]' --output text 2>"${target_error_file}" || true)"
             if [ -s "${target_error_file}" ]; then
               echo "CodeDeploy target diagnostics are unavailable. Grant codedeploy:ListDeploymentTargets and codedeploy:BatchGetDeploymentTargets to ${{ env.ROLE_ARN }}."
-              cat "${target_error_file}"
+              sed 's/^/AWS diagnostic permission error: /' "${target_error_file}"
             fi
             if [ -n "${target_ids}" ] && [ "${target_ids}" != "None" ]; then
               echo "CodeDeploy target IDs: ${target_ids}"
@@ -119,7 +119,7 @@ jobs:
             instance_ids="$(aws deploy list-deployment-instances --deployment-id "${deployment_id}" --query 'instancesList[]' --output text 2>"${instance_error_file}" || true)"
             if [ -s "${instance_error_file}" ]; then
               echo "CodeDeploy EC2 instance diagnostics are unavailable. Grant codedeploy:ListDeploymentInstances and codedeploy:GetDeploymentInstance to ${{ env.ROLE_ARN }}."
-              cat "${instance_error_file}"
+              sed 's/^/AWS diagnostic permission error: /' "${instance_error_file}"
             fi
             if [ -n "${instance_ids}" ] && [ "${instance_ids}" != "None" ]; then
               echo "CodeDeploy EC2 instance IDs: ${instance_ids}"
