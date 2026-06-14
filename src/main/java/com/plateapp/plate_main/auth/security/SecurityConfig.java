@@ -71,6 +71,7 @@ public class SecurityConfig {
                     "/api/qna/*",
                     "/api/search",
                     "/api/search/suggest",
+                    "/api/recommendations",
                     "/api/image-feeds/*",
                     "/api/image-feeds/context",
                     "/api/image-feeds/groups",
