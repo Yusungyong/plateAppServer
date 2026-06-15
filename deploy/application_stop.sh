@@ -5,16 +5,49 @@ log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S %Z')] [application_stop] $*"
 }
 
+STOP_TIMEOUT_SECONDS=20
+KILL_WAIT_SECONDS=5
+
 log "Checking plate-main service before deployment stop hook."
-if systemctl list-units --type=service --all | grep -q "plate-main.service"; then
-  if systemctl is-active --quiet plate-main; then
-    log "plate-main is active. Stopping service..."
-    systemctl stop plate-main
-    log "plate-main stop command completed."
-  else
-    log "plate-main service exists but is not active. Nothing to stop."
-  fi
-else
+if ! systemctl cat plate-main.service >/dev/null 2>&1; then
   log "plate-main service is not installed yet. Nothing to stop."
+  exit 0
 fi
-log "ApplicationStop hook completed."
+
+service_state="$(systemctl is-active plate-main || true)"
+if [ "$service_state" = "inactive" ] || [ "$service_state" = "failed" ] || [ "$service_state" = "unknown" ]; then
+  log "plate-main state is ${service_state}. Nothing to stop."
+  exit 0
+fi
+
+log "plate-main state is ${service_state}. Requesting stop."
+systemctl stop --no-block plate-main
+
+for ((i=1; i<=STOP_TIMEOUT_SECONDS; i++)); do
+  service_state="$(systemctl is-active plate-main || true)"
+  if [ "$service_state" = "inactive" ] || [ "$service_state" = "failed" ] || [ "$service_state" = "unknown" ]; then
+    log "plate-main stopped with state ${service_state} after ${i}s."
+    exit 0
+  fi
+
+  if (( i % 5 == 0 )); then
+    log "Waiting for plate-main to stop: ${i}/${STOP_TIMEOUT_SECONDS}s (state=${service_state})"
+  fi
+  sleep 1
+done
+
+log "Graceful stop exceeded ${STOP_TIMEOUT_SECONDS}s. Sending SIGKILL."
+systemctl kill --kill-who=all --signal=SIGKILL plate-main || true
+
+for ((i=1; i<=KILL_WAIT_SECONDS; i++)); do
+  service_state="$(systemctl is-active plate-main || true)"
+  if [ "$service_state" = "inactive" ] || [ "$service_state" = "failed" ] || [ "$service_state" = "unknown" ]; then
+    log "plate-main stopped after forced termination with state ${service_state}."
+    exit 0
+  fi
+  sleep 1
+done
+
+log "plate-main did not stop after forced termination. Final state: ${service_state}"
+systemctl status plate-main --no-pager -l || true
+exit 1

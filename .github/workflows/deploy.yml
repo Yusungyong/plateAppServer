@@ -20,6 +20,9 @@ env:
   ROLE_ARN: arn:aws:iam::174977828951:role/GitHubActions-CodeDeploy
   CODEDEPLOY_WAIT_ATTEMPTS: "90"
   CODEDEPLOY_WAIT_SECONDS: "5"
+  # Recover from the previous revision's stuck ApplicationStop hook.
+  # ApplicationStart restarts the service after the new revision is installed.
+  CODEDEPLOY_IGNORE_APPLICATION_STOP_FAILURES: "true"
 
 concurrency:
   group: deploy-main
@@ -75,6 +78,12 @@ jobs:
         id: codedeploy
         run: |
           set -euo pipefail
+          create_args=()
+          if [ "${CODEDEPLOY_IGNORE_APPLICATION_STOP_FAILURES}" = "true" ]; then
+            create_args+=(--ignore-application-stop-failures)
+            echo "ApplicationStop failures will not block this deployment."
+          fi
+
           deployment_id=$(
             aws deploy create-deployment \
               --application-name "${{ env.CODEDEPLOY_APP }}" \
@@ -82,6 +91,7 @@ jobs:
               --s3-location "bucket=${{ env.S3_BUCKET }},key=deployments/${{ github.event.workflow_run.head_sha }}.zip,bundleType=zip" \
               --file-exists-behavior OVERWRITE \
               --description "GitHub Actions deploy ${{ github.event.workflow_run.head_sha }}" \
+              "${create_args[@]}" \
               --query deploymentId \
               --output text
           )
@@ -135,9 +145,13 @@ jobs:
           }
 
           for attempt in $(seq 1 "${CODEDEPLOY_WAIT_ATTEMPTS}"); do
-            status=$(aws deploy get-deployment --deployment-id "${deployment_id}" --query 'deploymentInfo.status' --output text)
-            overview=$(aws deploy get-deployment --deployment-id "${deployment_id}" --query 'deploymentInfo.deploymentOverview' --output json)
-            echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] attempt=${attempt}/${CODEDEPLOY_WAIT_ATTEMPTS} status=${status} overview=${overview}"
+            read -r status pending in_progress succeeded failed skipped ready < <(
+              aws deploy get-deployment \
+                --deployment-id "${deployment_id}" \
+                --query 'deploymentInfo.[status,deploymentOverview.Pending,deploymentOverview.InProgress,deploymentOverview.Succeeded,deploymentOverview.Failed,deploymentOverview.Skipped,deploymentOverview.Ready]' \
+                --output text
+            )
+            echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] attempt=${attempt}/${CODEDEPLOY_WAIT_ATTEMPTS} status=${status} overview={Pending:${pending},InProgress:${in_progress},Succeeded:${succeeded},Failed:${failed},Skipped:${skipped},Ready:${ready}}"
 
             case "${status}" in
               Succeeded)
