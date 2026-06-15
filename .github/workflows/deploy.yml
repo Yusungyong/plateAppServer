@@ -18,7 +18,7 @@ env:
   CODEDEPLOY_APP: plate-app-server
   CODEDEPLOY_GROUP: plate-main-deploy-group
   ROLE_ARN: arn:aws:iam::174977828951:role/GitHubActions-CodeDeploy
-  CODEDEPLOY_WAIT_ATTEMPTS: "90"
+  CODEDEPLOY_WAIT_ATTEMPTS: "20"
   CODEDEPLOY_WAIT_SECONDS: "5"
   # Recover from the previous revision's stuck ApplicationStop hook.
   # ApplicationStart restarts the service after the new revision is installed.
