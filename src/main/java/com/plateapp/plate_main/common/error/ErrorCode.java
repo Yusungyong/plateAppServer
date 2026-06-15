@@ -33,7 +33,15 @@ public enum ErrorCode {
 
     // VIDEO/COMMENT 등
     VIDEO_NOT_FOUND(HttpStatus.NOT_FOUND, "VIDEO_404", "동영상을 찾을 수 없습니다."),
-    COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "COMMENT_404", "댓글을 찾을 수 없습니다.");
+    COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "COMMENT_404", "댓글을 찾을 수 없습니다."),
+
+    STORE_APPROVAL_NOT_FOUND(HttpStatus.NOT_FOUND, "STORE_APPROVAL_NOT_FOUND", "매장 신청 정보를 찾을 수 없습니다."),
+    STORE_APPROVAL_VERSION_CONFLICT(HttpStatus.CONFLICT, "STORE_APPROVAL_VERSION_CONFLICT", "다른 운영자가 먼저 처리했습니다."),
+    STORE_APPROVAL_INVALID_TRANSITION(HttpStatus.CONFLICT, "STORE_APPROVAL_INVALID_TRANSITION", "현재 상태에서는 요청한 처리를 할 수 없습니다."),
+    STORE_APPROVAL_DOCUMENT_INCOMPLETE(HttpStatus.CONFLICT, "STORE_APPROVAL_DOCUMENT_INCOMPLETE", "필수 문서 검수가 완료되지 않았습니다."),
+    STORE_APPROVAL_VERIFICATION_INCOMPLETE(HttpStatus.CONFLICT, "STORE_APPROVAL_VERIFICATION_INCOMPLETE", "사업자 인증이 완료되지 않았습니다."),
+    STORE_APPROVAL_DUPLICATE_STORE(HttpStatus.CONFLICT, "STORE_APPROVAL_DUPLICATE_STORE", "동일한 사업자등록번호의 매장이 이미 존재합니다."),
+    STORE_DOCUMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "STORE_DOCUMENT_NOT_FOUND", "신청 문서를 찾을 수 없습니다.");
 
     private final HttpStatus status;
     private final String code;

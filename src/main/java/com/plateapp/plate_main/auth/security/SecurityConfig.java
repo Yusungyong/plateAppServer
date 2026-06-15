@@ -8,6 +8,7 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
@@ -83,27 +84,34 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/users/detail/*/public-profile").authenticated()
 
                 .requestMatchers("/api/admin/member-monitoring/**").hasAnyAuthority(
-                    PlateAuthorities.AUTHORITY_ADMIN,
-                    PlateAuthorities.PERMISSION_ADMIN_ACCESS,
-                    PlateAuthorities.PERMISSION_MEMBER_MONITORING_READ
-                )
-                .requestMatchers("/api/admin/restaurants", "/api/admin/restaurants/**", "/api/admin/files").hasAnyAuthority(
-                    PlateAuthorities.AUTHORITY_ADMIN,
-                    PlateAuthorities.PERMISSION_ADMIN_ACCESS,
-                    PlateAuthorities.PERMISSION_RESTAURANT_MANAGE
-                )
-                .requestMatchers("/api/admin/**").hasAnyAuthority(
-                    PlateAuthorities.AUTHORITY_ADMIN,
+                    PlateAuthorities.AUTHORITY_SUPER_ADMIN,
                     PlateAuthorities.PERMISSION_ADMIN_ACCESS
                 )
-                .requestMatchers("/api/users/detail/**").hasAnyAuthority(
-                    PlateAuthorities.AUTHORITY_ADMIN,
-                    PlateAuthorities.PERMISSION_ADMIN_ACCESS
-                )
-                .requestMatchers(HttpMethod.POST, "/api/users/*/profile-history").hasAnyAuthority(
-                    PlateAuthorities.AUTHORITY_ADMIN,
-                    PlateAuthorities.PERMISSION_ADMIN_ACCESS
-                )
+                .requestMatchers("/api/admin/restaurants", "/api/admin/restaurants/**", "/api/admin/files")
+                .access((authentication, context) -> new AuthorizationDecision(
+                    PlateAuthorities.hasAdminPermission(
+                        authentication.get(),
+                        PlateAuthorities.PERMISSION_RESTAURANT_MANAGE
+                    )
+                ))
+                .requestMatchers("/api/admin/**")
+                .access((authentication, context) -> new AuthorizationDecision(
+                    PlateAuthorities.hasAdminAccess(authentication.get())
+                ))
+                .requestMatchers("/api/users/detail/**")
+                .access((authentication, context) -> new AuthorizationDecision(
+                    PlateAuthorities.hasAdminPermission(
+                        authentication.get(),
+                        PlateAuthorities.PERMISSION_ADMIN_ACCOUNT_MANAGE
+                    )
+                ))
+                .requestMatchers(HttpMethod.POST, "/api/users/*/profile-history")
+                .access((authentication, context) -> new AuthorizationDecision(
+                    PlateAuthorities.hasAdminPermission(
+                        authentication.get(),
+                        PlateAuthorities.PERMISSION_ADMIN_ACCOUNT_MANAGE
+                    )
+                ))
 
                 .anyRequest().authenticated()
             )

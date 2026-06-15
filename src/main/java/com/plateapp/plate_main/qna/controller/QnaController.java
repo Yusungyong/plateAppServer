@@ -80,10 +80,8 @@ public class QnaController {
         if (authentication == null || authentication.getAuthorities() == null) {
             return false;
         }
-        return PlateAuthorities.hasAny(
+        return PlateAuthorities.hasAdminPermission(
             authentication,
-            PlateAuthorities.AUTHORITY_ADMIN,
-            PlateAuthorities.PERMISSION_ADMIN_ACCESS,
             PlateAuthorities.PERMISSION_QNA_MANAGE
         );
     }

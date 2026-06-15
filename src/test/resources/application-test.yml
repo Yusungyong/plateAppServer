@@ -13,6 +13,8 @@ spring:
       ddl-auto: create-drop
     show-sql: false
     open-in-view: false
+  flyway:
+    enabled: false
 
 google:
   client-id: test-google-client

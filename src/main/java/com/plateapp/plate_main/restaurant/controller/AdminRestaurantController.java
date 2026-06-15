@@ -93,10 +93,8 @@ public class AdminRestaurantController {
     }
 
     private void requireRestaurantManage(Authentication authentication) {
-        if (!PlateAuthorities.hasAny(
+        if (!PlateAuthorities.hasAdminPermission(
                 authentication,
-                PlateAuthorities.AUTHORITY_ADMIN,
-                PlateAuthorities.PERMISSION_ADMIN_ACCESS,
                 PlateAuthorities.PERMISSION_RESTAURANT_MANAGE
         )) {
             throw new AppException(ErrorCode.AUTH_FORBIDDEN, "Restaurant manage permission required.");

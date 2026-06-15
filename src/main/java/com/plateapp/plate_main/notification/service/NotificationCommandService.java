@@ -148,6 +148,45 @@ public class NotificationCommandService {
         );
     }
 
+    @Transactional
+    public void notifyStoreApprovalStatus(
+            String actorUsername,
+            String receiverUsername,
+            Long applicationId,
+            String status
+    ) {
+        String normalizedStatus = status == null ? "" : status.trim().toLowerCase();
+        String eventType = switch (normalizedStatus) {
+            case "approved" -> "STORE_APPROVED";
+            case "on_hold" -> "STORE_HELD";
+            case "rejected" -> "STORE_REJECTED";
+            default -> throw new IllegalArgumentException("Unsupported store approval status");
+        };
+        String title = switch (normalizedStatus) {
+            case "approved" -> "매장 승인이 완료되었습니다";
+            case "on_hold" -> "매장 신청 보완이 필요합니다";
+            case "rejected" -> "매장 신청이 반려되었습니다";
+            default -> "매장 신청 상태가 변경되었습니다";
+        };
+        String message = switch (normalizedStatus) {
+            case "approved" -> "제출한 매장 신청이 승인되었습니다.";
+            case "on_hold" -> "제출한 매장 신청의 보완 요청을 확인해 주세요.";
+            case "rejected" -> "제출한 매장 신청의 반려 사유를 확인해 주세요.";
+            default -> "매장 신청 상태를 확인해 주세요.";
+        };
+        createAndDispatch(
+                actorUsername,
+                receiverUsername,
+                eventType,
+                title,
+                message,
+                "store_application",
+                applicationId,
+                null,
+                null
+        );
+    }
+
     private void createAndDispatch(
             String actorUsername,
             String receiverUsername,

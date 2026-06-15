@@ -26,6 +26,8 @@ class JwtProviderTest {
         assertEquals("ADMIN", provider.getRoleFromAccessToken(token));
         assertEquals("ADMIN", provider.getRolesFromAccessToken(token).get(0));
         assertTrue(provider.getPermissionsFromAccessToken(token).contains("ADMIN_ACCESS"));
+        assertTrue(provider.getPermissionsFromAccessToken(token).contains("STORE_APPROVE"));
+        assertEquals(0, provider.getTokenVersionFromAccessToken(token));
         assertThrows(JwtException.class, () -> provider.getUsernameFromRefreshToken(token));
     }
 

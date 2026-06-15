@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
+import com.plateapp.plate_main.auth.domain.User;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -23,6 +25,8 @@ public class JwtProvider {
     private static final String CLAIM_ROLES = "roles";
     private static final String CLAIM_PERMISSIONS = "permissions";
     private static final String CLAIM_USERNAME = "username";
+    private static final String CLAIM_DISPLAY_NAME = "displayName";
+    private static final String CLAIM_TOKEN_VERSION = "tokenVersion";
     private static final String TYPE_ACCESS = "access";
     private static final String TYPE_REFRESH = "refresh";
 
@@ -48,11 +52,46 @@ public class JwtProvider {
     }
 
     public String createAccessToken(String username, String role) {
+        return createAccessToken(
+                username,
+                role,
+                null,
+                PlateAuthorities.defaultPermissionsFor(role),
+                0
+        );
+    }
+
+    public String createAccessToken(User user, Collection<String> permissions) {
+        if (user == null) {
+            throw new IllegalArgumentException("user is required");
+        }
+        return createAccessToken(
+                user.getUsername(),
+                user.getRole(),
+                user.getNickname(),
+                permissions,
+                user.getTokenVersion() == null ? 0 : user.getTokenVersion()
+        );
+    }
+
+    private String createAccessToken(
+            String username,
+            String role,
+            String displayName,
+            Collection<String> permissions,
+            int tokenVersion
+    ) {
         Date now = new Date();
         Date exp = new Date(now.getTime() + accessExpire);
         String normalizedRole = PlateAuthorities.toRole(role);
         List<String> roles = PlateAuthorities.rolesFor(normalizedRole);
-        List<String> permissions = PlateAuthorities.permissionsFor(normalizedRole);
+        List<String> resolvedPermissions = permissions == null
+                ? PlateAuthorities.defaultPermissionsFor(normalizedRole)
+                : permissions.stream()
+                        .filter(value -> value != null && !value.isBlank())
+                        .map(value -> value.trim().toUpperCase(Locale.ROOT))
+                        .distinct()
+                        .toList();
 
         return Jwts.builder()
                 .setSubject(username)
@@ -62,7 +101,9 @@ public class JwtProvider {
                 .claim(CLAIM_USERNAME, username)
                 .claim(CLAIM_ROLE, normalizedRole)
                 .claim(CLAIM_ROLES, roles)
-                .claim(CLAIM_PERMISSIONS, permissions)
+                .claim(CLAIM_PERMISSIONS, resolvedPermissions)
+                .claim(CLAIM_DISPLAY_NAME, displayName)
+                .claim(CLAIM_TOKEN_VERSION, tokenVersion)
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }
@@ -118,6 +159,12 @@ public class JwtProvider {
 
         String legacyRole = claims.get(CLAIM_ROLE, String.class);
         return PlateAuthorities.permissionsFor(legacyRole);
+    }
+
+    public int getTokenVersionFromAccessToken(String token) {
+        Claims claims = parseAccessClaims(token);
+        Number value = claims.get(CLAIM_TOKEN_VERSION, Number.class);
+        return value == null ? 0 : value.intValue();
     }
 
     public String getUsernameFromRefreshToken(String token) {

@@ -76,6 +76,7 @@ class SocialAuthServiceGoogleAudienceTest {
                 new ObjectMapper(),
                 restTemplate,
                 null,
+                null,
                 null
         );
         ReflectionTestUtils.setField(service, "googleClientId", IOS_CLIENT_ID);

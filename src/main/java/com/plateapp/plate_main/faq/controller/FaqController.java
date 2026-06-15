@@ -77,10 +77,8 @@ public class FaqController {
             throw new AppException(ErrorCode.AUTH_UNAUTHORIZED, "Unauthorized");
         }
 
-        boolean isAdmin = PlateAuthorities.hasAny(
+        boolean isAdmin = PlateAuthorities.hasAdminPermission(
             authentication,
-            PlateAuthorities.AUTHORITY_ADMIN,
-            PlateAuthorities.PERMISSION_ADMIN_ACCESS,
             PlateAuthorities.PERMISSION_FAQ_MANAGE
         );
 

@@ -73,6 +73,7 @@ public class SocialAuthService {
     private final RestTemplate restTemplate;
     private final LoginHistoryService loginHistoryService;
     private final UserPushTokenService userPushTokenService;
+    private final AdminPermissionService adminPermissionService;
 
     private volatile AppleJwkSet cachedAppleKeys;
     private volatile Instant appleKeysFetchedAt;
@@ -623,7 +624,7 @@ public class SocialAuthService {
     }
 
     private TokenPair issueTokens(User user, String deviceId) {
-        String accessToken = jwtProvider.createAccessToken(user.getUsername(), normalizeRole(user.getRole()));
+        String accessToken = jwtProvider.createAccessToken(user, adminPermissionService.resolvePermissions(user));
         String refreshToken = jwtProvider.createRefreshToken(user.getUsername());
 
         Date refreshExpDate = jwtProvider.getExpiration(refreshToken);

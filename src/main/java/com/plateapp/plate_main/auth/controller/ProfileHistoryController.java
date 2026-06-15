@@ -33,10 +33,9 @@ public class ProfileHistoryController {
     }
 
     private void requireAdmin(Authentication authentication) {
-        boolean isAdmin = PlateAuthorities.hasAny(
+        boolean isAdmin = PlateAuthorities.hasAdminPermission(
                 authentication,
-                PlateAuthorities.AUTHORITY_ADMIN,
-                PlateAuthorities.PERMISSION_ADMIN_ACCESS
+                PlateAuthorities.PERMISSION_ADMIN_ACCOUNT_MANAGE
         );
         if (!isAdmin) {
             throw new AccessDeniedException("Admin role required");

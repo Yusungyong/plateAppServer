@@ -1,6 +1,7 @@
 package com.plateapp.plate_main.auth.security;
 
 import com.plateapp.plate_main.auth.repository.UserRepository;
+import com.plateapp.plate_main.auth.domain.User;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
@@ -74,7 +75,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             List<String> roles = jwtProvider.getRolesFromAccessToken(token);
             List<String> permissions = jwtProvider.getPermissionsFromAccessToken(token);
 
-            if (!userRepository.existsById(username)) {
+            User user = userRepository.findById(username).orElse(null);
+            int tokenVersion = jwtProvider.getTokenVersionFromAccessToken(token);
+            if (user == null || tokenVersion != normalizeTokenVersion(user.getTokenVersion())) {
                 SecurityContextHolder.clearContext();
                 request.setAttribute(AUTH_ERROR_ATTR, AUTH_ERROR_INVALID);
                 filterChain.doFilter(request, response);
@@ -101,5 +104,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private int normalizeTokenVersion(Integer value) {
+        return value == null ? 0 : value;
     }
 }

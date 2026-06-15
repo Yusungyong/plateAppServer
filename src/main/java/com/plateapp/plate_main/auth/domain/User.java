@@ -59,6 +59,10 @@ public class User {
     @Column(name = "is_private")
     private Boolean isPrivate;
 
+    @Column(name = "token_version", nullable = false)
+    @Builder.Default
+    private Integer tokenVersion = 0;
+
     @Column(name = "user_id", insertable = false, updatable = false)
     private Integer userId;
 }

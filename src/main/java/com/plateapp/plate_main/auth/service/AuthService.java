@@ -35,6 +35,7 @@ public class AuthService {
     private final JwtProvider jwtProvider;
     private final BCryptPasswordEncoder passwordEncoder;
     private final UserPushTokenService userPushTokenService;
+    private final AdminPermissionService adminPermissionService;
 
     @Transactional
     public void signup(SignupRequest request) {
@@ -91,7 +92,7 @@ public class AuthService {
                 throw new AuthException(ErrorCode.AUTH_UNAUTHORIZED, loginFailMessage);
             }
 
-            String accessToken = jwtProvider.createAccessToken(username, normalizeRole(user.getRole()));
+            String accessToken = jwtProvider.createAccessToken(user, adminPermissionService.resolvePermissions(user));
             String refreshToken = jwtProvider.createRefreshToken(username);
 
             Date refreshExpDate = jwtProvider.getExpiration(refreshToken);
@@ -165,7 +166,7 @@ public class AuthService {
         User user = userRepository.findById(username)
                 .orElseThrow(() -> new AuthException(ErrorCode.USER_NOT_FOUND));
 
-        String newAccess = jwtProvider.createAccessToken(username, normalizeRole(user.getRole()));
+        String newAccess = jwtProvider.createAccessToken(user, adminPermissionService.resolvePermissions(user));
         String newRefresh = jwtProvider.createRefreshToken(username);
 
         Date refreshExpDate = jwtProvider.getExpiration(newRefresh);
