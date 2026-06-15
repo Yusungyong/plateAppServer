@@ -6,11 +6,11 @@ files:
 hooks:
   ApplicationStop:
     - location: deploy/application_stop.sh
-      timeout: 60
+      timeout: 90
       runas: root
   BeforeInstall:
     - location: deploy/before_install.sh
-      timeout: 60
+      timeout: 90
       runas: root
   AfterInstall:
     - location: deploy/after_install.sh

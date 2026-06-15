@@ -7,6 +7,11 @@ log() {
 
 APP_DIR="/opt/plate-main"
 ENV_FILE="/etc/plate-main.env"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+log "Running disk maintenance after downloading the deployment bundle."
+timeout 45s "${SCRIPT_DIR}/disk_maintenance.sh" \
+  || log "Warning: disk maintenance did not complete within 45 seconds."
 
 log "Preparing application directory: ${APP_DIR}"
 mkdir -p "$APP_DIR"

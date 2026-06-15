@@ -7,6 +7,11 @@ log() {
 
 STOP_TIMEOUT_SECONDS=20
 KILL_WAIT_SECONDS=5
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+log "Running disk maintenance before downloading the next revision."
+timeout 45s "${SCRIPT_DIR}/disk_maintenance.sh" \
+  || log "Warning: disk maintenance did not complete within 45 seconds."
 
 log "Checking plate-main service before deployment stop hook."
 if ! systemctl cat plate-main.service >/dev/null 2>&1; then
