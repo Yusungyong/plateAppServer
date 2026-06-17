@@ -41,7 +41,10 @@ public enum ErrorCode {
     STORE_APPROVAL_DOCUMENT_INCOMPLETE(HttpStatus.CONFLICT, "STORE_APPROVAL_DOCUMENT_INCOMPLETE", "필수 문서 검수가 완료되지 않았습니다."),
     STORE_APPROVAL_VERIFICATION_INCOMPLETE(HttpStatus.CONFLICT, "STORE_APPROVAL_VERIFICATION_INCOMPLETE", "사업자 인증이 완료되지 않았습니다."),
     STORE_APPROVAL_DUPLICATE_STORE(HttpStatus.CONFLICT, "STORE_APPROVAL_DUPLICATE_STORE", "동일한 사업자등록번호의 매장이 이미 존재합니다."),
-    STORE_DOCUMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "STORE_DOCUMENT_NOT_FOUND", "신청 문서를 찾을 수 없습니다.");
+    STORE_DOCUMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "STORE_DOCUMENT_NOT_FOUND", "신청 문서를 찾을 수 없습니다."),
+
+    BUSINESS_NUMBER_INVALID(HttpStatus.BAD_REQUEST, "BUSINESS_NUMBER_INVALID", "사업자등록번호 형식이 올바르지 않습니다."),
+    STORE_APPLICATION_DUPLICATE_BUSINESS(HttpStatus.CONFLICT, "STORE_APPLICATION_DUPLICATE_BUSINESS", "동일한 사업자등록번호의 진행 중인 신청이 있습니다.");
 
     private final HttpStatus status;
     private final String code;

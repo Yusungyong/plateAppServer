@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface StoreApplicationMenuRepository extends JpaRepository<StoreApplicationMenu, Long> {
 
     List<StoreApplicationMenu> findByApplicationIdOrderByDisplayOrderAscIdAsc(Long applicationId);
+
+    void deleteByApplicationId(Long applicationId);
 }

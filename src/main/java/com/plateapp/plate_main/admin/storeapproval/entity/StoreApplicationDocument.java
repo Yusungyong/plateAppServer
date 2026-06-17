@@ -14,6 +14,7 @@ import lombok.Getter;
 @Getter
 public class StoreApplicationDocument {
 
+    public static final String STATUS_SUBMITTED = "submitted";
     public static final String STATUS_VERIFIED = "verified";
 
     @Id
@@ -48,5 +49,26 @@ public class StoreApplicationDocument {
     private OffsetDateTime purgeAt;
 
     protected StoreApplicationDocument() {
+    }
+
+    public static StoreApplicationDocument submitted(
+            Long applicationId,
+            String documentType,
+            String objectKey,
+            String originalName,
+            String mimeType,
+            Long fileSizeBytes,
+            OffsetDateTime now
+    ) {
+        StoreApplicationDocument document = new StoreApplicationDocument();
+        document.applicationId = applicationId;
+        document.documentType = documentType;
+        document.objectKey = objectKey;
+        document.originalName = originalName;
+        document.mimeType = mimeType;
+        document.fileSizeBytes = fileSizeBytes;
+        document.verificationStatus = STATUS_SUBMITTED;
+        document.createdAt = now;
+        return document;
     }
 }

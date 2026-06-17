@@ -22,6 +22,8 @@ import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationRe
 import com.plateapp.plate_main.common.error.AppException;
 import com.plateapp.plate_main.common.error.ErrorCode;
 import com.plateapp.plate_main.common.s3.S3UploadService;
+import com.plateapp.plate_main.owner.entity.StoreOwner;
+import com.plateapp.plate_main.owner.repository.StoreOwnerRepository;
 import com.plateapp.plate_main.restaurant.entity.Restaurant;
 import com.plateapp.plate_main.restaurant.repository.RestaurantCategoryRepository;
 import com.plateapp.plate_main.restaurant.repository.RestaurantMenuRepository;
@@ -71,6 +73,8 @@ class StoreApprovalServiceTest {
     @Mock
     private StoreDocumentAccessService documentAccessService;
     @Mock
+    private StoreOwnerRepository storeOwnerRepository;
+    @Mock
     private HttpServletRequest request;
 
     private StoreApprovalService service;
@@ -90,7 +94,8 @@ class StoreApprovalServiceTest {
                 auditService,
                 businessNumberCrypto,
                 s3UploadService,
-                documentAccessService
+                documentAccessService,
+                storeOwnerRepository
         );
     }
 
@@ -159,6 +164,7 @@ class StoreApprovalServiceTest {
         assertEquals(StoreApplication.STATUS_APPROVED, response.approvalStatus());
         assertEquals(55L, response.storeId());
         verify(reviewRepository).save(any(StoreApplicationReview.class));
+        verify(storeOwnerRepository).save(any(StoreOwner.class));
         verify(auditService).record(
                 any(), any(), any(), any(), any(), any(), any(), any(), any()
         );

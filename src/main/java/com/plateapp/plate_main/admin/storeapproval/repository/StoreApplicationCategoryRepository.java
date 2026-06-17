@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface StoreApplicationCategoryRepository extends JpaRepository<StoreApplicationCategory, Long> {
 
     List<StoreApplicationCategory> findByApplicationIdOrderByDisplayOrderAscIdAsc(Long applicationId);
+
+    void deleteByApplicationId(Long applicationId);
 }

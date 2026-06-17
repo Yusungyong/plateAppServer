@@ -11,7 +11,11 @@ public interface StoreApplicationDocumentRepository extends JpaRepository<StoreA
 
     Optional<StoreApplicationDocument> findByIdAndApplicationId(Long id, Long applicationId);
 
+    Optional<StoreApplicationDocument> findByApplicationIdAndDocumentType(Long applicationId, String documentType);
+
     long countByApplicationId(Long applicationId);
 
     long countByApplicationIdAndVerificationStatus(Long applicationId, String verificationStatus);
+
+    boolean existsByApplicationIdAndDocumentType(Long applicationId, String documentType);
 }

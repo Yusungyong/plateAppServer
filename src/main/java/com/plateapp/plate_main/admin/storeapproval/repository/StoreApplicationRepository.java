@@ -2,6 +2,8 @@ package com.plateapp.plate_main.admin.storeapproval.repository;
 
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplication;
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -9,6 +11,27 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface StoreApplicationRepository extends JpaRepository<StoreApplication, Long> {
+
+    Page<StoreApplication> findByApplicantUserId(Integer applicantUserId, Pageable pageable);
+
+    Optional<StoreApplication> findByIdAndApplicantUserId(Long id, Integer applicantUserId);
+
+    Optional<StoreApplication> findFirstByApplicantUserIdAndBusinessNumberHashAndApprovalStatusOrderByAppliedAtDescIdDesc(
+            Integer applicantUserId,
+            String businessNumberHash,
+            String approvalStatus
+    );
+
+    boolean existsByBusinessNumberHashAndApprovalStatusIn(
+            String businessNumberHash,
+            Collection<String> approvalStatuses
+    );
+
+    boolean existsByBusinessNumberHashAndApprovalStatusInAndIdNot(
+            String businessNumberHash,
+            Collection<String> approvalStatuses,
+            Long id
+    );
 
     @Query("""
         select application

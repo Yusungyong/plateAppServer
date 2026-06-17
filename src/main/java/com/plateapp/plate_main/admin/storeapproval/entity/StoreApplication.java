@@ -15,10 +15,13 @@ import lombok.Getter;
 @Getter
 public class StoreApplication {
 
+    public static final String STATUS_DRAFT = "draft";
     public static final String STATUS_PENDING = "pending";
     public static final String STATUS_ON_HOLD = "on_hold";
     public static final String STATUS_APPROVED = "approved";
     public static final String STATUS_REJECTED = "rejected";
+    public static final String VERIFICATION_NOT_REQUESTED = "not_requested";
+    public static final String VERIFICATION_REVIEWING = "reviewing";
     public static final String VERIFICATION_VERIFIED = "verified";
 
     @Id
@@ -58,6 +61,9 @@ public class StoreApplication {
     @Column(name = "business_number_hash", nullable = false, length = 128)
     private String businessNumberHash;
 
+    @Column(name = "business_name", length = 150)
+    private String businessName;
+
     @Column(name = "approval_status", nullable = false, length = 30)
     private String approvalStatus;
 
@@ -87,6 +93,72 @@ public class StoreApplication {
     private Long version;
 
     protected StoreApplication() {
+    }
+
+    public static StoreApplication createDraft(
+            Long parentApplicationId,
+            Integer applicantUserId,
+            String storeName,
+            String regionCode,
+            String address,
+            String phone,
+            String email,
+            String ownerName,
+            byte[] businessNumberEncrypted,
+            String businessNumberHash,
+            String businessName,
+            String description,
+            OffsetDateTime now
+    ) {
+        StoreApplication application = new StoreApplication();
+        application.parentApplicationId = parentApplicationId;
+        application.applicantUserId = applicantUserId;
+        application.businessNumberEncrypted = businessNumberEncrypted;
+        application.businessNumberHash = businessNumberHash;
+        application.businessName = businessName;
+        application.approvalStatus = STATUS_DRAFT;
+        application.verificationStatus = VERIFICATION_NOT_REQUESTED;
+        application.appliedAt = now;
+        application.updatedAt = now;
+        application.updateDraft(storeName, regionCode, address, phone, email, ownerName, description, now);
+        return application;
+    }
+
+    public void updateDraft(
+            String storeName,
+            String regionCode,
+            String address,
+            String phone,
+            String email,
+            String ownerName,
+            String description,
+            OffsetDateTime now
+    ) {
+        this.storeName = storeName;
+        this.regionCode = regionCode;
+        this.address = address;
+        this.phone = phone;
+        this.email = email;
+        this.ownerName = ownerName;
+        this.description = description;
+        this.updatedAt = now;
+    }
+
+    public void replaceBusinessNumber(byte[] businessNumberEncrypted, String businessNumberHash, OffsetDateTime now) {
+        this.businessNumberEncrypted = businessNumberEncrypted;
+        this.businessNumberHash = businessNumberHash;
+        this.updatedAt = now;
+    }
+
+    public void updateBusinessName(String businessName, OffsetDateTime now) {
+        this.businessName = businessName;
+        this.updatedAt = now;
+    }
+
+    public void submit(OffsetDateTime now) {
+        this.approvalStatus = STATUS_PENDING;
+        this.verificationStatus = VERIFICATION_REVIEWING;
+        this.updatedAt = now;
     }
 
     public void approve(Long createdStoreId, Integer actorUserId, OffsetDateTime now) {

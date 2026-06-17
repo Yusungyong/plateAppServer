@@ -58,7 +58,7 @@ public class AuthService {
                 .updatedAt(today)
                 .build();
 
-        userRepository.save(user);
+        userRepository.saveAndFlush(user);
     }
 
     @Transactional
@@ -92,7 +92,11 @@ public class AuthService {
                 throw new AuthException(ErrorCode.AUTH_UNAUTHORIZED, loginFailMessage);
             }
 
-            String accessToken = jwtProvider.createAccessToken(user, adminPermissionService.resolvePermissions(user));
+            String accessToken = jwtProvider.createAccessToken(
+                    user,
+                    adminPermissionService.resolveRoles(user),
+                    adminPermissionService.resolvePermissions(user)
+            );
             String refreshToken = jwtProvider.createRefreshToken(username);
 
             Date refreshExpDate = jwtProvider.getExpiration(refreshToken);
@@ -166,7 +170,11 @@ public class AuthService {
         User user = userRepository.findById(username)
                 .orElseThrow(() -> new AuthException(ErrorCode.USER_NOT_FOUND));
 
-        String newAccess = jwtProvider.createAccessToken(user, adminPermissionService.resolvePermissions(user));
+        String newAccess = jwtProvider.createAccessToken(
+                user,
+                adminPermissionService.resolveRoles(user),
+                adminPermissionService.resolvePermissions(user)
+        );
         String newRefresh = jwtProvider.createRefreshToken(username);
 
         Date refreshExpDate = jwtProvider.getExpiration(newRefresh);

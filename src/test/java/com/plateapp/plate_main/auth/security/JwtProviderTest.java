@@ -8,7 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.plateapp.plate_main.auth.domain.User;
 import io.jsonwebtoken.JwtException;
+import java.util.List;
 
 class JwtProviderTest {
 
@@ -53,6 +55,27 @@ class JwtProviderTest {
 
         assertEquals("SUPER_ADMIN", provider.getRolesFromAccessToken(token).get(0));
         assertTrue(provider.getPermissionsFromAccessToken(token).contains("ADMIN_ACCESS"));
+    }
+
+    @Test
+    void accessTokenCanIncludeStoreOwnerRoleAndPermission() {
+        JwtProvider provider = new JwtProvider(SECRET);
+        ReflectionTestUtils.setField(provider, "accessExpire", 60000L);
+        ReflectionTestUtils.setField(provider, "refreshExpire", 120000L);
+        User user = User.builder()
+                .username("owner@example.com")
+                .role(PlateAuthorities.ROLE_USER)
+                .tokenVersion(0)
+                .build();
+
+        String token = provider.createAccessToken(
+                user,
+                List.of(PlateAuthorities.ROLE_USER, PlateAuthorities.ROLE_STORE_OWNER),
+                List.of(PlateAuthorities.PERMISSION_OWNER_ACCESS)
+        );
+
+        assertTrue(provider.getRolesFromAccessToken(token).contains(PlateAuthorities.ROLE_STORE_OWNER));
+        assertTrue(provider.getPermissionsFromAccessToken(token).contains(PlateAuthorities.PERMISSION_OWNER_ACCESS));
     }
 
     @Test

@@ -28,4 +28,12 @@ public class StoreApplicationCategory {
 
     protected StoreApplicationCategory() {
     }
+
+    public static StoreApplicationCategory create(Long applicationId, String categoryCode, Integer displayOrder) {
+        StoreApplicationCategory category = new StoreApplicationCategory();
+        category.applicationId = applicationId;
+        category.categoryCode = categoryCode;
+        category.displayOrder = displayOrder == null ? 0 : displayOrder;
+        return category;
+    }
 }

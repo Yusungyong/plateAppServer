@@ -19,6 +19,8 @@ import com.plateapp.plate_main.common.error.AppException;
 import com.plateapp.plate_main.common.error.ErrorCode;
 import com.plateapp.plate_main.common.filter.RequestIdFilter;
 import com.plateapp.plate_main.common.s3.S3UploadService;
+import com.plateapp.plate_main.owner.entity.StoreOwner;
+import com.plateapp.plate_main.owner.repository.StoreOwnerRepository;
 import com.plateapp.plate_main.restaurant.entity.Restaurant;
 import com.plateapp.plate_main.restaurant.entity.RestaurantCategory;
 import com.plateapp.plate_main.restaurant.entity.RestaurantMenu;
@@ -90,6 +92,7 @@ public class StoreApprovalService {
     private final BusinessNumberCrypto businessNumberCrypto;
     private final S3UploadService s3UploadService;
     private final StoreDocumentAccessService documentAccessService;
+    private final StoreOwnerRepository storeOwnerRepository;
 
     @Transactional(readOnly = true)
     public StoreApprovalDtos.ListResponse list(
@@ -243,6 +246,7 @@ public class StoreApprovalService {
                 "draft"
         ));
         copyApplicationChildren(applicationId, restaurant.getId());
+        storeOwnerRepository.save(StoreOwner.createOwner(restaurant.getId(), application.getApplicantUserId()));
         application.approve(restaurant.getId(), actor.userId(), now);
         application = applicationRepository.saveAndFlush(application);
 

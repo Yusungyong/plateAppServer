@@ -56,6 +56,7 @@ public class JwtProvider {
                 username,
                 role,
                 null,
+                PlateAuthorities.rolesFor(role),
                 PlateAuthorities.defaultPermissionsFor(role),
                 0
         );
@@ -65,10 +66,18 @@ public class JwtProvider {
         if (user == null) {
             throw new IllegalArgumentException("user is required");
         }
+        return createAccessToken(user, PlateAuthorities.rolesFor(user.getRole()), permissions);
+    }
+
+    public String createAccessToken(User user, Collection<String> roles, Collection<String> permissions) {
+        if (user == null) {
+            throw new IllegalArgumentException("user is required");
+        }
         return createAccessToken(
                 user.getUsername(),
                 user.getRole(),
                 user.getNickname(),
+                roles,
                 permissions,
                 user.getTokenVersion() == null ? 0 : user.getTokenVersion()
         );
@@ -78,13 +87,20 @@ public class JwtProvider {
             String username,
             String role,
             String displayName,
+            Collection<String> roles,
             Collection<String> permissions,
             int tokenVersion
     ) {
         Date now = new Date();
         Date exp = new Date(now.getTime() + accessExpire);
         String normalizedRole = PlateAuthorities.toRole(role);
-        List<String> roles = PlateAuthorities.rolesFor(normalizedRole);
+        List<String> resolvedRoles = roles == null
+                ? PlateAuthorities.rolesFor(normalizedRole)
+                : roles.stream()
+                        .filter(value -> value != null && !value.isBlank())
+                        .map(PlateAuthorities::toRole)
+                        .distinct()
+                        .toList();
         List<String> resolvedPermissions = permissions == null
                 ? PlateAuthorities.defaultPermissionsFor(normalizedRole)
                 : permissions.stream()
@@ -100,7 +116,7 @@ public class JwtProvider {
                 .claim(CLAIM_TOKEN_TYPE, TYPE_ACCESS)
                 .claim(CLAIM_USERNAME, username)
                 .claim(CLAIM_ROLE, normalizedRole)
-                .claim(CLAIM_ROLES, roles)
+                .claim(CLAIM_ROLES, resolvedRoles)
                 .claim(CLAIM_PERMISSIONS, resolvedPermissions)
                 .claim(CLAIM_DISPLAY_NAME, displayName)
                 .claim(CLAIM_TOKEN_VERSION, tokenVersion)

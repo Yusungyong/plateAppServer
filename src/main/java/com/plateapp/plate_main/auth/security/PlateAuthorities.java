@@ -17,6 +17,7 @@ public final class PlateAuthorities {
     public static final String ROLE_CONTENT_MANAGER = "CONTENT_MANAGER";
     public static final String ROLE_VIEWER = "VIEWER";
     public static final String ROLE_USER = "USER";
+    public static final String ROLE_STORE_OWNER = "STORE_OWNER";
 
     public static final String AUTHORITY_ADMIN = "ROLE_ADMIN";
     public static final String AUTHORITY_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
@@ -41,6 +42,7 @@ public final class PlateAuthorities {
     public static final String PERMISSION_QNA_MANAGE = "QNA_MANAGE";
     public static final String PERMISSION_MEMBER_MONITORING_READ = "MEMBER_MONITORING_READ";
     public static final String PERMISSION_RESTAURANT_MANAGE = "RESTAURANT_MANAGE";
+    public static final String PERMISSION_OWNER_ACCESS = "OWNER_ACCESS";
 
     private static final List<String> ALL_ADMIN_PERMISSIONS = List.of(
             PERMISSION_ADMIN_ACCESS,
@@ -125,6 +127,7 @@ public final class PlateAuthorities {
             case "OP", "OPS", "OPERATOR", "992" -> ROLE_OPERATOR;
             case "CONTENT_MANAGER", "CONTENTMANAGER" -> ROLE_CONTENT_MANAGER;
             case "VIEWER", "VIEW_ONLY", "READ_ONLY" -> ROLE_VIEWER;
+            case "STORE_OWNER", "STOREOWNER", "OWNER" -> ROLE_STORE_OWNER;
             case "USR", "USER" -> ROLE_USER;
             default -> normalized;
         };

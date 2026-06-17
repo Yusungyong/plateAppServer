@@ -49,6 +49,17 @@ class PlateAuthoritiesTest {
         assertFalse(permissions.contains(PlateAuthorities.PERMISSION_STORE_UPDATE));
     }
 
+    @Test
+    void ownerAccessDoesNotGrantAdminAccess() {
+        var owner = authentication(
+                "ROLE_" + PlateAuthorities.ROLE_STORE_OWNER,
+                PlateAuthorities.PERMISSION_OWNER_ACCESS
+        );
+
+        assertFalse(PlateAuthorities.hasAdminAccess(owner));
+        assertFalse(PlateAuthorities.hasAdminPermission(owner, PlateAuthorities.PERMISSION_STORE_APPROVE));
+    }
+
     private UsernamePasswordAuthenticationToken authentication(String... authorities) {
         return new UsernamePasswordAuthenticationToken(
                 "admin",

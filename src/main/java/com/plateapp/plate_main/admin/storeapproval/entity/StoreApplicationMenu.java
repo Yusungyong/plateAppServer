@@ -35,4 +35,20 @@ public class StoreApplicationMenu {
 
     protected StoreApplicationMenu() {
     }
+
+    public static StoreApplicationMenu create(
+            Long applicationId,
+            String name,
+            BigDecimal price,
+            String description,
+            Integer displayOrder
+    ) {
+        StoreApplicationMenu menu = new StoreApplicationMenu();
+        menu.applicationId = applicationId;
+        menu.name = name;
+        menu.price = price;
+        menu.description = description;
+        menu.displayOrder = displayOrder == null ? 0 : displayOrder;
+        return menu;
+    }
 }
