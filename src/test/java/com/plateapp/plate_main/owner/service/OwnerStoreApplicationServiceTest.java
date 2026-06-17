@@ -106,6 +106,33 @@ class OwnerStoreApplicationServiceTest {
         assertEquals(ErrorCode.STORE_APPROVAL_DOCUMENT_INCOMPLETE, exception.getErrorCode());
     }
 
+    @Test
+    void submitAllowsVerifiedBusinessWithoutRegistrationDocument() {
+        stubCurrentUser();
+        StoreApplication application = draftApplication();
+        ReflectionTestUtils.setField(application, "businessVerificationStatus", "verified");
+        when(applicationRepository.findByIdAndApplicantUserId(10L, 100)).thenReturn(Optional.of(application));
+        when(applicationRepository.existsByBusinessNumberHashAndApprovalStatusInAndIdNot(
+                "business-hash",
+                Set.of(
+                        StoreApplication.STATUS_PENDING,
+                        StoreApplication.STATUS_ON_HOLD,
+                        StoreApplication.STATUS_APPROVED
+                ),
+                10L
+        )).thenReturn(false);
+        when(documentRepository.existsByApplicationIdAndDocumentType(10L, "business_registration")).thenReturn(false);
+        when(applicationRepository.saveAndFlush(application)).thenReturn(application);
+
+        OwnerApplicationDtos.SubmitResponse response = service.submit(
+                "owner@example.com",
+                10L,
+                new OwnerApplicationDtos.SubmitRequest(3L)
+        );
+
+        assertEquals(StoreApplication.STATUS_PENDING, response.approvalStatus());
+    }
+
     private void stubCurrentUser() {
         User user = User.builder()
                 .username("owner@example.com")
@@ -118,7 +145,16 @@ class OwnerStoreApplicationServiceTest {
     private OwnerApplicationDtos.StoreApplicationUpsertRequest requestWithBusinessNumber(String businessNumber) {
         return new OwnerApplicationDtos.StoreApplicationUpsertRequest(
                 new OwnerApplicationDtos.OwnerProfileRequest("Owner", "010-1234-5678", "owner@example.com"),
-                new OwnerApplicationDtos.BusinessRequest(businessNumber, "Plate Company"),
+                new OwnerApplicationDtos.BusinessRequest(
+                        businessNumber,
+                        "Plate Company",
+                        "Owner",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                ),
                 new OwnerApplicationDtos.StoreRequest(
                         "Plate Kitchen",
                         "SEOUL",

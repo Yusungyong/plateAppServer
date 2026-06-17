@@ -10,6 +10,7 @@ public final class SecurityPaths {
             "/email/**",
             "/api/auth/**",
             "/api/email/**",
+            "/api/owner/business-verifications",
             "/api/owner/signup-applications",
             "/v3/api-docs/**",
             "/swagger-ui/**",

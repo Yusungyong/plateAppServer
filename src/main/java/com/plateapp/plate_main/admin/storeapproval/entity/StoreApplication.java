@@ -7,6 +7,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import lombok.Getter;
 
@@ -63,6 +64,24 @@ public class StoreApplication {
 
     @Column(name = "business_name", length = 150)
     private String businessName;
+
+    @Column(name = "business_representative_name", length = 100)
+    private String businessRepresentativeName;
+
+    @Column(name = "business_opening_date")
+    private LocalDate businessOpeningDate;
+
+    @Column(name = "business_verification_provider", length = 30)
+    private String businessVerificationProvider;
+
+    @Column(name = "business_verification_status", length = 30)
+    private String businessVerificationStatus;
+
+    @Column(name = "business_verified_at")
+    private OffsetDateTime businessVerifiedAt;
+
+    @Column(name = "business_verification_message", length = 300)
+    private String businessVerificationMessage;
 
     @Column(name = "approval_status", nullable = false, length = 30)
     private String approvalStatus;
@@ -152,6 +171,24 @@ public class StoreApplication {
 
     public void updateBusinessName(String businessName, OffsetDateTime now) {
         this.businessName = businessName;
+        this.updatedAt = now;
+    }
+
+    public void updateBusinessVerification(
+            String businessRepresentativeName,
+            LocalDate businessOpeningDate,
+            String businessVerificationProvider,
+            String businessVerificationStatus,
+            OffsetDateTime businessVerifiedAt,
+            String businessVerificationMessage,
+            OffsetDateTime now
+    ) {
+        this.businessRepresentativeName = businessRepresentativeName;
+        this.businessOpeningDate = businessOpeningDate;
+        this.businessVerificationProvider = businessVerificationProvider;
+        this.businessVerificationStatus = businessVerificationStatus;
+        this.businessVerifiedAt = businessVerifiedAt;
+        this.businessVerificationMessage = businessVerificationMessage;
         this.updatedAt = now;
     }
 

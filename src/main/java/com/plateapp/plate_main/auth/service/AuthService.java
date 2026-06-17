@@ -39,10 +39,14 @@ public class AuthService {
 
     @Transactional
     public void signup(SignupRequest request) {
+        String username = request.getUsername() == null ? "" : request.getUsername().trim();
         String email = request.getEmail() == null ? "" : request.getEmail().trim();
         String rawPassword = request.getPassword();
         String nickname = request.getNickname() == null ? "" : request.getNickname().trim();
 
+        if (userRepository.existsById(username)) {
+            throw new AuthException(ErrorCode.COMMON_CONFLICT, "이미 사용 중인 로그인 ID입니다.");
+        }
         if (userRepository.existsByEmail(email)) {
             throw new AuthException(ErrorCode.COMMON_CONFLICT, "이미 가입된 이메일입니다.");
         }
@@ -50,7 +54,7 @@ public class AuthService {
         LocalDate today = LocalDate.now();
 
         User user = User.builder()
-                .username(email)
+                .username(username)
                 .email(email)
                 .password(passwordEncoder.encode(rawPassword))
                 .nickname(nickname)

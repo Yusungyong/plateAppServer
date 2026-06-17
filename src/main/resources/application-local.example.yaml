@@ -31,3 +31,7 @@ springdoc:
     enabled: true
   swagger-ui:
     enabled: true
+
+external:
+  nts-business:
+    service-key:

@@ -21,6 +21,7 @@ import com.plateapp.plate_main.owner.entity.BusinessProfile;
 import com.plateapp.plate_main.owner.repository.BusinessProfileRepository;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -77,14 +78,16 @@ public class OwnerStoreApplicationService {
     public OwnerApplicationDtos.ApplicationCreatedResponse signupAndCreate(
             OwnerApplicationDtos.SignupApplicationRequest request
     ) {
+        String username = normalizeRequired(request.account().username(), "account.username is required.");
         String email = normalizeRequired(request.account().email(), "account.email is required.");
         SignupRequest signupRequest = new SignupRequest();
+        signupRequest.setUsername(username);
         signupRequest.setEmail(email);
         signupRequest.setPassword(request.account().password());
         signupRequest.setNickname(request.account().nickname());
         authService.signup(signupRequest);
 
-        Integer userId = findUserIdByUsername(email);
+        Integer userId = findUserIdByUsername(username);
         StoreApplication application = createApplication(userId, request.applicationRequest());
         return new OwnerApplicationDtos.ApplicationCreatedResponse(
                 application.getId(),
@@ -168,6 +171,15 @@ public class OwnerStoreApplicationService {
         );
         application.replaceBusinessNumber(data.businessNumberEncrypted(), data.businessNumberHash(), now);
         application.updateBusinessName(data.businessName(), now);
+        application.updateBusinessVerification(
+                data.businessRepresentativeName(),
+                data.businessOpeningDate(),
+                data.businessVerificationProvider(),
+                data.businessVerificationStatus(),
+                data.businessVerifiedAt(),
+                data.businessVerificationMessage(),
+                now
+        );
         replaceChildren(application.getId(), data.categories(), data.menus());
         return toDetail(applicationRepository.saveAndFlush(application));
     }
@@ -266,6 +278,15 @@ public class OwnerStoreApplicationService {
                 data.description(),
                 now
         ));
+        application.updateBusinessVerification(
+                data.businessRepresentativeName(),
+                data.businessOpeningDate(),
+                data.businessVerificationProvider(),
+                data.businessVerificationStatus(),
+                data.businessVerifiedAt(),
+                data.businessVerificationMessage(),
+                now
+        );
         replaceChildren(application.getId(), data.categories(), data.menus());
         return application;
     }
@@ -319,7 +340,13 @@ public class OwnerStoreApplicationService {
                 ),
                 new OwnerApplicationDtos.BusinessResponse(
                         application.getBusinessName(),
-                        businessNumberCrypto.maskEncrypted(application.getBusinessNumberEncrypted())
+                        businessNumberCrypto.maskEncrypted(application.getBusinessNumberEncrypted()),
+                        application.getBusinessRepresentativeName(),
+                        application.getBusinessOpeningDate(),
+                        application.getBusinessVerificationProvider(),
+                        application.getBusinessVerificationStatus(),
+                        application.getBusinessVerifiedAt(),
+                        application.getBusinessVerificationMessage()
                 ),
                 new OwnerApplicationDtos.StoreResponse(
                         application.getStoreName(),
@@ -370,6 +397,12 @@ public class OwnerStoreApplicationService {
                 businessNumberCrypto.encrypt(businessNumber),
                 businessNumberHash,
                 normalizeNullable(request.business().businessName()),
+                normalizeNullable(request.business().representativeName()),
+                request.business().openingDate(),
+                normalizeUpperNullable(request.business().verificationProvider()),
+                normalizeLowerNullable(request.business().verificationStatus()),
+                request.business().verificationVerifiedAt(),
+                normalizeNullable(request.business().verificationMessage()),
                 normalizeRequired(request.store().storeName(), "store.storeName is required."),
                 normalizeUpperRequired(request.store().regionCode(), "store.regionCode is required."),
                 normalizeRequired(request.store().address(), "store.address is required."),
@@ -382,10 +415,12 @@ public class OwnerStoreApplicationService {
     }
 
     private void assertSubmittable(StoreApplication application) {
-        if (!documentRepository.existsByApplicationIdAndDocumentType(
+        boolean hasVerifiedBusiness = "verified".equals(application.getBusinessVerificationStatus());
+        boolean hasBusinessRegistrationDocument = documentRepository.existsByApplicationIdAndDocumentType(
                 application.getId(),
                 "business_registration"
-        )) {
+        );
+        if (!hasVerifiedBusiness && !hasBusinessRegistrationDocument) {
             throw new AppException(ErrorCode.STORE_APPROVAL_DOCUMENT_INCOMPLETE);
         }
         if (isBlank(application.getStoreName())
@@ -511,6 +546,16 @@ public class OwnerStoreApplicationService {
         return normalizeRequired(value, message).toUpperCase(Locale.ROOT);
     }
 
+    private String normalizeUpperNullable(String value) {
+        String normalized = normalizeNullable(value);
+        return normalized == null ? null : normalized.toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeLowerNullable(String value) {
+        String normalized = normalizeNullable(value);
+        return normalized == null ? null : normalized.toLowerCase(Locale.ROOT);
+    }
+
     private String normalizeUpper(String value) {
         return normalizeRequired(value, "code is required.").toUpperCase(Locale.ROOT);
     }
@@ -560,6 +605,12 @@ public class OwnerStoreApplicationService {
             byte[] businessNumberEncrypted,
             String businessNumberHash,
             String businessName,
+            String businessRepresentativeName,
+            LocalDate businessOpeningDate,
+            String businessVerificationProvider,
+            String businessVerificationStatus,
+            OffsetDateTime businessVerifiedAt,
+            String businessVerificationMessage,
             String storeName,
             String regionCode,
             String address,

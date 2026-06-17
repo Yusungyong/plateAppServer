@@ -17,6 +17,7 @@ class SecurityPathsTest {
         assertTrue(matchers.contains("/email/**"));
         assertTrue(matchers.contains("/api/auth/**"));
         assertTrue(matchers.contains("/api/email/**"));
+        assertTrue(matchers.contains("/api/owner/business-verifications"));
         assertTrue(matchers.contains("/api/owner/signup-applications"));
         assertTrue(matchers.contains("/v3/api-docs/**"));
         assertTrue(matchers.contains("/swagger-ui/**"));

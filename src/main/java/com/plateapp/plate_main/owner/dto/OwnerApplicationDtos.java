@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -15,6 +16,7 @@ public final class OwnerApplicationDtos {
     }
 
     public record AccountRequest(
+            @NotBlank @Size(min = 4, max = 64) String username,
             @NotBlank @Email String email,
             @NotBlank @Size(min = 8, max = 64) String password,
             @NotBlank @Size(max = 100) String nickname
@@ -30,7 +32,13 @@ public final class OwnerApplicationDtos {
 
     public record BusinessRequest(
             @NotBlank String businessNumber,
-            @Size(max = 150) String businessName
+            @Size(max = 150) String businessName,
+            @Size(max = 100) String representativeName,
+            LocalDate openingDate,
+            @Size(max = 30) String verificationProvider,
+            @Size(max = 30) String verificationStatus,
+            OffsetDateTime verificationVerifiedAt,
+            @Size(max = 300) String verificationMessage
     ) {
     }
 
@@ -153,7 +161,16 @@ public final class OwnerApplicationDtos {
     public record OwnerProfileResponse(String ownerName, String ownerPhone, String ownerEmail) {
     }
 
-    public record BusinessResponse(String businessName, String businessNumber) {
+    public record BusinessResponse(
+            String businessName,
+            String businessNumber,
+            String representativeName,
+            LocalDate openingDate,
+            String verificationProvider,
+            String verificationStatus,
+            OffsetDateTime verificationVerifiedAt,
+            String verificationMessage
+    ) {
     }
 
     public record StoreResponse(

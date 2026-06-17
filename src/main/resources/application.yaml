@@ -156,3 +156,10 @@ firebase:
   enabled: ${FIREBASE_ENABLED:false}
   project-id: ${FIREBASE_PROJECT_ID:}
   service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:}
+
+external:
+  nts-business:
+    base-url: ${NTS_BUSINESS_BASE_URL:https://api.odcloud.kr/api/nts-businessman/v1}
+    service-key: ${NTS_BUSINESS_SERVICE_KEY:}
+    timeout-ms: ${NTS_BUSINESS_TIMEOUT_MS:5000}
+    enabled: ${NTS_BUSINESS_VERIFICATION_ENABLED:true}

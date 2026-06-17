@@ -12,8 +12,12 @@ import lombok.Setter;
 public class SignupRequest {
 
     @NotBlank
+    @Size(min = 4, max = 64)
+    private String username;
+
+    @NotBlank
     @Email
-    private String email;   // RN에서 id로 입력한 값
+    private String email;
 
     @NotBlank
     @Size(min = 8, max = 64)
@@ -24,6 +28,10 @@ public class SignupRequest {
 
     public String getEmail() {
         return email;
+    }
+
+    public String getUsername() {
+        return username;
     }
 
     public String getPassword() {
