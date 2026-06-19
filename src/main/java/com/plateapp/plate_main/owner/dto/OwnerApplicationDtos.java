@@ -16,10 +16,10 @@ public final class OwnerApplicationDtos {
     }
 
     public record AccountRequest(
-            @NotBlank @Size(min = 4, max = 64) String username,
-            @NotBlank @Email String email,
+            @NotBlank String username,
+            @NotBlank String email,
             @NotBlank @Size(min = 8, max = 64) String password,
-            @NotBlank @Size(max = 100) String nickname
+            @NotBlank String nickname
     ) {
     }
 

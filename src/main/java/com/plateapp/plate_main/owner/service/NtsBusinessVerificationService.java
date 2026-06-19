@@ -15,8 +15,6 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
@@ -24,7 +22,6 @@ import org.springframework.web.client.RestTemplate;
 @Service
 public class NtsBusinessVerificationService {
 
-    private static final Logger log = LoggerFactory.getLogger(NtsBusinessVerificationService.class);
     private static final String PROVIDER = "NTS";
     private static final DateTimeFormatter NTS_DATE = DateTimeFormatter.BASIC_ISO_DATE;
 
@@ -51,12 +48,6 @@ public class NtsBusinessVerificationService {
     public BusinessVerificationDtos.VerifyResponse verify(BusinessVerificationDtos.VerifyRequest request) {
         String businessNumber = normalizeBusinessNumber(request.businessNumber());
         if (!enabled || serviceKey.isBlank()) {
-            log.warn(
-                    "NTS business verification unavailable. businessNumber={}, enabled={}, serviceKeyConfigured={}",
-                    maskBusinessNumber(businessNumber),
-                    enabled,
-                    !serviceKey.isBlank()
-            );
             throw unavailable();
         }
 
@@ -79,21 +70,8 @@ public class NtsBusinessVerificationService {
                     new HttpEntity<>(body, headers),
                     JsonNode.class
             );
-            BusinessVerificationDtos.VerifyResponse result = toResponse(response);
-            log.info(
-                    "NTS business verification completed. businessNumber={}, status={}, verified={}, provider={}",
-                    maskBusinessNumber(businessNumber),
-                    result.verificationStatus(),
-                    result.verified(),
-                    result.provider()
-            );
-            return result;
+            return toResponse(response);
         } catch (RestClientException | IllegalArgumentException e) {
-            log.warn(
-                    "NTS business verification failed. businessNumber={}, reason={}",
-                    maskBusinessNumber(businessNumber),
-                    e.getClass().getSimpleName()
-            );
             throw unavailable();
         }
     }
@@ -125,13 +103,6 @@ public class NtsBusinessVerificationService {
             throw new AppException(ErrorCode.BUSINESS_NUMBER_INVALID);
         }
         return normalized;
-    }
-
-    private String maskBusinessNumber(String value) {
-        if (value == null || value.length() < 3) {
-            return "***-**-*****";
-        }
-        return value.substring(0, 3) + "-**-*****";
     }
 
     private String nullToBlank(String value) {

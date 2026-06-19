@@ -18,6 +18,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 import com.plateapp.plate_main.common.api.ApiResponse;
 import com.plateapp.plate_main.common.security.RateLimitException;
+import com.plateapp.plate_main.auth.exception.AccountConflictException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +30,15 @@ import jakarta.validation.ConstraintViolationException;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(AccountConflictException.class)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> handleAccountConflict(AccountConflictException e) {
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("fieldErrors", e.getFieldErrors());
+        ErrorCode ec = e.getErrorCode();
+        return ResponseEntity.status(ec.getStatus())
+                .body(ApiResponse.fail(ec.getCode(), e.getMessage(), details));
+    }
 
     @ExceptionHandler(AppException.class)
     public ResponseEntity<ApiResponse<Void>> handleAppException(AppException e) {
@@ -135,6 +146,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleRateLimit(RateLimitException e) {
         return ResponseEntity.status(429)
                 .body(ApiResponse.fail("COMMON_429", e.getMessage()));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(DataIntegrityViolationException e) {
+        ErrorCode ec = ErrorCode.COMMON_CONFLICT;
+        return ResponseEntity.status(ec.getStatus())
+                .body(ApiResponse.fail(ec.getCode(), ec.getDefaultMessage()));
     }
 
     @ExceptionHandler(Exception.class)

@@ -2,10 +2,13 @@
 package com.plateapp.plate_main.auth.domain;
 
 import java.time.LocalDate;
+import java.util.Locale;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -65,4 +68,18 @@ public class User {
 
     @Column(name = "user_id", insertable = false, updatable = false)
     private Integer userId;
+
+    @PrePersist
+    @PreUpdate
+    private void normalizeAccountFields() {
+        if (username != null) {
+            username = username.trim();
+        }
+        if (email != null) {
+            email = email.trim().toLowerCase(Locale.ROOT);
+        }
+        if (nickname != null) {
+            nickname = nickname.trim();
+        }
+    }
 }

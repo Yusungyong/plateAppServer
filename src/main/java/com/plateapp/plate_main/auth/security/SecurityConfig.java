@@ -56,6 +56,7 @@ public class SecurityConfig {
                     "/api/auth/social/**",
                     "/api/owner/business-verifications",
                     "/api/owner/signup-applications",
+                    "/api/owner/signup-account-validations",
                     "/api/email/**",
                     "/api/auth/reset-password",
                     "/api/health",

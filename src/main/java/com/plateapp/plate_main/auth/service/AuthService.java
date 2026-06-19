@@ -22,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @Service
 @RequiredArgsConstructor
@@ -36,20 +37,21 @@ public class AuthService {
     private final BCryptPasswordEncoder passwordEncoder;
     private final UserPushTokenService userPushTokenService;
     private final AdminPermissionService adminPermissionService;
+    private final AccountValidationService accountValidationService;
 
     @Transactional
     public void signup(SignupRequest request) {
-        String username = request.getUsername() == null ? "" : request.getUsername().trim();
-        String email = request.getEmail() == null ? "" : request.getEmail().trim();
-        String rawPassword = request.getPassword();
-        String nickname = request.getNickname() == null ? "" : request.getNickname().trim();
+        AccountValidationService.NormalizedAccount account = accountValidationService.normalizeAccount(
+                request.getUsername(),
+                request.getEmail(),
+                request.getNickname()
+        );
+        accountValidationService.assertAvailable(account);
 
-        if (userRepository.existsById(username)) {
-            throw new AuthException(ErrorCode.COMMON_CONFLICT, "이미 사용 중인 로그인 ID입니다.");
-        }
-        if (userRepository.existsByEmail(email)) {
-            throw new AuthException(ErrorCode.COMMON_CONFLICT, "이미 가입된 이메일입니다.");
-        }
+        String username = account.username();
+        String email = account.email();
+        String rawPassword = request.getPassword();
+        String nickname = account.nickname();
 
         LocalDate today = LocalDate.now();
 
@@ -62,7 +64,11 @@ public class AuthService {
                 .updatedAt(today)
                 .build();
 
-        userRepository.saveAndFlush(user);
+        try {
+            userRepository.saveAndFlush(user);
+        } catch (DataIntegrityViolationException e) {
+            throw accountValidationService.conflictFrom(e);
+        }
     }
 
     @Transactional
