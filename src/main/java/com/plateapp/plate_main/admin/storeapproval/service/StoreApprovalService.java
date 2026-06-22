@@ -113,9 +113,17 @@ public class StoreApprovalService {
         }
 
         String normalizedKeyword = normalizeNullable(keyword);
+        boolean hasKeyword = normalizedKeyword != null;
+        String keywordPattern = hasKeyword
+                ? "%" + normalizedKeyword.toLowerCase(Locale.ROOT) + "%"
+                : "";
+        String businessNumberHash = hasKeyword
+                ? businessNumberCrypto.hash(normalizedKeyword)
+                : "";
         Page<StoreApplication> result = applicationRepository.search(
-                normalizedKeyword,
-                businessNumberCrypto.hash(normalizedKeyword),
+                hasKeyword,
+                keywordPattern,
+                businessNumberHash,
                 normalizeUpper(region),
                 normalizeUpper(category),
                 normalizeEnum(status, APPROVAL_STATUSES, "status"),

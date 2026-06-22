@@ -36,12 +36,12 @@ public interface StoreApplicationRepository extends JpaRepository<StoreApplicati
     @Query("""
         select application
         from StoreApplication application
-        where (:keyword is null
-               or lower(application.storeName) like lower(concat('%', :keyword, '%'))
-               or lower(application.ownerName) like lower(concat('%', :keyword, '%'))
-               or lower(coalesce(application.phone, '')) like lower(concat('%', :keyword, '%'))
-               or lower(application.address) like lower(concat('%', :keyword, '%'))
-               or (:businessNumberHash is not null and application.businessNumberHash = :businessNumberHash))
+        where (:hasKeyword = false
+               or lower(application.storeName) like :keywordPattern
+               or lower(application.ownerName) like :keywordPattern
+               or lower(coalesce(application.phone, '')) like :keywordPattern
+               or lower(application.address) like :keywordPattern
+               or application.businessNumberHash = :businessNumberHash)
           and (:region is null or application.regionCode = :region)
           and (:status is null or application.approvalStatus = :status)
           and (:verificationStatus is null or application.verificationStatus = :verificationStatus)
@@ -55,7 +55,8 @@ public interface StoreApplicationRepository extends JpaRepository<StoreApplicati
           ))
         """)
     Page<StoreApplication> search(
-            @Param("keyword") String keyword,
+            @Param("hasKeyword") boolean hasKeyword,
+            @Param("keywordPattern") String keywordPattern,
             @Param("businessNumberHash") String businessNumberHash,
             @Param("region") String region,
             @Param("category") String category,

@@ -3,6 +3,9 @@ package com.plateapp.plate_main.admin.storeapproval.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -40,6 +43,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -96,6 +101,41 @@ class StoreApprovalServiceTest {
                 s3UploadService,
                 documentAccessService,
                 storeOwnerRepository
+        );
+    }
+
+    @Test
+    void listUsesNonNullSearchParametersWhenKeywordIsMissing() {
+        when(applicationRepository.search(
+                eq(false), eq(""), eq(""), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(),
+                any(Pageable.class)
+        )).thenReturn(Page.empty());
+
+        StoreApprovalDtos.ListResponse response = service.list(
+                0, 20, null, null, null, null, null, null, null, "appliedAt,desc"
+        );
+
+        assertEquals(0, response.totalElements());
+        verify(applicationRepository).search(
+                eq(false), eq(""), eq(""), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(),
+                any(Pageable.class)
+        );
+        verify(businessNumberCrypto, never()).hash(anyString());
+    }
+
+    @Test
+    void listBuildsLowercasePatternAndBusinessNumberHashWhenKeywordExists() {
+        when(businessNumberCrypto.hash("Plate 123")).thenReturn("business-hash");
+        when(applicationRepository.search(
+                eq(true), eq("%plate 123%"), eq("business-hash"), isNull(), isNull(), isNull(), isNull(),
+                isNull(), isNull(), any(Pageable.class)
+        )).thenReturn(Page.empty());
+
+        service.list(0, 20, "  Plate 123  ", null, null, null, null, null, null, "appliedAt,desc");
+
+        verify(applicationRepository).search(
+                eq(true), eq("%plate 123%"), eq("business-hash"), isNull(), isNull(), isNull(), isNull(),
+                isNull(), isNull(), any(Pageable.class)
         );
     }
 
