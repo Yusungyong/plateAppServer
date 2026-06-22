@@ -79,9 +79,20 @@ server:
     include-stacktrace: ${SERVER_ERROR_INCLUDE_STACKTRACE:never}
   servlet:
     encoding:
-      charset: UTF-8
+      charset: UTF-8  
       force: true
       enabled: true
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001}
+    # Bearer 인증은 쿠키를 사용하지 않으므로 기본값은 false입니다.
+    allow-credentials: ${CORS_ALLOW_CREDENTIALS:false}
+    max-age: ${CORS_MAX_AGE:1h}
+
+feedback:
+  contact-retention-days: ${FEEDBACK_CONTACT_RETENTION_DAYS:90}
+  contact-purge-cron: "${FEEDBACK_CONTACT_PURGE_CRON:0 30 3 * * *}"
 
 jwt:
   access-expire: 3600000        # 1 hour in ms

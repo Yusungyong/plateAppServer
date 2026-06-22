@@ -82,6 +82,7 @@ public class SecurityConfig {
                     "/api/image-feeds/groups/*/images"
                 ).permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/qna").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/feedback").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/home/video-events").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/home/impressions").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/detail/*/public-profile").authenticated()

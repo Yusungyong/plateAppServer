@@ -3,6 +3,7 @@ package com.plateapp.plate_main.feed.repository;
 import java.util.List;
 
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -10,6 +11,10 @@ import org.springframework.data.repository.query.Param;
 import com.plateapp.plate_main.feed.entity.Fp400Feed;
 
 public interface Fp400FeedRepository extends JpaRepository<Fp400Feed, Integer> {
+
+  @Modifying(clearAutomatically = true, flushAutomatically = true)
+  @Query("update Fp400Feed f set f.useYn = :useYn where f.feedNo = :feedId")
+  int updateAdminVisibility(@Param("feedId") Integer feedId, @Param("useYn") String useYn);
 
   @Query("""
     select f

@@ -18,4 +18,8 @@ public interface ReportRepository extends JpaRepository<Fp40Report, Integer> {
           and r.targetUsername is not null
     """)
     List<String> findReportedUsernames(@Param("username") String username);
+
+    Page<Fp40Report> findByTargetTypeIgnoreCaseAndTargetId(String targetType, Integer targetId, Pageable pageable);
+
+    long countByTargetTypeIgnoreCaseAndTargetId(String targetType, Integer targetId);
 }

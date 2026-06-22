@@ -9,6 +9,7 @@ ENV_FILE="/etc/plate-main.env"
 SERVER_PORT="$(grep -E "^[[:space:]]*SERVER_PORT=" "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' || true)"
 SERVER_PORT="${SERVER_PORT:-8090}"
 APP_URL="http://127.0.0.1:${SERVER_PORT}/api/health"
+CORS_SMOKE_ORIGIN="$(grep -E "^[[:space:]]*CORS_SMOKE_ORIGIN=" "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' || true)"
 MAX_RETRIES=30
 SLEEP_SECONDS=2
 CURL_TIMEOUT_SECONDS=2
@@ -41,6 +42,20 @@ for ((i=1; i<=MAX_RETRIES; i++)); do
   http_code="$(curl -sS -o /tmp/plate-main-health.out -w "%{http_code}" --max-time "$CURL_TIMEOUT_SECONDS" "$APP_URL" || true)"
   if [ "$http_code" = "200" ]; then
     log "Health check succeeded."
+    if [ -n "$CORS_SMOKE_ORIGIN" ]; then
+      cors_code="$(curl -sS -o /dev/null -D /tmp/plate-main-cors.headers -w "%{http_code}" \
+        --max-time "$CURL_TIMEOUT_SECONDS" -X OPTIONS \
+        -H "Origin: ${CORS_SMOKE_ORIGIN}" \
+        -H "Access-Control-Request-Method: GET" \
+        -H "Access-Control-Request-Headers: authorization,content-type" \
+        "http://127.0.0.1:${SERVER_PORT}/api/admin/stores" || true)"
+      if [ "$cors_code" != "200" ] || ! grep -Fqi "access-control-allow-origin: ${CORS_SMOKE_ORIGIN}" /tmp/plate-main-cors.headers; then
+        log "CORS preflight failed for ${CORS_SMOKE_ORIGIN} with http_code=${cors_code}."
+        cat /tmp/plate-main-cors.headers || true
+        exit 1
+      fi
+      log "CORS preflight succeeded for ${CORS_SMOKE_ORIGIN}."
+    fi
     exit 0
   fi
   log "Health check failed with http_code=${http_code}. Sleeping ${SLEEP_SECONDS}s before retry."
