@@ -45,8 +45,8 @@ public interface StoreApplicationRepository extends JpaRepository<StoreApplicati
           and (:region is null or application.regionCode = :region)
           and (:status is null or application.approvalStatus = :status)
           and (:verificationStatus is null or application.verificationStatus = :verificationStatus)
-          and (:appliedFrom is null or application.appliedAt >= :appliedFrom)
-          and (:appliedToExclusive is null or application.appliedAt < :appliedToExclusive)
+          and (:hasAppliedFrom = false or application.appliedAt >= :appliedFrom)
+          and (:hasAppliedTo = false or application.appliedAt < :appliedToExclusive)
           and (:category is null or exists (
               select 1
               from StoreApplicationCategory category
@@ -62,7 +62,9 @@ public interface StoreApplicationRepository extends JpaRepository<StoreApplicati
             @Param("category") String category,
             @Param("status") String status,
             @Param("verificationStatus") String verificationStatus,
+            @Param("hasAppliedFrom") boolean hasAppliedFrom,
             @Param("appliedFrom") OffsetDateTime appliedFrom,
+            @Param("hasAppliedTo") boolean hasAppliedTo,
             @Param("appliedToExclusive") OffsetDateTime appliedToExclusive,
             Pageable pageable
     );

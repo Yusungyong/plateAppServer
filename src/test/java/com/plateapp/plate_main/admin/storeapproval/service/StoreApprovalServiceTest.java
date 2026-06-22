@@ -107,7 +107,8 @@ class StoreApprovalServiceTest {
     @Test
     void listUsesNonNullSearchParametersWhenKeywordIsMissing() {
         when(applicationRepository.search(
-                eq(false), eq(""), eq(""), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(),
+                eq(false), eq(""), eq(""), isNull(), isNull(), isNull(), isNull(),
+                eq(false), isNull(), eq(false), isNull(),
                 any(Pageable.class)
         )).thenReturn(Page.empty());
 
@@ -117,7 +118,8 @@ class StoreApprovalServiceTest {
 
         assertEquals(0, response.totalElements());
         verify(applicationRepository).search(
-                eq(false), eq(""), eq(""), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(),
+                eq(false), eq(""), eq(""), isNull(), isNull(), isNull(), isNull(),
+                eq(false), isNull(), eq(false), isNull(),
                 any(Pageable.class)
         );
         verify(businessNumberCrypto, never()).hash(anyString());
@@ -128,14 +130,14 @@ class StoreApprovalServiceTest {
         when(businessNumberCrypto.hash("Plate 123")).thenReturn("business-hash");
         when(applicationRepository.search(
                 eq(true), eq("%plate 123%"), eq("business-hash"), isNull(), isNull(), isNull(), isNull(),
-                isNull(), isNull(), any(Pageable.class)
+                eq(false), isNull(), eq(false), isNull(), any(Pageable.class)
         )).thenReturn(Page.empty());
 
         service.list(0, 20, "  Plate 123  ", null, null, null, null, null, null, "appliedAt,desc");
 
         verify(applicationRepository).search(
                 eq(true), eq("%plate 123%"), eq("business-hash"), isNull(), isNull(), isNull(), isNull(),
-                isNull(), isNull(), any(Pageable.class)
+                eq(false), isNull(), eq(false), isNull(), any(Pageable.class)
         );
     }
 

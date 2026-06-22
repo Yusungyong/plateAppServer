@@ -120,6 +120,8 @@ public class StoreApprovalService {
         String businessNumberHash = hasKeyword
                 ? businessNumberCrypto.hash(normalizedKeyword)
                 : "";
+        OffsetDateTime appliedFromStart = startOfDay(appliedFrom);
+        OffsetDateTime appliedToExclusive = startOfNextDay(appliedTo);
         Page<StoreApplication> result = applicationRepository.search(
                 hasKeyword,
                 keywordPattern,
@@ -128,8 +130,10 @@ public class StoreApprovalService {
                 normalizeUpper(category),
                 normalizeEnum(status, APPROVAL_STATUSES, "status"),
                 normalizeEnum(verificationStatus, VERIFICATION_STATUSES, "verificationStatus"),
-                startOfDay(appliedFrom),
-                startOfNextDay(appliedTo),
+                appliedFromStart != null,
+                appliedFromStart,
+                appliedToExclusive != null,
+                appliedToExclusive,
                 PageRequest.of(page, size, parseSort(sort))
         );
 
