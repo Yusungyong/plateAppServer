@@ -1,6 +1,8 @@
 package com.plateapp.plate_main.admin.storeapproval.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -22,6 +24,8 @@ import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationDo
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationMenuRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationReviewRepository;
+import com.plateapp.plate_main.admin.storeoperation.entity.AdminStoreOperation;
+import com.plateapp.plate_main.admin.storeoperation.repository.AdminStoreOperationRepository;
 import com.plateapp.plate_main.common.error.AppException;
 import com.plateapp.plate_main.common.error.ErrorCode;
 import com.plateapp.plate_main.common.s3.S3UploadService;
@@ -68,6 +72,8 @@ class StoreApprovalServiceTest {
     @Mock
     private RestaurantMenuRepository restaurantMenuRepository;
     @Mock
+    private AdminStoreOperationRepository storeOperationRepository;
+    @Mock
     private AdminOutboxEventRepository outboxRepository;
     @Mock
     private AdminAuditService auditService;
@@ -95,6 +101,7 @@ class StoreApprovalServiceTest {
                 restaurantRepository,
                 restaurantCategoryRepository,
                 restaurantMenuRepository,
+                storeOperationRepository,
                 outboxRepository,
                 auditService,
                 businessNumberCrypto,
@@ -191,6 +198,8 @@ class StoreApprovalServiceTest {
                 .thenReturn(List.of());
         when(applicationMenuRepository.findByApplicationIdOrderByDisplayOrderAscIdAsc(10L))
                 .thenReturn(List.of());
+        when(storeOwnerRepository.findFirstByStoreIdAndUserIdOrderByCreatedAtDescIdDesc(55L, 100))
+                .thenReturn(Optional.empty());
         when(applicationRepository.saveAndFlush(application)).thenReturn(application);
 
         StoreApprovalDtos.ActionResponse response = service.approve(
@@ -230,6 +239,91 @@ class StoreApprovalServiceTest {
 
         assertEquals(ErrorCode.STORE_APPROVAL_VERIFICATION_INCOMPLETE, exception.getErrorCode());
         verify(restaurantRepository, never()).save(any(Restaurant.class));
+    }
+
+    @Test
+    void approveRestoresRejectedApplicationWithoutCreatingDuplicateStore() {
+        StoreApplication application = application(10L, 3L, StoreApplication.STATUS_REJECTED,
+                StoreApplication.VERIFICATION_VERIFIED);
+        ReflectionTestUtils.setField(application, "storeId", 55L);
+        Restaurant restaurant = Restaurant.create(
+                "Plate Kitchen",
+                "Seoul",
+                "02-1234-5678",
+                null,
+                "Introduction",
+                "hidden"
+        );
+        ReflectionTestUtils.setField(restaurant, "id", 55L);
+        StoreOwner owner = StoreOwner.createOwner(55L, 100);
+        owner.revoke(OffsetDateTime.now(ZoneOffset.UTC));
+
+        when(applicationRepository.findById(10L)).thenReturn(Optional.of(application));
+        when(applicationDocumentRepository.countByApplicationId(10L)).thenReturn(2L);
+        when(applicationDocumentRepository.countByApplicationIdAndVerificationStatus(10L, "verified")).thenReturn(2L);
+        when(applicationRepository.existsByBusinessNumberHashAndApprovalStatusAndIdNot(
+                "business-hash",
+                StoreApplication.STATUS_APPROVED,
+                10L
+        )).thenReturn(false);
+        when(restaurantRepository.findById(55L)).thenReturn(Optional.of(restaurant));
+        when(storeOperationRepository.findById(55L)).thenReturn(Optional.empty());
+        when(storeOwnerRepository.findFirstByStoreIdAndUserIdOrderByCreatedAtDescIdDesc(55L, 100))
+                .thenReturn(Optional.of(owner));
+        when(applicationRepository.saveAndFlush(application)).thenReturn(application);
+
+        StoreApprovalDtos.ActionResponse response = service.approve(
+                10L,
+                new StoreApprovalDtos.ApproveRequest(3L, "restored"),
+                actor(),
+                request
+        );
+
+        assertEquals(StoreApplication.STATUS_APPROVED, response.approvalStatus());
+        assertEquals(55L, response.storeId());
+        assertNull(owner.getRevokedAt());
+        verify(restaurantRepository, never()).save(any(Restaurant.class));
+        verify(storeOperationRepository).save(any(AdminStoreOperation.class));
+    }
+
+    @Test
+    void rejectApprovedApplicationDeactivatesStoreAndOwner() {
+        StoreApplication application = application(10L, 3L, StoreApplication.STATUS_APPROVED,
+                StoreApplication.VERIFICATION_VERIFIED);
+        ReflectionTestUtils.setField(application, "storeId", 55L);
+        Restaurant restaurant = Restaurant.create(
+                "Plate Kitchen",
+                "Seoul",
+                "02-1234-5678",
+                null,
+                "Introduction",
+                "published"
+        );
+        ReflectionTestUtils.setField(restaurant, "id", 55L);
+        StoreOwner owner = StoreOwner.createOwner(55L, 100);
+
+        when(applicationRepository.findById(10L)).thenReturn(Optional.of(application));
+        when(restaurantRepository.findById(55L)).thenReturn(Optional.of(restaurant));
+        when(storeOperationRepository.findById(55L)).thenReturn(Optional.empty());
+        when(storeOwnerRepository.findByStoreIdAndRevokedAtIsNull(55L)).thenReturn(List.of(owner));
+        when(applicationRepository.saveAndFlush(application)).thenReturn(application);
+
+        StoreApprovalDtos.ActionResponse response = service.reject(
+                10L,
+                new StoreApprovalDtos.RejectRequest(
+                        3L,
+                        "BUSINESS_INFO_MISMATCH",
+                        "Business information does not match the application."
+                ),
+                actor(),
+                request
+        );
+
+        assertEquals(StoreApplication.STATUS_REJECTED, response.approvalStatus());
+        assertEquals("hidden", restaurant.getExposureStatus());
+        assertNotNull(owner.getRevokedAt());
+        verify(restaurantRepository).save(restaurant);
+        verify(storeOperationRepository).save(any(AdminStoreOperation.class));
     }
 
     private StoreApplication application(Long id, Long version, String status, String verificationStatus) {

@@ -48,6 +48,14 @@ public class StoreOwner {
         return owner;
     }
 
+    public void revoke(OffsetDateTime now) {
+        this.revokedAt = now;
+    }
+
+    public void restore() {
+        this.revokedAt = null;
+    }
+
     @PrePersist
     void prePersist() {
         this.createdAt = OffsetDateTime.now(ZoneOffset.UTC);

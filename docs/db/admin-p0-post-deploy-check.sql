@@ -63,7 +63,7 @@ order by u.user_id, required_permissions.permission;
 -- Expected: 0 rows
 select id, approval_status, verification_status
 from store_applications
-where approval_status not in ('pending', 'on_hold', 'approved', 'rejected')
+where approval_status not in ('draft', 'pending', 'on_hold', 'approved', 'rejected')
    or verification_status not in ('not_requested', 'reviewing', 'verified', 'rejected');
 
 -- Expected: 0 rows

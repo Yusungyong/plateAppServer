@@ -15,6 +15,8 @@ import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationDo
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationMenuRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationReviewRepository;
+import com.plateapp.plate_main.admin.storeoperation.entity.AdminStoreOperation;
+import com.plateapp.plate_main.admin.storeoperation.repository.AdminStoreOperationRepository;
 import com.plateapp.plate_main.common.error.AppException;
 import com.plateapp.plate_main.common.error.ErrorCode;
 import com.plateapp.plate_main.common.filter.RequestIdFilter;
@@ -50,7 +52,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class StoreApprovalService {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
-    private static final Set<String> APPROVAL_STATUSES = Set.of("pending", "on_hold", "approved", "rejected");
+    private static final Set<String> APPROVAL_STATUSES = Set.of("draft", "pending", "on_hold", "approved", "rejected");
     private static final Set<String> VERIFICATION_STATUSES = Set.of("not_requested", "reviewing", "verified", "rejected");
     private static final Set<String> REJECTION_CODES = Set.of(
             "MISSING_DOCUMENT",
@@ -87,6 +89,7 @@ public class StoreApprovalService {
     private final RestaurantRepository restaurantRepository;
     private final RestaurantCategoryRepository restaurantCategoryRepository;
     private final RestaurantMenuRepository restaurantMenuRepository;
+    private final AdminStoreOperationRepository storeOperationRepository;
     private final AdminOutboxEventRepository outboxRepository;
     private final AdminAuditService auditService;
     private final BusinessNumberCrypto businessNumberCrypto;
@@ -234,7 +237,11 @@ public class StoreApprovalService {
     ) {
         StoreApplication application = findApplication(applicationId);
         assertVersion(application, command.version());
-        assertTransitionAllowed(application, Set.of(StoreApplication.STATUS_PENDING, StoreApplication.STATUS_ON_HOLD));
+        assertTransitionAllowed(application, Set.of(
+                StoreApplication.STATUS_PENDING,
+                StoreApplication.STATUS_ON_HOLD,
+                StoreApplication.STATUS_REJECTED
+        ));
         if (!StoreApplication.VERIFICATION_VERIFIED.equals(application.getVerificationStatus())) {
             throw new AppException(ErrorCode.STORE_APPROVAL_VERIFICATION_INCOMPLETE);
         }
@@ -249,16 +256,7 @@ public class StoreApprovalService {
 
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         String previousStatus = application.getApprovalStatus();
-        Restaurant restaurant = restaurantRepository.save(Restaurant.create(
-                application.getStoreName(),
-                application.getAddress(),
-                application.getPhone(),
-                null,
-                application.getDescription(),
-                "draft"
-        ));
-        copyApplicationChildren(applicationId, restaurant.getId());
-        storeOwnerRepository.save(StoreOwner.createOwner(restaurant.getId(), application.getApplicantUserId()));
+        Restaurant restaurant = activateApprovedStore(application, actor.userId());
         application.approve(restaurant.getId(), actor.userId(), now);
         application = applicationRepository.saveAndFlush(application);
 
@@ -306,10 +304,17 @@ public class StoreApprovalService {
 
         StoreApplication application = findApplication(applicationId);
         assertVersion(application, command.version());
-        assertTransitionAllowed(application, Set.of(StoreApplication.STATUS_PENDING, StoreApplication.STATUS_ON_HOLD));
+        assertTransitionAllowed(application, Set.of(
+                StoreApplication.STATUS_PENDING,
+                StoreApplication.STATUS_ON_HOLD,
+                StoreApplication.STATUS_APPROVED
+        ));
 
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         String previousStatus = application.getApprovalStatus();
+        if (StoreApplication.STATUS_APPROVED.equals(previousStatus)) {
+            deactivateRejectedStore(application, reason, actor.userId(), now);
+        }
         application.reject(actor.userId(), now);
         application = applicationRepository.saveAndFlush(application);
         saveReview(applicationId, previousStatus, application.getApprovalStatus(), reasonCode, reason, null, actor.userId(), now);
@@ -351,6 +356,80 @@ public class StoreApprovalService {
                 request
         );
         return new StoreApprovalDtos.DocumentAccessResponse(presigned.accessUrl(), presigned.expiresAt());
+    }
+
+    private Restaurant activateApprovedStore(StoreApplication application, Integer actorUserId) {
+        Long storeId = application.getStoreId();
+        if (storeId != null) {
+            Restaurant restaurant = restaurantRepository.findById(storeId)
+                    .orElseThrow(() -> new AppException(ErrorCode.COMMON_NOT_FOUND));
+            AdminStoreOperation operation = storeOperationRepository.findById(storeId)
+                    .orElseGet(() -> AdminStoreOperation.initial(storeId, defaultVisibility(restaurant)));
+            operation.changeOperation("operating", "Store approval restored.", actorUserId);
+            storeOperationRepository.save(operation);
+            ensureActiveOwner(storeId, application.getApplicantUserId());
+            return restaurant;
+        }
+
+        Restaurant restaurant = restaurantRepository.save(Restaurant.create(
+                application.getStoreName(),
+                application.getAddress(),
+                application.getPhone(),
+                null,
+                application.getDescription(),
+                "draft"
+        ));
+        copyApplicationChildren(application.getId(), restaurant.getId());
+        ensureActiveOwner(restaurant.getId(), application.getApplicantUserId());
+        return restaurant;
+    }
+
+    private void deactivateRejectedStore(
+            StoreApplication application,
+            String reason,
+            Integer actorUserId,
+            OffsetDateTime now
+    ) {
+        Long storeId = application.getStoreId();
+        if (storeId == null) {
+            return;
+        }
+
+        restaurantRepository.findById(storeId).ifPresent(restaurant -> {
+            restaurant.update(
+                    restaurant.getTitle(),
+                    restaurant.getAddress(),
+                    restaurant.getPhone(),
+                    restaurant.getBusinessHours(),
+                    restaurant.getIntroduction(),
+                    "hidden"
+            );
+            restaurantRepository.save(restaurant);
+        });
+
+        AdminStoreOperation operation = storeOperationRepository.findById(storeId)
+                .orElseGet(() -> AdminStoreOperation.initial(storeId, "hidden"));
+        operation.changeVisibility("hidden", reason, actorUserId);
+        operation.changeOperation("closed", reason, actorUserId);
+        storeOperationRepository.save(operation);
+
+        storeOwnerRepository.findByStoreIdAndRevokedAtIsNull(storeId)
+                .forEach(owner -> owner.revoke(now));
+    }
+
+    private void ensureActiveOwner(Long storeId, Integer userId) {
+        storeOwnerRepository.findFirstByStoreIdAndUserIdOrderByCreatedAtDescIdDesc(storeId, userId)
+                .ifPresentOrElse(
+                        StoreOwner::restore,
+                        () -> storeOwnerRepository.save(StoreOwner.createOwner(storeId, userId))
+                );
+    }
+
+    private String defaultVisibility(Restaurant store) {
+        String status = normalizeNullable(store.getExposureStatus());
+        return status != null && Set.of("published", "visible").contains(status.toLowerCase(Locale.ROOT))
+                ? "visible"
+                : "hidden";
     }
 
     private void copyApplicationChildren(Long applicationId, Long restaurantId) {
