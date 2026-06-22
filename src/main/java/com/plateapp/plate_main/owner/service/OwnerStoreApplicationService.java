@@ -4,10 +4,12 @@ import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplication;
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationCategory;
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationDocument;
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationMenu;
+import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationReview;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationCategoryRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationDocumentRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationMenuRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationRepository;
+import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationReviewRepository;
 import com.plateapp.plate_main.admin.storeapproval.service.BusinessNumberCrypto;
 import com.plateapp.plate_main.auth.domain.User;
 import com.plateapp.plate_main.auth.dto.SignupRequest;
@@ -68,6 +70,7 @@ public class OwnerStoreApplicationService {
     private final StoreApplicationCategoryRepository categoryRepository;
     private final StoreApplicationMenuRepository menuRepository;
     private final StoreApplicationDocumentRepository documentRepository;
+    private final StoreApplicationReviewRepository reviewRepository;
     private final BusinessNumberCrypto businessNumberCrypto;
     private final S3UploadService s3UploadService;
 
@@ -329,6 +332,12 @@ public class OwnerStoreApplicationService {
     private OwnerApplicationDtos.ApplicationDetailResponse toDetail(StoreApplication application) {
         Long applicationId = application.getId();
         BusinessProfile profile = businessProfileRepository.findByUserId(application.getApplicantUserId()).orElse(null);
+        StoreApplicationReview latestRejectedReview = reviewRepository
+                .findFirstByApplicationIdAndNextStatusOrderByReviewedAtDescIdDesc(
+                        applicationId,
+                        StoreApplication.STATUS_REJECTED
+                )
+                .orElse(null);
         return new OwnerApplicationDtos.ApplicationDetailResponse(
                 applicationId,
                 application.getParentApplicationId(),
@@ -381,6 +390,8 @@ public class OwnerStoreApplicationService {
                         .toList(),
                 application.getApprovalStatus(),
                 application.getVerificationStatus(),
+                latestRejectedReview == null ? null : latestRejectedReview.getReasonCode(),
+                latestRejectedReview == null ? null : latestRejectedReview.getReason(),
                 application.getAppliedAt(),
                 application.getUpdatedAt(),
                 application.getVersion()

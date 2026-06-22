@@ -5,10 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplication;
+import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationReview;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationCategoryRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationDocumentRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationMenuRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationRepository;
+import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationReviewRepository;
 import com.plateapp.plate_main.admin.storeapproval.service.BusinessNumberCrypto;
 import com.plateapp.plate_main.auth.domain.User;
 import com.plateapp.plate_main.auth.repository.UserRepository;
@@ -49,6 +51,8 @@ class OwnerStoreApplicationServiceTest {
     @Mock
     private StoreApplicationDocumentRepository documentRepository;
     @Mock
+    private StoreApplicationReviewRepository reviewRepository;
+    @Mock
     private BusinessNumberCrypto businessNumberCrypto;
     @Mock
     private S3UploadService s3UploadService;
@@ -65,6 +69,7 @@ class OwnerStoreApplicationServiceTest {
                 categoryRepository,
                 menuRepository,
                 documentRepository,
+                reviewRepository,
                 businessNumberCrypto,
                 s3UploadService
         );
@@ -131,6 +136,37 @@ class OwnerStoreApplicationServiceTest {
         );
 
         assertEquals(StoreApplication.STATUS_PENDING, response.approvalStatus());
+    }
+
+    @Test
+    void detailIncludesLatestRejectedReviewReason() {
+        stubCurrentUser();
+        StoreApplication application = draftApplication();
+        StoreApplicationReview review = StoreApplicationReview.create(
+                10L,
+                StoreApplication.STATUS_PENDING,
+                StoreApplication.STATUS_REJECTED,
+                "INVALID_DOCUMENT",
+                "Business document does not match the application.",
+                null,
+                1,
+                OffsetDateTime.now(ZoneOffset.UTC),
+                "request-id"
+        );
+        when(applicationRepository.findByIdAndApplicantUserId(10L, 100)).thenReturn(Optional.of(application));
+        when(businessProfileRepository.findByUserId(100)).thenReturn(Optional.empty());
+        when(categoryRepository.findByApplicationIdOrderByDisplayOrderAscIdAsc(10L)).thenReturn(List.of());
+        when(menuRepository.findByApplicationIdOrderByDisplayOrderAscIdAsc(10L)).thenReturn(List.of());
+        when(documentRepository.findByApplicationIdOrderByCreatedAtAscIdAsc(10L)).thenReturn(List.of());
+        when(reviewRepository.findFirstByApplicationIdAndNextStatusOrderByReviewedAtDescIdDesc(
+                10L,
+                StoreApplication.STATUS_REJECTED
+        )).thenReturn(Optional.of(review));
+
+        OwnerApplicationDtos.ApplicationDetailResponse response = service.detail("owner@example.com", 10L);
+
+        assertEquals("INVALID_DOCUMENT", response.reviewReasonCode());
+        assertEquals("Business document does not match the application.", response.reviewReason());
     }
 
     private void stubCurrentUser() {

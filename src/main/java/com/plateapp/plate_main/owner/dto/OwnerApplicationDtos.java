@@ -152,6 +152,8 @@ public final class OwnerApplicationDtos {
             List<DocumentResponse> documents,
             String approvalStatus,
             String verificationStatus,
+            String reviewReasonCode,
+            String reviewReason,
             OffsetDateTime appliedAt,
             OffsetDateTime updatedAt,
             Long version
