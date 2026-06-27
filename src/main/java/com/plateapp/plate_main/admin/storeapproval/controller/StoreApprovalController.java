@@ -69,6 +69,15 @@ public class StoreApprovalController {
         return ApiResponse.ok(storeApprovalService.detail(applicationId, actorResolver.resolve(authentication), request));
     }
 
+    @GetMapping("/{applicationId}/history")
+    public ApiResponse<StoreApprovalDtos.HistoryResponse> history(
+            @PathVariable Long applicationId,
+            Authentication authentication
+    ) {
+        requirePermission(authentication, PlateAuthorities.PERMISSION_STORE_READ);
+        return ApiResponse.ok(storeApprovalService.history(applicationId));
+    }
+
     @PostMapping("/{applicationId}/approve")
     public ApiResponse<StoreApprovalDtos.ActionResponse> approve(
             @PathVariable Long applicationId,
@@ -94,6 +103,22 @@ public class StoreApprovalController {
     ) {
         requirePermission(authentication, PlateAuthorities.PERMISSION_STORE_APPROVE);
         return ApiResponse.ok(storeApprovalService.hold(
+                applicationId,
+                command,
+                actorResolver.resolve(authentication),
+                request
+        ));
+    }
+
+    @PostMapping("/{applicationId}/request-changes")
+    public ApiResponse<StoreApprovalDtos.ActionResponse> requestChanges(
+            @PathVariable Long applicationId,
+            @Valid @RequestBody StoreApprovalDtos.RequestChangesRequest command,
+            Authentication authentication,
+            HttpServletRequest request
+    ) {
+        requirePermission(authentication, PlateAuthorities.PERMISSION_STORE_APPROVE);
+        return ApiResponse.ok(storeApprovalService.requestChanges(
                 applicationId,
                 command,
                 actorResolver.resolve(authentication),

@@ -1,6 +1,7 @@
 package com.plateapp.plate_main.admin.storeapproval.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
@@ -88,6 +89,22 @@ public final class StoreApprovalDtos {
     ) {
     }
 
+    public record ChangeRequestItemRequest(
+            @NotBlank @Size(max = 120) String field,
+            @NotBlank @Size(max = 150) String label,
+            @NotBlank @Size(max = 80) String reasonCode,
+            @NotBlank @Size(min = 5, max = 1000) String message,
+            @Size(max = 1000) String editPath
+    ) {
+    }
+
+    public record RequestChangesRequest(
+            @NotNull Long version,
+            @NotEmpty List<ChangeRequestItemRequest> items,
+            @NotBlank @Size(min = 10, max = 1000) String applicantMessage
+    ) {
+    }
+
     public record ActionResponse(
             Long applicationId,
             String approvalStatus,
@@ -104,5 +121,36 @@ public final class StoreApprovalDtos {
             String accessUrl,
             OffsetDateTime expiresAt
     ) {
+    }
+
+    public record ChangeRequestItemResponse(
+            Long id,
+            String field,
+            String label,
+            String reasonCode,
+            String message,
+            String editPath,
+            Integer displayOrder
+    ) {
+    }
+
+    public record HistoryItemResponse(
+            Long reviewId,
+            String previousStatus,
+            String nextStatus,
+            String reasonCode,
+            String reason,
+            String comment,
+            Integer reviewedBy,
+            OffsetDateTime reviewedAt,
+            String requestId,
+            Long changeRequestId,
+            String changeRequestStatus,
+            String applicantMessage,
+            List<ChangeRequestItemResponse> items
+    ) {
+    }
+
+    public record HistoryResponse(List<HistoryItemResponse> content) {
     }
 }

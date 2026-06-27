@@ -2,10 +2,15 @@ package com.plateapp.plate_main.owner.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplication;
+import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationChangeRequest;
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationReview;
+import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationChangeRequestItemRepository;
+import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationChangeRequestRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationCategoryRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationDocumentRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationMenuRepository;
@@ -53,6 +58,10 @@ class OwnerStoreApplicationServiceTest {
     @Mock
     private StoreApplicationReviewRepository reviewRepository;
     @Mock
+    private StoreApplicationChangeRequestRepository changeRequestRepository;
+    @Mock
+    private StoreApplicationChangeRequestItemRepository changeRequestItemRepository;
+    @Mock
     private BusinessNumberCrypto businessNumberCrypto;
     @Mock
     private S3UploadService s3UploadService;
@@ -70,6 +79,8 @@ class OwnerStoreApplicationServiceTest {
                 menuRepository,
                 documentRepository,
                 reviewRepository,
+                changeRequestRepository,
+                changeRequestItemRepository,
                 businessNumberCrypto,
                 s3UploadService
         );
@@ -167,6 +178,51 @@ class OwnerStoreApplicationServiceTest {
 
         assertEquals("INVALID_DOCUMENT", response.reviewReasonCode());
         assertEquals("Business document does not match the application.", response.reviewReason());
+    }
+
+    @Test
+    void resubmitMovesOnHoldApplicationToPendingAndClosesOpenChangeRequests() {
+        stubCurrentUser();
+        StoreApplication application = draftApplication();
+        ReflectionTestUtils.setField(application, "approvalStatus", StoreApplication.STATUS_ON_HOLD);
+        ReflectionTestUtils.setField(application, "businessVerificationStatus", "verified");
+        StoreApplicationChangeRequest changeRequest = StoreApplicationChangeRequest.create(
+                10L,
+                88L,
+                "Please update the requested fields.",
+                1,
+                OffsetDateTime.now(ZoneOffset.UTC),
+                "request-id"
+        );
+        ReflectionTestUtils.setField(changeRequest, "id", 77L);
+
+        when(applicationRepository.findByIdAndApplicantUserId(10L, 100)).thenReturn(Optional.of(application));
+        when(applicationRepository.existsByBusinessNumberHashAndApprovalStatusInAndIdNot(
+                "business-hash",
+                Set.of(
+                        StoreApplication.STATUS_PENDING,
+                        StoreApplication.STATUS_ON_HOLD,
+                        StoreApplication.STATUS_APPROVED
+                ),
+                10L
+        )).thenReturn(false);
+        when(documentRepository.existsByApplicationIdAndDocumentType(10L, "business_registration")).thenReturn(false);
+        when(applicationRepository.saveAndFlush(application)).thenReturn(application);
+        when(changeRequestRepository.findByApplicationIdAndStatusOrderByRequestedAtDescIdDesc(
+                10L,
+                StoreApplicationChangeRequest.STATUS_OPEN
+        )).thenReturn(List.of(changeRequest));
+
+        OwnerApplicationDtos.SubmitResponse response = service.resubmit(
+                "owner@example.com",
+                10L,
+                new OwnerApplicationDtos.SubmitRequest(3L)
+        );
+
+        assertEquals(StoreApplication.STATUS_PENDING, response.approvalStatus());
+        assertEquals(StoreApplicationChangeRequest.STATUS_RESUBMITTED, changeRequest.getStatus());
+        verify(reviewRepository).save(any(StoreApplicationReview.class));
+        verify(changeRequestRepository).saveAll(List.of(changeRequest));
     }
 
     private void stubCurrentUser() {

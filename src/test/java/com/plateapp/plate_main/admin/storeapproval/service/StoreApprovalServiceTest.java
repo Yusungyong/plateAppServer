@@ -18,7 +18,11 @@ import com.plateapp.plate_main.admin.outbox.repository.AdminOutboxEventRepositor
 import com.plateapp.plate_main.admin.security.AdminActor;
 import com.plateapp.plate_main.admin.storeapproval.dto.StoreApprovalDtos;
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplication;
+import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationChangeRequest;
+import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationChangeRequestItem;
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationReview;
+import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationChangeRequestItemRepository;
+import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationChangeRequestRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationCategoryRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationDocumentRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationMenuRepository;
@@ -66,6 +70,10 @@ class StoreApprovalServiceTest {
     @Mock
     private StoreApplicationReviewRepository reviewRepository;
     @Mock
+    private StoreApplicationChangeRequestRepository changeRequestRepository;
+    @Mock
+    private StoreApplicationChangeRequestItemRepository changeRequestItemRepository;
+    @Mock
     private RestaurantRepository restaurantRepository;
     @Mock
     private RestaurantCategoryRepository restaurantCategoryRepository;
@@ -98,6 +106,8 @@ class StoreApprovalServiceTest {
                 applicationMenuRepository,
                 applicationDocumentRepository,
                 reviewRepository,
+                changeRequestRepository,
+                changeRequestItemRepository,
                 restaurantRepository,
                 restaurantCategoryRepository,
                 restaurantMenuRepository,
@@ -219,6 +229,46 @@ class StoreApprovalServiceTest {
         verify(auditService).record(
                 any(), any(), any(), any(), any(), any(), any(), any(), any()
         );
+        verify(outboxRepository).save(any(AdminOutboxEvent.class));
+    }
+
+    @Test
+    void requestChangesStoresItemLevelChangeRequest() {
+        StoreApplication application = application(10L, 3L, StoreApplication.STATUS_PENDING, "reviewing");
+        when(applicationRepository.findById(10L)).thenReturn(Optional.of(application));
+        when(applicationRepository.saveAndFlush(application)).thenReturn(application);
+        when(reviewRepository.save(any(StoreApplicationReview.class))).thenAnswer(invocation -> {
+            StoreApplicationReview review = invocation.getArgument(0);
+            ReflectionTestUtils.setField(review, "id", 88L);
+            return review;
+        });
+        when(changeRequestRepository.save(any(StoreApplicationChangeRequest.class))).thenAnswer(invocation -> {
+            StoreApplicationChangeRequest changeRequest = invocation.getArgument(0);
+            ReflectionTestUtils.setField(changeRequest, "id", 77L);
+            return changeRequest;
+        });
+
+        StoreApprovalDtos.ActionResponse response = service.requestChanges(
+                10L,
+                new StoreApprovalDtos.RequestChangesRequest(
+                        3L,
+                        List.of(new StoreApprovalDtos.ChangeRequestItemRequest(
+                                "store.address",
+                                "Store address",
+                                "ADDRESS_UNCLEAR",
+                                "Please add floor and room details.",
+                                "/business/signup?applicationId=10&step=store"
+                        )),
+                        "Please update the requested fields and submit again."
+                ),
+                actor(),
+                request
+        );
+
+        assertEquals(StoreApplication.STATUS_ON_HOLD, response.approvalStatus());
+        verify(reviewRepository).save(any(StoreApplicationReview.class));
+        verify(changeRequestRepository).save(any(StoreApplicationChangeRequest.class));
+        verify(changeRequestItemRepository).save(any(StoreApplicationChangeRequestItem.class));
         verify(outboxRepository).save(any(AdminOutboxEvent.class));
     }
 

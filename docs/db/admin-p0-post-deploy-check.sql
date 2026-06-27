@@ -7,7 +7,7 @@ from information_schema.columns
 where table_name = 'fp_100'
   and column_name = 'token_version';
 
--- Expected: 8 rows
+-- Expected: 10 rows
 select count(*) as required_table_count
 from information_schema.tables
 where table_schema = current_schema()
@@ -18,6 +18,8 @@ where table_schema = current_schema()
       'store_application_categories',
       'store_application_menus',
       'store_application_documents',
+      'store_application_change_requests',
+      'store_application_change_request_items',
       'admin_audit_logs',
       'admin_outbox_events'
   );

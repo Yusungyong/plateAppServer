@@ -1,10 +1,14 @@
 package com.plateapp.plate_main.owner.service;
 
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplication;
+import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationChangeRequest;
+import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationChangeRequestItem;
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationCategory;
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationDocument;
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationMenu;
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationReview;
+import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationChangeRequestItemRepository;
+import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationChangeRequestRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationCategoryRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationDocumentRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationMenuRepository;
@@ -17,6 +21,7 @@ import com.plateapp.plate_main.auth.repository.UserRepository;
 import com.plateapp.plate_main.auth.service.AuthService;
 import com.plateapp.plate_main.common.error.AppException;
 import com.plateapp.plate_main.common.error.ErrorCode;
+import com.plateapp.plate_main.common.filter.RequestIdFilter;
 import com.plateapp.plate_main.common.s3.S3UploadService;
 import com.plateapp.plate_main.owner.dto.OwnerApplicationDtos;
 import com.plateapp.plate_main.owner.entity.BusinessProfile;
@@ -26,10 +31,14 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -71,6 +80,8 @@ public class OwnerStoreApplicationService {
     private final StoreApplicationMenuRepository menuRepository;
     private final StoreApplicationDocumentRepository documentRepository;
     private final StoreApplicationReviewRepository reviewRepository;
+    private final StoreApplicationChangeRequestRepository changeRequestRepository;
+    private final StoreApplicationChangeRequestItemRepository changeRequestItemRepository;
     private final BusinessNumberCrypto businessNumberCrypto;
     private final S3UploadService s3UploadService;
 
@@ -145,6 +156,13 @@ public class OwnerStoreApplicationService {
         Integer userId = currentUserId(username);
         StoreApplication application = findOwnApplication(applicationId, userId);
         return toDetail(application);
+    }
+
+    @Transactional(readOnly = true)
+    public OwnerApplicationDtos.ApplicationHistoryResponse history(String username, Long applicationId) {
+        Integer userId = currentUserId(username);
+        StoreApplication application = findOwnApplication(applicationId, userId);
+        return ownerHistoryResponse(application.getId());
     }
 
     @Transactional
@@ -243,6 +261,52 @@ public class OwnerStoreApplicationService {
 
         application.submit(OffsetDateTime.now(ZoneOffset.UTC));
         application = applicationRepository.saveAndFlush(application);
+        return new OwnerApplicationDtos.SubmitResponse(
+                application.getId(),
+                application.getApprovalStatus(),
+                application.getVerificationStatus(),
+                application.getVersion()
+        );
+    }
+
+    @Transactional
+    public OwnerApplicationDtos.SubmitResponse resubmit(
+            String username,
+            Long applicationId,
+            OwnerApplicationDtos.SubmitRequest request
+    ) {
+        Integer userId = currentUserId(username);
+        StoreApplication application = findOwnApplication(applicationId, userId);
+        assertVersion(application, request.version());
+        if (!StoreApplication.STATUS_ON_HOLD.equals(application.getApprovalStatus())) {
+            throw new AppException(ErrorCode.STORE_APPROVAL_INVALID_TRANSITION);
+        }
+        assertNoActiveDuplicate(application.getBusinessNumberHash(), application.getId());
+        assertSubmittable(application);
+
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        String previousStatus = application.getApprovalStatus();
+        application.submit(now);
+        application = applicationRepository.saveAndFlush(application);
+        reviewRepository.save(StoreApplicationReview.create(
+                applicationId,
+                previousStatus,
+                application.getApprovalStatus(),
+                "RESUBMITTED",
+                "Applicant resubmitted the requested changes.",
+                null,
+                userId,
+                now,
+                MDC.get(RequestIdFilter.MDC_KEY_REQUEST_ID)
+        ));
+        List<StoreApplicationChangeRequest> openRequests = changeRequestRepository
+                .findByApplicationIdAndStatusOrderByRequestedAtDescIdDesc(
+                        applicationId,
+                        StoreApplicationChangeRequest.STATUS_OPEN
+                );
+        openRequests.forEach(changeRequest -> changeRequest.markResubmitted(now));
+        changeRequestRepository.saveAll(openRequests);
+
         return new OwnerApplicationDtos.SubmitResponse(
                 application.getId(),
                 application.getApprovalStatus(),
@@ -396,6 +460,71 @@ public class OwnerStoreApplicationService {
                 application.getUpdatedAt(),
                 application.getVersion()
         );
+    }
+
+    private OwnerApplicationDtos.ApplicationHistoryResponse ownerHistoryResponse(Long applicationId) {
+        List<StoreApplicationReview> reviews = reviewRepository.findByApplicationIdOrderByReviewedAtDescIdDesc(applicationId);
+        HistoryBundle bundle = historyBundle(applicationId);
+        List<OwnerApplicationDtos.ApplicationHistoryItemResponse> content = reviews.stream()
+                .map(review -> {
+                    StoreApplicationChangeRequest changeRequest = bundle.changeRequestsByReviewId().get(review.getId());
+                    return new OwnerApplicationDtos.ApplicationHistoryItemResponse(
+                            review.getId(),
+                            review.getPreviousStatus(),
+                            review.getNextStatus(),
+                            review.getReasonCode(),
+                            review.getReason(),
+                            review.getReviewedAt(),
+                            changeRequest == null ? null : changeRequest.getId(),
+                            changeRequest == null ? null : changeRequest.getStatus(),
+                            changeRequest == null ? null : changeRequest.getApplicantMessage(),
+                            changeRequest == null
+                                    ? List.of()
+                                    : ownerChangeRequestItems(bundle.itemsByRequestId().get(changeRequest.getId()))
+                    );
+                })
+                .toList();
+        return new OwnerApplicationDtos.ApplicationHistoryResponse(content);
+    }
+
+    private HistoryBundle historyBundle(Long applicationId) {
+        List<StoreApplicationChangeRequest> changeRequests =
+                changeRequestRepository.findByApplicationIdOrderByRequestedAtDescIdDesc(applicationId);
+        Map<Long, StoreApplicationChangeRequest> byReviewId = new HashMap<>();
+        List<Long> changeRequestIds = new ArrayList<>();
+        for (StoreApplicationChangeRequest changeRequest : changeRequests) {
+            changeRequestIds.add(changeRequest.getId());
+            if (changeRequest.getReviewId() != null) {
+                byReviewId.putIfAbsent(changeRequest.getReviewId(), changeRequest);
+            }
+        }
+        Map<Long, List<StoreApplicationChangeRequestItem>> itemsByRequestId = new HashMap<>();
+        if (!changeRequestIds.isEmpty()) {
+            for (StoreApplicationChangeRequestItem item :
+                    changeRequestItemRepository.findByChangeRequestIdInOrderByDisplayOrderAscIdAsc(changeRequestIds)) {
+                itemsByRequestId.computeIfAbsent(item.getChangeRequestId(), ignored -> new ArrayList<>()).add(item);
+            }
+        }
+        return new HistoryBundle(byReviewId, itemsByRequestId);
+    }
+
+    private List<OwnerApplicationDtos.ChangeRequestItemResponse> ownerChangeRequestItems(
+            List<StoreApplicationChangeRequestItem> items
+    ) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        return items.stream()
+                .map(item -> new OwnerApplicationDtos.ChangeRequestItemResponse(
+                        item.getId(),
+                        item.getField(),
+                        item.getLabel(),
+                        item.getReasonCode(),
+                        item.getMessage(),
+                        item.getEditPath(),
+                        item.getDisplayOrder()
+                ))
+                .toList();
     }
 
     private UpsertData validateUpsert(OwnerApplicationDtos.StoreApplicationUpsertRequest request) {
@@ -630,6 +759,12 @@ public class OwnerStoreApplicationService {
             String description,
             List<OwnerApplicationDtos.CategoryRequest> categories,
             List<OwnerApplicationDtos.MenuRequest> menus
+    ) {
+    }
+
+    private record HistoryBundle(
+            Map<Long, StoreApplicationChangeRequest> changeRequestsByReviewId,
+            Map<Long, List<StoreApplicationChangeRequestItem>> itemsByRequestId
     ) {
     }
 }

@@ -6,10 +6,14 @@ import com.plateapp.plate_main.admin.outbox.repository.AdminOutboxEventRepositor
 import com.plateapp.plate_main.admin.security.AdminActor;
 import com.plateapp.plate_main.admin.storeapproval.dto.StoreApprovalDtos;
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplication;
+import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationChangeRequest;
+import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationChangeRequestItem;
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationCategory;
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationDocument;
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationMenu;
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationReview;
+import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationChangeRequestItemRepository;
+import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationChangeRequestRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationCategoryRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationDocumentRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationMenuRepository;
@@ -34,6 +38,8 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -86,6 +92,8 @@ public class StoreApprovalService {
     private final StoreApplicationMenuRepository applicationMenuRepository;
     private final StoreApplicationDocumentRepository applicationDocumentRepository;
     private final StoreApplicationReviewRepository reviewRepository;
+    private final StoreApplicationChangeRequestRepository changeRequestRepository;
+    private final StoreApplicationChangeRequestItemRepository changeRequestItemRepository;
     private final RestaurantRepository restaurantRepository;
     private final RestaurantCategoryRepository restaurantCategoryRepository;
     private final RestaurantMenuRepository restaurantMenuRepository;
@@ -163,6 +171,12 @@ public class StoreApprovalService {
                 result.getTotalPages(),
                 result.hasNext()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public StoreApprovalDtos.HistoryResponse history(Long applicationId) {
+        findApplication(applicationId);
+        return adminHistoryResponse(applicationId);
     }
 
     @Transactional
@@ -285,6 +299,75 @@ public class StoreApprovalService {
         application = applicationRepository.saveAndFlush(application);
         saveReview(applicationId, previousStatus, application.getApprovalStatus(), null, reason, null, actor.userId(), now);
         recordTransitionAudit(application, previousStatus, reason, null, actor, request);
+        saveOutbox(application, "STORE_HELD", actor, now);
+        return actionResponse(application);
+    }
+
+    @Transactional
+    public StoreApprovalDtos.ActionResponse requestChanges(
+            Long applicationId,
+            StoreApprovalDtos.RequestChangesRequest command,
+            AdminActor actor,
+            HttpServletRequest request
+    ) {
+        String applicantMessage = validateReason(command.applicantMessage());
+        List<StoreApprovalDtos.ChangeRequestItemRequest> items = validateChangeRequestItems(command.items());
+        StoreApplication application = findApplication(applicationId);
+        assertVersion(application, command.version());
+        assertTransitionAllowed(application, Set.of(StoreApplication.STATUS_PENDING, StoreApplication.STATUS_ON_HOLD));
+
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        String previousStatus = application.getApprovalStatus();
+        application.hold(actor.userId(), now);
+        application = applicationRepository.saveAndFlush(application);
+        StoreApplicationReview review = saveReview(
+                applicationId,
+                previousStatus,
+                application.getApprovalStatus(),
+                "CHANGES_REQUESTED",
+                applicantMessage,
+                null,
+                actor.userId(),
+                now
+        );
+
+        StoreApplicationChangeRequest changeRequest = changeRequestRepository.save(
+                StoreApplicationChangeRequest.create(
+                        applicationId,
+                        review.getId(),
+                        applicantMessage,
+                        actor.userId(),
+                        now,
+                        currentRequestId()
+                )
+        );
+        int displayOrder = 0;
+        for (StoreApprovalDtos.ChangeRequestItemRequest item : items) {
+            changeRequestItemRepository.save(StoreApplicationChangeRequestItem.create(
+                    changeRequest.getId(),
+                    normalizeRequired(item.field(), "items[].field is required."),
+                    normalizeRequired(item.label(), "items[].label is required."),
+                    normalizeUpperRequired(item.reasonCode(), "items[].reasonCode is required."),
+                    normalizeRequired(item.message(), "items[].message is required."),
+                    normalizeNullable(item.editPath()),
+                    displayOrder++
+            ));
+        }
+
+        auditService.record(
+                actor,
+                "STORE_CHANGE_REQUESTED",
+                "STORE_APPROVAL",
+                applicationId,
+                Map.of("approvalStatus", previousStatus),
+                mapOfNullable(
+                        "approvalStatus", application.getApprovalStatus(),
+                        "changeRequestId", changeRequest.getId()
+                ),
+                "CHANGES_REQUESTED",
+                applicantMessage,
+                request
+        );
         saveOutbox(application, "STORE_HELD", actor, now);
         return actionResponse(application);
     }
@@ -432,6 +515,74 @@ public class StoreApprovalService {
                 : "hidden";
     }
 
+    private StoreApprovalDtos.HistoryResponse adminHistoryResponse(Long applicationId) {
+        List<StoreApplicationReview> reviews = reviewRepository.findByApplicationIdOrderByReviewedAtDescIdDesc(applicationId);
+        HistoryBundle bundle = historyBundle(applicationId);
+        List<StoreApprovalDtos.HistoryItemResponse> content = reviews.stream()
+                .map(review -> {
+                    StoreApplicationChangeRequest changeRequest = bundle.changeRequestsByReviewId().get(review.getId());
+                    return new StoreApprovalDtos.HistoryItemResponse(
+                            review.getId(),
+                            review.getPreviousStatus(),
+                            review.getNextStatus(),
+                            review.getReasonCode(),
+                            review.getReason(),
+                            review.getComment(),
+                            review.getReviewedBy(),
+                            review.getReviewedAt(),
+                            review.getRequestId(),
+                            changeRequest == null ? null : changeRequest.getId(),
+                            changeRequest == null ? null : changeRequest.getStatus(),
+                            changeRequest == null ? null : changeRequest.getApplicantMessage(),
+                            changeRequest == null
+                                    ? List.of()
+                                    : changeRequestItems(bundle.itemsByRequestId().get(changeRequest.getId()))
+                    );
+                })
+                .toList();
+        return new StoreApprovalDtos.HistoryResponse(content);
+    }
+
+    private HistoryBundle historyBundle(Long applicationId) {
+        List<StoreApplicationChangeRequest> changeRequests =
+                changeRequestRepository.findByApplicationIdOrderByRequestedAtDescIdDesc(applicationId);
+        Map<Long, StoreApplicationChangeRequest> byReviewId = new HashMap<>();
+        List<Long> changeRequestIds = new ArrayList<>();
+        for (StoreApplicationChangeRequest changeRequest : changeRequests) {
+            changeRequestIds.add(changeRequest.getId());
+            if (changeRequest.getReviewId() != null) {
+                byReviewId.putIfAbsent(changeRequest.getReviewId(), changeRequest);
+            }
+        }
+        Map<Long, List<StoreApplicationChangeRequestItem>> itemsByRequestId = new HashMap<>();
+        if (!changeRequestIds.isEmpty()) {
+            for (StoreApplicationChangeRequestItem item :
+                    changeRequestItemRepository.findByChangeRequestIdInOrderByDisplayOrderAscIdAsc(changeRequestIds)) {
+                itemsByRequestId.computeIfAbsent(item.getChangeRequestId(), ignored -> new ArrayList<>()).add(item);
+            }
+        }
+        return new HistoryBundle(byReviewId, itemsByRequestId);
+    }
+
+    private List<StoreApprovalDtos.ChangeRequestItemResponse> changeRequestItems(
+            List<StoreApplicationChangeRequestItem> items
+    ) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        return items.stream()
+                .map(item -> new StoreApprovalDtos.ChangeRequestItemResponse(
+                        item.getId(),
+                        item.getField(),
+                        item.getLabel(),
+                        item.getReasonCode(),
+                        item.getMessage(),
+                        item.getEditPath(),
+                        item.getDisplayOrder()
+                ))
+                .toList();
+    }
+
     private void copyApplicationChildren(Long applicationId, Long restaurantId) {
         List<StoreApplicationCategory> categories =
                 applicationCategoryRepository.findByApplicationIdOrderByDisplayOrderAscIdAsc(applicationId);
@@ -478,7 +629,7 @@ public class StoreApprovalService {
         }
     }
 
-    private void saveReview(
+    private StoreApplicationReview saveReview(
             Long applicationId,
             String previousStatus,
             String nextStatus,
@@ -488,7 +639,7 @@ public class StoreApprovalService {
             Integer actorUserId,
             OffsetDateTime now
     ) {
-        reviewRepository.save(StoreApplicationReview.create(
+        return reviewRepository.save(StoreApplicationReview.create(
                 applicationId,
                 previousStatus,
                 nextStatus,
@@ -497,7 +648,7 @@ public class StoreApprovalService {
                 comment,
                 actorUserId,
                 now,
-                MDC.get(RequestIdFilter.MDC_KEY_REQUEST_ID)
+                currentRequestId()
         ));
     }
 
@@ -640,6 +791,18 @@ public class StoreApprovalService {
         return normalized == null ? null : normalized.toUpperCase(Locale.ROOT);
     }
 
+    private String normalizeUpperRequired(String value, String message) {
+        return normalizeRequired(value, message).toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeRequired(String value, String message) {
+        String normalized = normalizeNullable(value);
+        if (normalized == null) {
+            throw new AppException(ErrorCode.COMMON_INVALID_INPUT, message);
+        }
+        return normalized;
+    }
+
     private String normalizeNullable(String value) {
         if (value == null) {
             return null;
@@ -648,11 +811,33 @@ public class StoreApprovalService {
         return normalized.isBlank() ? null : normalized;
     }
 
+    private List<StoreApprovalDtos.ChangeRequestItemRequest> validateChangeRequestItems(
+            List<StoreApprovalDtos.ChangeRequestItemRequest> items
+    ) {
+        if (items == null || items.isEmpty()) {
+            throw new AppException(ErrorCode.COMMON_INVALID_INPUT, "items must contain at least one change request item.");
+        }
+        if (items.size() > 50) {
+            throw new AppException(ErrorCode.COMMON_INVALID_INPUT, "items must contain 50 or fewer entries.");
+        }
+        return items;
+    }
+
+    private String currentRequestId() {
+        return MDC.get(RequestIdFilter.MDC_KEY_REQUEST_ID);
+    }
+
     private Map<String, Object> mapOfNullable(Object... values) {
         Map<String, Object> result = new LinkedHashMap<>();
         for (int i = 0; i < values.length; i += 2) {
             result.put(String.valueOf(values[i]), values[i + 1]);
         }
         return result;
+    }
+
+    private record HistoryBundle(
+            Map<Long, StoreApplicationChangeRequest> changeRequestsByReviewId,
+            Map<Long, List<StoreApplicationChangeRequestItem>> itemsByRequestId
+    ) {
     }
 }

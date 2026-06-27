@@ -63,6 +63,14 @@ public class OwnerStoreApplicationController {
         return ApiResponse.ok(applicationService.detail(username(authentication), applicationId));
     }
 
+    @GetMapping("/store-applications/{applicationId}/history")
+    public ApiResponse<OwnerApplicationDtos.ApplicationHistoryResponse> history(
+            @PathVariable Long applicationId,
+            Authentication authentication
+    ) {
+        return ApiResponse.ok(applicationService.history(username(authentication), applicationId));
+    }
+
     @PutMapping("/store-applications/{applicationId}")
     public ApiResponse<OwnerApplicationDtos.ApplicationDetailResponse> update(
             @PathVariable Long applicationId,
@@ -98,6 +106,15 @@ public class OwnerStoreApplicationController {
             Authentication authentication
     ) {
         return ApiResponse.ok(applicationService.submit(username(authentication), applicationId, request));
+    }
+
+    @PostMapping("/store-applications/{applicationId}/resubmit")
+    public ApiResponse<OwnerApplicationDtos.SubmitResponse> resubmit(
+            @PathVariable Long applicationId,
+            @Valid @RequestBody OwnerApplicationDtos.SubmitRequest request,
+            Authentication authentication
+    ) {
+        return ApiResponse.ok(applicationService.resubmit(username(authentication), applicationId, request));
     }
 
     private String username(Authentication authentication) {

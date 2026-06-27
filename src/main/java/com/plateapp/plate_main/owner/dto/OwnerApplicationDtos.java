@@ -160,6 +160,34 @@ public final class OwnerApplicationDtos {
     ) {
     }
 
+    public record ChangeRequestItemResponse(
+            Long id,
+            String field,
+            String label,
+            String reasonCode,
+            String message,
+            String editPath,
+            Integer displayOrder
+    ) {
+    }
+
+    public record ApplicationHistoryItemResponse(
+            Long reviewId,
+            String previousStatus,
+            String nextStatus,
+            String reasonCode,
+            String reason,
+            OffsetDateTime reviewedAt,
+            Long changeRequestId,
+            String changeRequestStatus,
+            String applicantMessage,
+            List<ChangeRequestItemResponse> items
+    ) {
+    }
+
+    public record ApplicationHistoryResponse(List<ApplicationHistoryItemResponse> content) {
+    }
+
     public record OwnerProfileResponse(String ownerName, String ownerPhone, String ownerEmail) {
     }
 

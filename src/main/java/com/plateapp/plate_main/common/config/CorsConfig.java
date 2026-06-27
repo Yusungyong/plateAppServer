@@ -31,7 +31,8 @@ public class CorsConfig implements WebMvcConfigurer {
             HttpHeaders.AUTHORIZATION,
             "content-type",
             "authorization",
-            "X-Requested-With"
+            "X-Requested-With",
+            "X-Request-Id"
     );
 
     @Override
