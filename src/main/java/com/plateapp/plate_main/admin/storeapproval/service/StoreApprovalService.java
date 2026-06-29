@@ -256,7 +256,7 @@ public class StoreApprovalService {
                 StoreApplication.STATUS_ON_HOLD,
                 StoreApplication.STATUS_REJECTED
         ));
-        assertDocumentsComplete(applicationId);
+        completeDocumentsForApproval(application);
         if (applicationRepository.existsByBusinessNumberHashAndApprovalStatusAndIdNot(
                 application.getBusinessNumberHash(),
                 StoreApplication.STATUS_APPROVED,
@@ -603,15 +603,19 @@ public class StoreApprovalService {
         }
     }
 
-    private void assertDocumentsComplete(Long applicationId) {
-        long total = applicationDocumentRepository.countByApplicationId(applicationId);
-        long verified = applicationDocumentRepository.countByApplicationIdAndVerificationStatus(
-                applicationId,
-                StoreApplicationDocument.STATUS_VERIFIED
-        );
-        if (total == 0 || total != verified) {
+    private void completeDocumentsForApproval(StoreApplication application) {
+        List<StoreApplicationDocument> documents =
+                applicationDocumentRepository.findByApplicationIdOrderByCreatedAtAscIdAsc(application.getId());
+        if (documents.isEmpty()) {
+            if (StoreApplication.VERIFICATION_VERIFIED.equals(application.getBusinessVerificationStatus())) {
+                return;
+            }
             throw new AppException(ErrorCode.STORE_APPROVAL_DOCUMENT_INCOMPLETE);
         }
+        if (documents.stream().anyMatch(StoreApplicationDocument::isRejected)) {
+            throw new AppException(ErrorCode.STORE_APPROVAL_DOCUMENT_INCOMPLETE);
+        }
+        documents.forEach(StoreApplicationDocument::verify);
     }
 
     private void assertTransitionAllowed(StoreApplication application, Set<String> allowedCurrentStates) {

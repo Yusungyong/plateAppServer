@@ -16,6 +16,7 @@ public class StoreApplicationDocument {
 
     public static final String STATUS_SUBMITTED = "submitted";
     public static final String STATUS_VERIFIED = "verified";
+    public static final String STATUS_REJECTED = "rejected";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -70,5 +71,13 @@ public class StoreApplicationDocument {
         document.verificationStatus = STATUS_SUBMITTED;
         document.createdAt = now;
         return document;
+    }
+
+    public void verify() {
+        this.verificationStatus = STATUS_VERIFIED;
+    }
+
+    public boolean isRejected() {
+        return STATUS_REJECTED.equals(this.verificationStatus);
     }
 }

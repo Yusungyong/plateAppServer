@@ -20,6 +20,7 @@ import com.plateapp.plate_main.admin.storeapproval.dto.StoreApprovalDtos;
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplication;
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationChangeRequest;
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationChangeRequestItem;
+import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationDocument;
 import com.plateapp.plate_main.admin.storeapproval.entity.StoreApplicationReview;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationChangeRequestItemRepository;
 import com.plateapp.plate_main.admin.storeapproval.repository.StoreApplicationChangeRequestRepository;
@@ -194,10 +195,11 @@ class StoreApprovalServiceTest {
                 "draft"
         );
         ReflectionTestUtils.setField(savedRestaurant, "id", 55L);
+        List<StoreApplicationDocument> documents = submittedDocuments(10L);
 
         when(applicationRepository.findById(10L)).thenReturn(Optional.of(application));
-        when(applicationDocumentRepository.countByApplicationId(10L)).thenReturn(2L);
-        when(applicationDocumentRepository.countByApplicationIdAndVerificationStatus(10L, "verified")).thenReturn(2L);
+        when(applicationDocumentRepository.findByApplicationIdOrderByCreatedAtAscIdAsc(10L))
+                .thenReturn(documents);
         when(applicationRepository.existsByBusinessNumberHashAndApprovalStatusAndIdNot(
                 "business-hash",
                 StoreApplication.STATUS_APPROVED,
@@ -225,6 +227,7 @@ class StoreApprovalServiceTest {
         assertEquals(StoreApplication.STATUS_APPROVED, response.approvalStatus());
         assertEquals(StoreApplication.VERIFICATION_VERIFIED, response.verificationStatus());
         assertEquals(StoreApplication.VERIFICATION_VERIFIED, application.getVerificationStatus());
+        assertDocumentsVerified(documents);
         assertEquals(55L, response.storeId());
         verify(reviewRepository).save(any(StoreApplicationReview.class));
         verify(storeOwnerRepository).save(any(StoreOwner.class));
@@ -277,9 +280,10 @@ class StoreApprovalServiceTest {
     @Test
     void approveMarksReviewingVerificationAsVerified() {
         StoreApplication application = application(10L, 3L, StoreApplication.STATUS_PENDING, "reviewing");
+        List<StoreApplicationDocument> documents = submittedDocuments(10L);
         when(applicationRepository.findById(10L)).thenReturn(Optional.of(application));
-        when(applicationDocumentRepository.countByApplicationId(10L)).thenReturn(2L);
-        when(applicationDocumentRepository.countByApplicationIdAndVerificationStatus(10L, "verified")).thenReturn(2L);
+        when(applicationDocumentRepository.findByApplicationIdOrderByCreatedAtAscIdAsc(10L))
+                .thenReturn(documents);
         when(applicationRepository.existsByBusinessNumberHashAndApprovalStatusAndIdNot(
                 "business-hash",
                 StoreApplication.STATUS_APPROVED,
@@ -313,6 +317,49 @@ class StoreApprovalServiceTest {
         assertEquals(StoreApplication.STATUS_APPROVED, response.approvalStatus());
         assertEquals(StoreApplication.VERIFICATION_VERIFIED, response.verificationStatus());
         assertEquals(StoreApplication.VERIFICATION_VERIFIED, application.getVerificationStatus());
+        assertDocumentsVerified(documents);
+    }
+
+    @Test
+    void approveAllowsVerifiedBusinessWithoutDocuments() {
+        StoreApplication application = application(10L, 3L, StoreApplication.STATUS_PENDING, "reviewing");
+        ReflectionTestUtils.setField(application, "businessVerificationStatus", StoreApplication.VERIFICATION_VERIFIED);
+        Restaurant savedRestaurant = Restaurant.create(
+                "Plate Kitchen",
+                "Seoul",
+                "02-1234-5678",
+                null,
+                "Introduction",
+                "draft"
+        );
+        ReflectionTestUtils.setField(savedRestaurant, "id", 55L);
+
+        when(applicationRepository.findById(10L)).thenReturn(Optional.of(application));
+        when(applicationDocumentRepository.findByApplicationIdOrderByCreatedAtAscIdAsc(10L))
+                .thenReturn(List.of());
+        when(applicationRepository.existsByBusinessNumberHashAndApprovalStatusAndIdNot(
+                "business-hash",
+                StoreApplication.STATUS_APPROVED,
+                10L
+        )).thenReturn(false);
+        when(restaurantRepository.save(any(Restaurant.class))).thenReturn(savedRestaurant);
+        when(applicationCategoryRepository.findByApplicationIdOrderByDisplayOrderAscIdAsc(10L))
+                .thenReturn(List.of());
+        when(applicationMenuRepository.findByApplicationIdOrderByDisplayOrderAscIdAsc(10L))
+                .thenReturn(List.of());
+        when(storeOwnerRepository.findFirstByStoreIdAndUserIdOrderByCreatedAtDescIdDesc(55L, 100))
+                .thenReturn(Optional.empty());
+        when(applicationRepository.saveAndFlush(application)).thenReturn(application);
+
+        StoreApprovalDtos.ActionResponse response = service.approve(
+                10L,
+                new StoreApprovalDtos.ApproveRequest(3L, null),
+                actor(),
+                request
+        );
+
+        assertEquals(StoreApplication.STATUS_APPROVED, response.approvalStatus());
+        assertEquals(StoreApplication.VERIFICATION_VERIFIED, response.verificationStatus());
     }
 
     @Test
@@ -331,10 +378,11 @@ class StoreApprovalServiceTest {
         ReflectionTestUtils.setField(restaurant, "id", 55L);
         StoreOwner owner = StoreOwner.createOwner(55L, 100);
         owner.revoke(OffsetDateTime.now(ZoneOffset.UTC));
+        List<StoreApplicationDocument> documents = submittedDocuments(10L);
 
         when(applicationRepository.findById(10L)).thenReturn(Optional.of(application));
-        when(applicationDocumentRepository.countByApplicationId(10L)).thenReturn(2L);
-        when(applicationDocumentRepository.countByApplicationIdAndVerificationStatus(10L, "verified")).thenReturn(2L);
+        when(applicationDocumentRepository.findByApplicationIdOrderByCreatedAtAscIdAsc(10L))
+                .thenReturn(documents);
         when(applicationRepository.existsByBusinessNumberHashAndApprovalStatusAndIdNot(
                 "business-hash",
                 StoreApplication.STATUS_APPROVED,
@@ -356,6 +404,7 @@ class StoreApprovalServiceTest {
         assertEquals(StoreApplication.STATUS_APPROVED, response.approvalStatus());
         assertEquals(StoreApplication.VERIFICATION_VERIFIED, response.verificationStatus());
         assertEquals(55L, response.storeId());
+        assertDocumentsVerified(documents);
         assertNull(owner.getRevokedAt());
         verify(restaurantRepository, never()).save(any(Restaurant.class));
         verify(storeOperationRepository).save(any(AdminStoreOperation.class));
@@ -418,6 +467,36 @@ class StoreApprovalServiceTest {
         ReflectionTestUtils.setField(application, "updatedAt", OffsetDateTime.now(ZoneOffset.UTC));
         ReflectionTestUtils.setField(application, "version", version);
         return application;
+    }
+
+    private List<StoreApplicationDocument> submittedDocuments(Long applicationId) {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        return List.of(
+                StoreApplicationDocument.submitted(
+                        applicationId,
+                        "business_registration",
+                        "applications/10/business_registration/file.pdf",
+                        "business-registration.pdf",
+                        "application/pdf",
+                        1024L,
+                        now
+                ),
+                StoreApplicationDocument.submitted(
+                        applicationId,
+                        "sales_permit",
+                        "applications/10/sales_permit/file.pdf",
+                        "sales-permit.pdf",
+                        "application/pdf",
+                        1024L,
+                        now
+                )
+        );
+    }
+
+    private void assertDocumentsVerified(List<StoreApplicationDocument> documents) {
+        documents.forEach(document ->
+                assertEquals(StoreApplicationDocument.STATUS_VERIFIED, document.getVerificationStatus())
+        );
     }
 
     private AdminActor actor() {
