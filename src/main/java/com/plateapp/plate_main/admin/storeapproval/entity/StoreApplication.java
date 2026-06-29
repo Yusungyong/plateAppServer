@@ -200,6 +200,7 @@ public class StoreApplication {
 
     public void approve(Long createdStoreId, Integer actorUserId, OffsetDateTime now) {
         this.approvalStatus = STATUS_APPROVED;
+        this.verificationStatus = VERIFICATION_VERIFIED;
         this.storeId = createdStoreId;
         markReviewed(actorUserId, now);
     }

@@ -108,6 +108,7 @@ public final class StoreApprovalDtos {
     public record ActionResponse(
             Long applicationId,
             String approvalStatus,
+            String verificationStatus,
             Long storeId,
             Long version,
             OffsetDateTime reviewedAt

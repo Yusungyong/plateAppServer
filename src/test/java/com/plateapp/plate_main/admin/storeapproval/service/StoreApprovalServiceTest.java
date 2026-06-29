@@ -223,6 +223,8 @@ class StoreApprovalServiceTest {
         verify(restaurantRepository).save(restaurantCaptor.capture());
         assertEquals("draft", restaurantCaptor.getValue().getExposureStatus());
         assertEquals(StoreApplication.STATUS_APPROVED, response.approvalStatus());
+        assertEquals(StoreApplication.VERIFICATION_VERIFIED, response.verificationStatus());
+        assertEquals(StoreApplication.VERIFICATION_VERIFIED, application.getVerificationStatus());
         assertEquals(55L, response.storeId());
         verify(reviewRepository).save(any(StoreApplicationReview.class));
         verify(storeOwnerRepository).save(any(StoreOwner.class));
@@ -273,22 +275,44 @@ class StoreApprovalServiceTest {
     }
 
     @Test
-    void approveRequiresCompletedBusinessVerification() {
+    void approveMarksReviewingVerificationAsVerified() {
         StoreApplication application = application(10L, 3L, StoreApplication.STATUS_PENDING, "reviewing");
         when(applicationRepository.findById(10L)).thenReturn(Optional.of(application));
+        when(applicationDocumentRepository.countByApplicationId(10L)).thenReturn(2L);
+        when(applicationDocumentRepository.countByApplicationIdAndVerificationStatus(10L, "verified")).thenReturn(2L);
+        when(applicationRepository.existsByBusinessNumberHashAndApprovalStatusAndIdNot(
+                "business-hash",
+                StoreApplication.STATUS_APPROVED,
+                10L
+        )).thenReturn(false);
+        Restaurant savedRestaurant = Restaurant.create(
+                "Plate Kitchen",
+                "Seoul",
+                "02-1234-5678",
+                null,
+                "Introduction",
+                "draft"
+        );
+        ReflectionTestUtils.setField(savedRestaurant, "id", 55L);
+        when(restaurantRepository.save(any(Restaurant.class))).thenReturn(savedRestaurant);
+        when(applicationCategoryRepository.findByApplicationIdOrderByDisplayOrderAscIdAsc(10L))
+                .thenReturn(List.of());
+        when(applicationMenuRepository.findByApplicationIdOrderByDisplayOrderAscIdAsc(10L))
+                .thenReturn(List.of());
+        when(storeOwnerRepository.findFirstByStoreIdAndUserIdOrderByCreatedAtDescIdDesc(55L, 100))
+                .thenReturn(Optional.empty());
+        when(applicationRepository.saveAndFlush(application)).thenReturn(application);
 
-        AppException exception = assertThrows(
-                AppException.class,
-                () -> service.approve(
-                        10L,
-                        new StoreApprovalDtos.ApproveRequest(3L, null),
-                        actor(),
-                        request
-                )
+        StoreApprovalDtos.ActionResponse response = service.approve(
+                10L,
+                new StoreApprovalDtos.ApproveRequest(3L, null),
+                actor(),
+                request
         );
 
-        assertEquals(ErrorCode.STORE_APPROVAL_VERIFICATION_INCOMPLETE, exception.getErrorCode());
-        verify(restaurantRepository, never()).save(any(Restaurant.class));
+        assertEquals(StoreApplication.STATUS_APPROVED, response.approvalStatus());
+        assertEquals(StoreApplication.VERIFICATION_VERIFIED, response.verificationStatus());
+        assertEquals(StoreApplication.VERIFICATION_VERIFIED, application.getVerificationStatus());
     }
 
     @Test
@@ -330,6 +354,7 @@ class StoreApprovalServiceTest {
         );
 
         assertEquals(StoreApplication.STATUS_APPROVED, response.approvalStatus());
+        assertEquals(StoreApplication.VERIFICATION_VERIFIED, response.verificationStatus());
         assertEquals(55L, response.storeId());
         assertNull(owner.getRevokedAt());
         verify(restaurantRepository, never()).save(any(Restaurant.class));

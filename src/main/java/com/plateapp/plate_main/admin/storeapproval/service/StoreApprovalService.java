@@ -256,9 +256,6 @@ public class StoreApprovalService {
                 StoreApplication.STATUS_ON_HOLD,
                 StoreApplication.STATUS_REJECTED
         ));
-        if (!StoreApplication.VERIFICATION_VERIFIED.equals(application.getVerificationStatus())) {
-            throw new AppException(ErrorCode.STORE_APPROVAL_VERIFICATION_INCOMPLETE);
-        }
         assertDocumentsComplete(applicationId);
         if (applicationRepository.existsByBusinessNumberHashAndApprovalStatusAndIdNot(
                 application.getBusinessNumberHash(),
@@ -706,6 +703,7 @@ public class StoreApprovalService {
         return new StoreApprovalDtos.ActionResponse(
                 application.getId(),
                 application.getApprovalStatus(),
+                application.getVerificationStatus(),
                 application.getStoreId(),
                 application.getVersion(),
                 application.getReviewedAt()
