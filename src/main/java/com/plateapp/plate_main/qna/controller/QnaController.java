@@ -39,6 +39,24 @@ public class QnaController {
         return ResponseEntity.ok(qnaService.listQna(category, statusCode, page, size, isAdmin(authentication)));
     }
 
+    @GetMapping("/my")
+    public ResponseEntity<QnaListResponse> listMyQna(
+        @RequestParam(value = "statusCode", required = false) String statusCode,
+        @RequestParam(value = "page", defaultValue = "0") int page,
+        @RequestParam(value = "size", defaultValue = "10") int size,
+        Authentication authentication
+    ) {
+        return ResponseEntity.ok(qnaService.listMyQna(requireUsername(authentication), statusCode, page, size));
+    }
+
+    @GetMapping("/my/{qnaId}")
+    public ResponseEntity<QnaResponse> getMyQna(
+        @PathVariable Integer qnaId,
+        Authentication authentication
+    ) {
+        return ResponseEntity.ok(qnaService.getMyQna(requireUsername(authentication), qnaId));
+    }
+
     @GetMapping("/{qnaId}")
     public ResponseEntity<QnaResponse> getQna(
         @PathVariable Integer qnaId,
@@ -74,6 +92,14 @@ public class QnaController {
             return null;
         }
         return name;
+    }
+
+    private String requireUsername(Authentication authentication) {
+        String username = currentUsername(authentication);
+        if (username == null) {
+            throw new AppException(ErrorCode.AUTH_UNAUTHORIZED, "Unauthorized");
+        }
+        return username;
     }
 
     private boolean isAdmin(Authentication authentication) {

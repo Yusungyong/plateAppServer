@@ -158,6 +158,7 @@ public class StoreApprovalService {
                         application.getOwnerName(),
                         application.getApprovalStatus(),
                         application.getVerificationStatus(),
+                        application.getBusinessVerificationStatus(),
                         application.getAppliedAt(),
                         application.getUpdatedAt()
                 ))
@@ -203,6 +204,8 @@ public class StoreApprovalService {
                 null,
                 request
         );
+        List<StoreApprovalDtos.ApproveBlockedReason> approveBlockedReasons =
+                approveBlockedReasons(application, documents);
 
         return new StoreApprovalDtos.DetailResponse(
                 application.getId(),
@@ -216,6 +219,10 @@ public class StoreApprovalService {
                 businessNumberCrypto.maskEncrypted(application.getBusinessNumberEncrypted()),
                 application.getApprovalStatus(),
                 application.getVerificationStatus(),
+                application.getBusinessVerificationProvider(),
+                application.getBusinessVerificationStatus(),
+                application.getBusinessVerifiedAt(),
+                application.getBusinessVerificationMessage(),
                 s3UploadService.toDeliveryUrl(application.getMainImageObjectKey()),
                 application.getDescription(),
                 applicationMenuRepository.findByApplicationIdOrderByDisplayOrderAscIdAsc(applicationId).stream()
@@ -238,7 +245,9 @@ public class StoreApprovalService {
                 application.getUpdatedAt(),
                 latestReview == null ? null : latestReview.getReason(),
                 application.getStoreId(),
-                application.getVersion()
+                application.getVersion(),
+                approveBlockedReasons.isEmpty(),
+                approveBlockedReasons
         );
     }
 
@@ -616,6 +625,47 @@ public class StoreApprovalService {
             throw new AppException(ErrorCode.STORE_APPROVAL_DOCUMENT_INCOMPLETE);
         }
         documents.forEach(StoreApplicationDocument::verify);
+    }
+
+    private List<StoreApprovalDtos.ApproveBlockedReason> approveBlockedReasons(
+            StoreApplication application,
+            List<StoreApplicationDocument> documents
+    ) {
+        List<StoreApprovalDtos.ApproveBlockedReason> reasons = new ArrayList<>();
+        if (!Set.of(
+                StoreApplication.STATUS_PENDING,
+                StoreApplication.STATUS_ON_HOLD,
+                StoreApplication.STATUS_REJECTED
+        ).contains(application.getApprovalStatus())) {
+            reasons.add(new StoreApprovalDtos.ApproveBlockedReason(
+                    "INVALID_STATUS_TRANSITION",
+                    "현재 상태에서는 승인할 수 없습니다."
+            ));
+        }
+        if (documents.isEmpty()
+                && !StoreApplication.VERIFICATION_VERIFIED.equals(application.getBusinessVerificationStatus())) {
+            reasons.add(new StoreApprovalDtos.ApproveBlockedReason(
+                    "DOCUMENT_REQUIRED",
+                    "사업자 자동 검증 또는 제출 서류가 필요합니다."
+            ));
+        }
+        if (documents.stream().anyMatch(StoreApplicationDocument::isRejected)) {
+            reasons.add(new StoreApprovalDtos.ApproveBlockedReason(
+                    "DOCUMENT_REJECTED",
+                    "반려된 제출 서류가 있습니다."
+            ));
+        }
+        if (applicationRepository.existsByBusinessNumberHashAndApprovalStatusAndIdNot(
+                application.getBusinessNumberHash(),
+                StoreApplication.STATUS_APPROVED,
+                application.getId()
+        )) {
+            reasons.add(new StoreApprovalDtos.ApproveBlockedReason(
+                    "DUPLICATE_STORE",
+                    "동일한 사업자등록번호로 승인된 매장이 이미 있습니다."
+            ));
+        }
+        return reasons;
     }
 
     private void assertTransitionAllowed(StoreApplication application, Set<String> allowedCurrentStates) {

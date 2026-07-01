@@ -43,6 +43,7 @@ public class QnaService {
             result = qnaRepository.findAdminQna(
                 normalize(category),
                 normalizeStatusCodeOrNull(statusCode),
+                null,
                 pageable
             );
         } else {
@@ -72,6 +73,77 @@ public class QnaService {
             throw new AppException(ErrorCode.COMMON_NOT_FOUND, "QnA not found");
         }
         return toResponse(qna, isAdmin);
+    }
+
+    @Transactional(readOnly = true)
+    public QnaListResponse listMyQna(String username, String statusCode, int page, int size) {
+        String normalizedUsername = requireUsername(username);
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.max(1, Math.min(size, 100));
+        PageRequest pageable = PageRequest.of(
+            safePage,
+            safeSize,
+            Sort.by(
+                Sort.Order.desc("createdAt"),
+                Sort.Order.desc("qnaId")
+            )
+        );
+        Page<Fp901Qna> result = qnaRepository.findMyQna(
+            normalizedUsername,
+            normalizeStatusCodeOrNull(statusCode),
+            pageable
+        );
+        return new QnaListResponse(
+            result.getContent().stream().map(qna -> toResponse(qna, true)).toList(),
+            result.getNumber(),
+            result.getSize(),
+            result.getTotalElements(),
+            result.getTotalPages(),
+            result.hasNext()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public QnaListResponse listAdminQna(
+        String category,
+        String statusCode,
+        String visibility,
+        int page,
+        int size
+    ) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.max(1, Math.min(size, 100));
+        PageRequest pageable = PageRequest.of(
+            safePage,
+            safeSize,
+            Sort.by(
+                Sort.Order.desc("createdAt"),
+                Sort.Order.desc("qnaId")
+            )
+        );
+        Page<Fp901Qna> result = qnaRepository.findAdminQna(
+            normalize(category),
+            normalizeStatusCodeOrNull(statusCode),
+            normalizeVisibility(visibility),
+            pageable
+        );
+        return new QnaListResponse(
+            result.getContent().stream().map(qna -> toResponse(qna, true)).toList(),
+            result.getNumber(),
+            result.getSize(),
+            result.getTotalElements(),
+            result.getTotalPages(),
+            result.hasNext()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public QnaResponse getMyQna(String username, Integer qnaId) {
+        Fp901Qna qna = qnaRepository.findByQnaIdAndUsername(qnaId, requireUsername(username));
+        if (qna == null) {
+            throw new AppException(ErrorCode.COMMON_NOT_FOUND, "QnA not found");
+        }
+        return toResponse(qna, true);
     }
 
     @Transactional
@@ -142,6 +214,28 @@ public class QnaService {
             throw new AppException(ErrorCode.COMMON_INVALID_INPUT, "Invalid statusCode");
         }
         return trimmed;
+    }
+
+    private String requireUsername(String username) {
+        String normalized = normalize(username);
+        if (normalized == null) {
+            throw new AppException(ErrorCode.AUTH_UNAUTHORIZED, "Unauthorized");
+        }
+        return normalized;
+    }
+
+    private Boolean normalizeVisibility(String value) {
+        String normalized = normalize(value);
+        if (normalized == null || "all".equalsIgnoreCase(normalized)) {
+            return null;
+        }
+        if ("public".equalsIgnoreCase(normalized)) {
+            return true;
+        }
+        if ("private".equalsIgnoreCase(normalized)) {
+            return false;
+        }
+        throw new AppException(ErrorCode.COMMON_INVALID_INPUT, "visibility must be all, public, or private");
     }
 }
 

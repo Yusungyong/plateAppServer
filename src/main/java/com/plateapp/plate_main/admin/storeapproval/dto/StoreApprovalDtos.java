@@ -25,6 +25,7 @@ public final class StoreApprovalDtos {
             String ownerName,
             String approvalStatus,
             String verificationStatus,
+            String businessVerificationStatus,
             OffsetDateTime appliedAt,
             OffsetDateTime updatedAt
     ) {
@@ -46,6 +47,9 @@ public final class StoreApprovalDtos {
     public record DocumentItem(Long id, String type, String name, String status) {
     }
 
+    public record ApproveBlockedReason(String code, String message) {
+    }
+
     public record DetailResponse(
             Long id,
             String name,
@@ -58,6 +62,10 @@ public final class StoreApprovalDtos {
             String businessNumber,
             String approvalStatus,
             String verificationStatus,
+            String businessVerificationProvider,
+            String businessVerificationStatus,
+            OffsetDateTime businessVerifiedAt,
+            String businessVerificationMessage,
             String mainImageUrl,
             String description,
             List<MenuItem> representativeMenus,
@@ -66,7 +74,9 @@ public final class StoreApprovalDtos {
             OffsetDateTime updatedAt,
             String reviewReason,
             Long storeId,
-            Long version
+            Long version,
+            boolean canApprove,
+            List<ApproveBlockedReason> approveBlockedReasons
     ) {
     }
 

@@ -73,6 +73,8 @@ public class SecurityConfig {
                     "/api/faqs/*",
                     "/api/qna",
                     "/api/qna/*",
+                    "/api/support/policies",
+                    "/api/common/codes",
                     "/api/search",
                     "/api/search/suggest",
                     "/api/recommendations",
