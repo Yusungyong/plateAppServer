@@ -10,9 +10,12 @@ SERVER_PORT="$(grep -E "^[[:space:]]*SERVER_PORT=" "$ENV_FILE" 2>/dev/null | tai
 SERVER_PORT="${SERVER_PORT:-8090}"
 APP_URL="http://127.0.0.1:${SERVER_PORT}/api/health"
 CORS_SMOKE_ORIGIN="$(grep -E "^[[:space:]]*CORS_SMOKE_ORIGIN=" "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' || true)"
-MAX_RETRIES=30
-SLEEP_SECONDS=2
-CURL_TIMEOUT_SECONDS=2
+MAX_RETRIES="$(grep -E "^[[:space:]]*HEALTH_MAX_RETRIES=" "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' || true)"
+SLEEP_SECONDS="$(grep -E "^[[:space:]]*HEALTH_SLEEP_SECONDS=" "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' || true)"
+CURL_TIMEOUT_SECONDS="$(grep -E "^[[:space:]]*HEALTH_CURL_TIMEOUT_SECONDS=" "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' || true)"
+MAX_RETRIES="${MAX_RETRIES:-90}"
+SLEEP_SECONDS="${SLEEP_SECONDS:-2}"
+CURL_TIMEOUT_SECONDS="${CURL_TIMEOUT_SECONDS:-5}"
 
 log "Checking systemd active state for plate-main."
 if ! systemctl is-active --quiet plate-main; then
@@ -21,7 +24,7 @@ if ! systemctl is-active --quiet plate-main; then
   journalctl -u plate-main -n 200 --no-pager || true
   exit 1
 fi
-log "plate-main is active. Starting health checks: ${APP_URL}"
+log "plate-main is active. Starting health checks: ${APP_URL} max_retries=${MAX_RETRIES} sleep_seconds=${SLEEP_SECONDS} curl_timeout_seconds=${CURL_TIMEOUT_SECONDS}"
 
 for ((i=1; i<=MAX_RETRIES; i++)); do
   log "Health check attempt ${i}/${MAX_RETRIES}"
