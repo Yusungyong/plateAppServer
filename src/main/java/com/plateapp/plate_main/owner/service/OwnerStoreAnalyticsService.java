@@ -295,60 +295,29 @@ public class OwnerStoreAnalyticsService {
 
         Restaurant restaurant = restaurantRepository.findById(storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.COMMON_NOT_FOUND));
-        List<String> ownerUsernames = activeOwnerUsernames(storeId, username);
-        List<Integer> videoStoreIds = linkedVideoStoreIds(storeId, restaurant, ownerUsernames);
+        List<Integer> videoStoreIds = linkedVideoStoreIds(storeId);
 
         OwnerStoreAnalyticsDtos.AnalyticsSource source = new OwnerStoreAnalyticsDtos.AnalyticsSource(
                 storeId,
                 restaurant.getTitle(),
                 restaurant.getAddress(),
                 videoStoreIds,
-                "restaurant_id_or_owner_name_address",
+                "restaurant_id",
                 !videoStoreIds.isEmpty()
         );
         return new AnalyticsContext(source, videoStoreIds);
     }
 
-    private List<String> activeOwnerUsernames(Long storeId, String fallbackUsername) {
-        List<String> usernames = jdbc.queryForList("""
-                select u.username
-                from store_owners so
-                join fp_100 u on u.user_id = so.user_id
-                where so.store_id = :storeId
-                  and so.revoked_at is null
-                  and u.username is not null
-                order by so.created_at desc, so.id desc
-                """, new MapSqlParameterSource("storeId", storeId), String.class);
-        if (usernames.isEmpty() && fallbackUsername != null && !fallbackUsername.isBlank()) {
-            return List.of(fallbackUsername);
-        }
-        return usernames;
-    }
-
-    private List<Integer> linkedVideoStoreIds(Long storeId, Restaurant restaurant, List<String> ownerUsernames) {
-        if (ownerUsernames.isEmpty()) {
-            return List.of();
-        }
-        Integer storeIdInt = storeId <= Integer.MAX_VALUE ? storeId.intValue() : null;
+    private List<Integer> linkedVideoStoreIds(Long storeId) {
         List<Integer> ids = jdbc.queryForList("""
                 select distinct s.store_id
                 from fp_300 s
-                where s.username in (:ownerUsernames)
+                where s.restaurant_id = :restaurantId
                   and s.use_yn = 'Y'
                   and s.deleted_at is null
-                  and (
-                        (:storeIdInt is not null and s.store_id = :storeIdInt)
-                     or (
-                        lower(trim(coalesce(nullif(s.store_name, ''), s.title, ''))) = lower(trim(:storeName))
-                        and lower(trim(coalesce(s.address, ''))) = lower(trim(:address))
-                     )
-                  )
-                order by s.store_id desc
+                order by s.created_at desc nulls last, s.store_id desc
                 """, new MapSqlParameterSource()
-                .addValue("ownerUsernames", ownerUsernames)
-                .addValue("storeIdInt", storeIdInt)
-                .addValue("storeName", restaurant.getTitle())
-                .addValue("address", restaurant.getAddress()), Integer.class);
+                .addValue("restaurantId", storeId), Integer.class);
         return List.copyOf(new LinkedHashSet<>(ids));
     }
 

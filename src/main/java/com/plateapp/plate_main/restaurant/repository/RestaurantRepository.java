@@ -1,6 +1,7 @@
 package com.plateapp.plate_main.restaurant.repository;
 
 import com.plateapp.plate_main.restaurant.entity.Restaurant;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -28,5 +29,16 @@ public interface RestaurantRepository extends JpaRepository<Restaurant, Long> {
             @Param("category") String category,
             @Param("exposureStatus") String exposureStatus,
             Pageable pageable
+    );
+
+    @Query("""
+        select r.id
+        from Restaurant r
+        where lower(trim(r.title)) = lower(trim(:title))
+          and lower(trim(r.address)) = lower(trim(:address))
+    """)
+    List<Long> findIdsByTitleAndAddress(
+            @Param("title") String title,
+            @Param("address") String address
     );
 }

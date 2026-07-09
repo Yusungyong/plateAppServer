@@ -61,6 +61,9 @@ public class Fp300Store {
     @Column(name = "place_id")
     private String placeId;
 
+    @Column(name = "restaurant_id")
+    private Long restaurantId;
+
     @Column(name = "video_duration")
     private Integer videoDuration;
 

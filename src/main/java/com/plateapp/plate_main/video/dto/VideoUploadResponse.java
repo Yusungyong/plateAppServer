@@ -7,6 +7,7 @@ import lombok.Value;
 @Builder
 public class VideoUploadResponse {
     Integer storeId;
+    Long restaurantId;
     String fileName;
     String thumbnail;
     Integer videoDuration;

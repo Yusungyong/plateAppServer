@@ -8,6 +8,7 @@ import com.plateapp.plate_main.comment.repository.ReplyRepository;
 import com.plateapp.plate_main.friend.repository.Fp200VisitRepository;
 import com.plateapp.plate_main.like.repository.Fp50LikeRepository;
 import com.plateapp.plate_main.menu.repository.Fp320MenuRepository;
+import com.plateapp.plate_main.restaurant.repository.RestaurantRepository;
 import com.plateapp.plate_main.video.dto.VideoUploadResponse;
 import com.plateapp.plate_main.video.entity.Fp300Store;
 import com.plateapp.plate_main.video.repository.Fp300StoreRepository;
@@ -48,6 +49,7 @@ public class VideoUploadService {
     private final Fp305WatchHistoryRepository fp305WatchHistoryRepository;
     private final Fp200VisitRepository fp200VisitRepository;
     private final Fp320MenuRepository fp320MenuRepository;
+    private final RestaurantRepository restaurantRepository;
     private final ImageProcessingService imageProcessingService;
     private final FfmpegService ffmpegService;
     private final PlaceService placeService;
@@ -60,6 +62,7 @@ public class VideoUploadService {
             String storeName,
             String placeId,
             String address,
+            Long restaurantId,
             Double lat,
             Double lng,
             String muteYn,
@@ -80,6 +83,7 @@ public class VideoUploadService {
         store.setTitle(storeName);
         store.setFileName(s3UploadService.toStoredVideoPath(media.fileUrl));
         store.setAddress(address);
+        store.setRestaurantId(resolveRestaurantId(restaurantId, storeName, address));
         store.setUsername(username);
         store.setCreatedAt(LocalDate.now());
         store.setUpdatedAt(LocalDate.now());
@@ -97,6 +101,7 @@ public class VideoUploadService {
 
         return VideoUploadResponse.builder()
                 .storeId(saved.getStoreId())
+                .restaurantId(saved.getRestaurantId())
                 .fileName(s3UploadService.toVideoUrl(saved.getFileName()))
                 .thumbnail(s3UploadService.toImageUrl(saved.getThumbnail()))
                 .videoDuration(saved.getVideoDuration())
@@ -112,6 +117,7 @@ public class VideoUploadService {
             String storeName,
             String placeId,
             String address,
+            Long restaurantId,
             Double lat,
             Double lng,
             String muteYn,
@@ -133,6 +139,7 @@ public class VideoUploadService {
         store.setStoreName(storeName);
         store.setPlaceId(placeId);
         store.setAddress(address);
+        store.setRestaurantId(resolveRestaurantId(restaurantId, storeName, address));
         store.setOpenYn(nextOpenYn);
         store.setUseYn(nextUseYn);
         store.setMuteYn(nextMuteYn);
@@ -149,6 +156,7 @@ public class VideoUploadService {
 
         return VideoUpdateResponse.builder()
                 .storeId(store.getStoreId())
+                .restaurantId(store.getRestaurantId())
                 .fileName(s3UploadService.toVideoUrl(store.getFileName()))
                 .thumbnail(s3UploadService.toImageUrl(store.getThumbnail()))
                 .videoDuration(store.getVideoDuration())
@@ -164,6 +172,7 @@ public class VideoUploadService {
             String storeName,
             String placeId,
             String address,
+            Long restaurantId,
             Double lat,
             Double lng,
             String muteYn,
@@ -177,6 +186,7 @@ public class VideoUploadService {
         store.setStoreName(storeName);
         store.setPlaceId(placeId);
         store.setAddress(address);
+        store.setRestaurantId(resolveRestaurantId(restaurantId, storeName, address));
         store.setOpenYn(normalizeYn(openYn, store.getOpenYn()));
         store.setUseYn(normalizeYn(useYn, store.getUseYn()));
         store.setMuteYn(normalizeYn(muteYn, store.getMuteYn()));
@@ -229,6 +239,20 @@ public class VideoUploadService {
             return fallback;
         }
         return value;
+    }
+
+    private Long resolveRestaurantId(Long requestedRestaurantId, String storeName, String address) {
+        if (requestedRestaurantId != null) {
+            if (!restaurantRepository.existsById(requestedRestaurantId)) {
+                throw new IllegalArgumentException("restaurantId not found");
+            }
+            return requestedRestaurantId;
+        }
+        if (storeName == null || storeName.isBlank() || address == null || address.isBlank()) {
+            return null;
+        }
+        List<Long> matches = restaurantRepository.findIdsByTitleAndAddress(storeName, address);
+        return matches.size() == 1 ? matches.get(0) : null;
     }
 
     private void upsertPlace(String placeId, String address, Double lat, Double lng) {

@@ -19,11 +19,14 @@
 
 ## 집계 연결 기준
 
-점주 권한 매장은 `restaurants.id` 기준입니다. 앱 콘텐츠/반응 데이터는 현재 `fp_300.store_id` 기준으로 쌓여 있어, 서버는 아래 규칙으로 점주 매장과 동영상 매장을 연결합니다.
+점주 권한 매장은 `restaurants.id` 기준입니다. 영상 콘텐츠는 `fp_300.restaurant_id`로 실제 식당과 직접 연결됩니다.
 
-1. 현재 매장의 활성 점주들이 업로드한 `fp_300` 콘텐츠만 집계합니다.
-2. `fp_300.store_id == restaurants.id`이면 연결합니다.
-3. 또는 `fp_300.store_name/title`과 `fp_300.address`가 `restaurants.title/address`와 일치하면 연결합니다.
+1. 점주 화면의 `{storeId}`는 `restaurants.id`입니다.
+2. 통계 집계 대상 영상은 `fp_300.restaurant_id = {storeId}`인 row입니다.
+3. 기존 데이터는 migration에서 가능한 범위만 백필됩니다.
+   - `fp_300.store_id == restaurants.id`
+   - 또는 `storeName/title + address`가 하나의 `restaurants` row와만 정확히 일치하는 경우
+4. 신규 영상 업로드/수정 시 프론트가 `restaurantId`를 전달하면 `fp_300.restaurant_id`에 저장됩니다.
 
 각 응답의 `source.videoStoreIds`에 실제 집계에 사용된 `fp_300.store_id` 목록이 내려갑니다. 이 값이 비어 있으면 콘텐츠 기반 지표는 모두 `0`입니다.
 
@@ -34,7 +37,7 @@
     "storeName": "Plate Burger",
     "address": "서울시 ...",
     "videoStoreIds": [301, 298],
-    "matchStrategy": "restaurant_id_or_owner_name_address",
+    "matchStrategy": "restaurant_id",
     "hasLinkedVideoContent": true
   }
 }
@@ -44,6 +47,39 @@
 
 - `hasLinkedVideoContent=false`: "아직 집계할 콘텐츠가 없습니다" 빈 상태 노출
 - `videoStoreIds`는 디버그/운영 확인용으로 화면에 직접 노출하지 않아도 됩니다.
+
+## 영상 업로드/수정 연결
+
+점주 매장의 콘텐츠를 올리거나 기존 콘텐츠를 점주 매장에 연결하려면 영상 업로드/수정 API에 `restaurantId`를 함께 보내면 됩니다.
+
+```http
+POST /api/videos
+Content-Type: multipart/form-data
+```
+
+주요 form field:
+
+- `file`: 영상 파일
+- `thumbnail`: 썸네일 파일, optional
+- `storeName`: 화면 표시용 매장명
+- `placeId`: 지도/장소 식별자
+- `address`: 주소
+- `restaurantId`: 실제 입점 식당 ID, optional
+
+`restaurantId`를 보내지 않으면 서버는 `storeName + address`가 하나의 `restaurants` row와 정확히 일치할 때만 자동 연결합니다. 일치하지 않거나 여러 개가 일치하면 `restaurantId=null`로 저장되어 점주 통계에 포함되지 않습니다.
+
+업로드/수정 응답에는 `restaurantId`가 포함됩니다.
+
+```json
+{
+  "storeId": 301,
+  "restaurantId": 12,
+  "fileName": "https://...",
+  "thumbnail": "https://...",
+  "videoDuration": 42,
+  "videoSize": 12345678
+}
+```
 
 ## 1. Summary
 
@@ -62,7 +98,7 @@ GET /api/owner/stores/{storeId}/analytics/summary?from=2026-07-01&to=2026-07-07
     "storeName": "Plate Burger",
     "address": "서울시 ...",
     "videoStoreIds": [301],
-    "matchStrategy": "restaurant_id_or_owner_name_address",
+    "matchStrategy": "restaurant_id",
     "hasLinkedVideoContent": true
   },
   "from": "2026-07-01",
@@ -181,7 +217,7 @@ GET /api/owner/stores/{storeId}/analytics/trends?from=2026-07-01&to=2026-07-07&i
     "storeName": "Plate Burger",
     "address": "서울시 ...",
     "videoStoreIds": [301],
-    "matchStrategy": "restaurant_id_or_owner_name_address",
+    "matchStrategy": "restaurant_id",
     "hasLinkedVideoContent": true
   },
   "from": "2026-07-01",
@@ -231,7 +267,7 @@ GET /api/owner/stores/{storeId}/analytics/contents?from=2026-07-01&to=2026-07-07
     "storeName": "Plate Burger",
     "address": "서울시 ...",
     "videoStoreIds": [301, 298],
-    "matchStrategy": "restaurant_id_or_owner_name_address",
+    "matchStrategy": "restaurant_id",
     "hasLinkedVideoContent": true
   },
   "from": "2026-07-01",
@@ -308,4 +344,3 @@ GET /api/owner/stores/{storeId}/analytics/contents?from=2026-07-01&to=2026-07-07
 
 - "아직 집계할 콘텐츠가 없습니다."
 - "매장 소개 영상이나 피드를 등록하면 노출, 시청, 저장 데이터를 확인할 수 있습니다."
-
