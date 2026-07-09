@@ -310,7 +310,7 @@ public class OwnerStoreAnalyticsService {
 
     private List<Integer> linkedVideoStoreIds(Long storeId) {
         List<Integer> ids = jdbc.queryForList("""
-                select distinct s.store_id
+                select s.store_id
                 from fp_300 s
                 where s.restaurant_id = :restaurantId
                   and s.use_yn = 'Y'
