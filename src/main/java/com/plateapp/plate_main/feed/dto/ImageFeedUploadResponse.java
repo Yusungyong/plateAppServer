@@ -5,6 +5,7 @@ import java.util.List;
 
 public class ImageFeedUploadResponse {
     public Integer feedId;
+    public Long restaurantId;
     public String content;
     public String storeName;
     public String placeId;

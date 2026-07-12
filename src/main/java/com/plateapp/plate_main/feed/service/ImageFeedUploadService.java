@@ -10,6 +10,7 @@ import com.plateapp.plate_main.feed.repository.ImageFeedRepository;
 import com.plateapp.plate_main.friend.repository.Fp200VisitRepository;
 import com.plateapp.plate_main.like.repository.ImageFeedLikeRepository;
 import com.plateapp.plate_main.menu.repository.Fp320MenuRepository;
+import com.plateapp.plate_main.restaurant.repository.RestaurantRepository;
 import com.plateapp.plate_main.video.service.PlaceService;
 import java.io.IOException;
 import java.io.InputStream;
@@ -55,6 +56,7 @@ public class ImageFeedUploadService {
     private final S3UploadService s3UploadService;
     private final ImageProcessingService imageProcessingService;
     private final PlaceService placeService;
+    private final RestaurantRepository restaurantRepository;
 
     @Transactional
     public ImageFeedUploadResponse createFeed(
@@ -63,6 +65,7 @@ public class ImageFeedUploadService {
             String address,
             String storeName,
             String placeId,
+            Long restaurantId,
             Double lat,
             Double lng,
             String withFriendsRaw,
@@ -105,6 +108,7 @@ public class ImageFeedUploadService {
         feed.setUpdatedAt(now);
         feed.setLocation(address);
         feed.setStoreName(storeName);
+        feed.setRestaurantId(resolveRestaurantId(restaurantId, storeName, address));
         feed.setPlaceId(placeId);
         feed.setUseYn(safeUseYn);
 
@@ -113,6 +117,7 @@ public class ImageFeedUploadService {
 
         ImageFeedUploadResponse response = new ImageFeedUploadResponse();
         response.feedId = saved.getFeedId();
+        response.restaurantId = saved.getRestaurantId();
         response.content = saved.getContent();
         response.storeName = saved.getStoreName();
         response.placeId = saved.getPlaceId();
@@ -132,6 +137,7 @@ public class ImageFeedUploadService {
             String address,
             String storeName,
             String placeId,
+            Long restaurantId,
             Double lat,
             Double lng,
             String useYn,
@@ -158,6 +164,7 @@ public class ImageFeedUploadService {
         if (useYn != null && !useYn.isBlank()) {
             feed.setUseYn(useYn);
         }
+        feed.setRestaurantId(resolveRestaurantId(restaurantId, feed.getStoreName(), feed.getLocation()));
         feed.setUpdatedAt(LocalDateTime.now());
         imageFeedRepository.save(feed);
         upsertPlace(feed.getPlaceId(), feed.getLocation(), lat, lng);
@@ -199,6 +206,7 @@ public class ImageFeedUploadService {
 
         ImageFeedUploadResponse response = new ImageFeedUploadResponse();
         response.feedId = feed.getFeedId();
+        response.restaurantId = feed.getRestaurantId();
         response.images = buildImageItems(currentUrls);
         response.content = feed.getContent();
         response.storeName = feed.getStoreName();
@@ -328,6 +336,7 @@ public class ImageFeedUploadService {
 
         ImageFeedUploadResponse response = new ImageFeedUploadResponse();
         response.feedId = feed.getFeedId();
+        response.restaurantId = feed.getRestaurantId();
         response.images = buildImageItems(reorderedUrls);
         response.content = feed.getContent();
         response.storeName = feed.getStoreName();
@@ -425,6 +434,20 @@ public class ImageFeedUploadService {
                 .lng(lng)
                 .build();
         placeService.savePlace(req);
+    }
+
+    private Long resolveRestaurantId(Long requestedRestaurantId, String storeName, String address) {
+        if (requestedRestaurantId != null) {
+            if (!restaurantRepository.existsById(requestedRestaurantId)) {
+                throw new IllegalArgumentException("restaurantId not found");
+            }
+            return requestedRestaurantId;
+        }
+        if (storeName == null || storeName.isBlank() || address == null || address.isBlank()) {
+            return null;
+        }
+        List<Long> matches = restaurantRepository.findIdsByTitleAndAddress(storeName, address);
+        return matches.size() == 1 ? matches.get(0) : null;
     }
 
     private String safeStoredImageFileName(String original, String fallback) {

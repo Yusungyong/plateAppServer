@@ -32,6 +32,7 @@ public class ImageFeedUploadController {
             @RequestParam("address") String address,
             @RequestParam(value = "storeName", required = false) String storeName,
             @RequestParam(value = "placeId", required = false) String placeId,
+            @RequestParam(value = "restaurantId", required = false) Long restaurantId,
             @RequestParam(value = "lat", required = false) Double lat,
             @RequestParam(value = "lng", required = false) Double lng,
             @RequestParam(value = "withFriends", required = false) String withFriends,
@@ -45,6 +46,7 @@ public class ImageFeedUploadController {
                 address,
                 storeName,
                 placeId,
+                restaurantId,
                 lat,
                 lng,
                 withFriends,
@@ -73,6 +75,7 @@ public class ImageFeedUploadController {
                 body.address,
                 body.storeName,
                 body.placeId,
+                body.restaurantId,
                 body.lat,
                 body.lng,
                 body.useYn,
@@ -148,6 +151,7 @@ public class ImageFeedUploadController {
         public String address;
         public String storeName;
         public String placeId;
+        public Long restaurantId;
         public Double lat;
         public Double lng;
         public String withFriends;

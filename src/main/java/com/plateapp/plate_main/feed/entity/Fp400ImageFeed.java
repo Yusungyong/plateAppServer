@@ -53,6 +53,9 @@ public class Fp400ImageFeed {
   @Column(name = "store_name")
   private String storeName;
 
+  @Column(name = "restaurant_id")
+  private Long restaurantId;
+
   @Column(name = "place_id")
   private String placeId;
 
@@ -72,6 +75,7 @@ public class Fp400ImageFeed {
   public String getFeedTitle() { return feedTitle; }
   public String getLocation() { return location; }
   public String getStoreName() { return storeName; }
+  public Long getRestaurantId() { return restaurantId; }
   public String getPlaceId() { return placeId; }
   public String getUseYn() { return useYn; }
   public String getThumbnail() { return thumbnail; }
@@ -84,6 +88,7 @@ public class Fp400ImageFeed {
   public void setFeedTitle(String feedTitle) { this.feedTitle = feedTitle; }
   public void setLocation(String location) { this.location = location; }
   public void setStoreName(String storeName) { this.storeName = storeName; }
+  public void setRestaurantId(Long restaurantId) { this.restaurantId = restaurantId; }
   public void setPlaceId(String placeId) { this.placeId = placeId; }
   public void setUseYn(String useYn) { this.useYn = useYn; }
   public void setThumbnail(String thumbnail) { this.thumbnail = thumbnail; }

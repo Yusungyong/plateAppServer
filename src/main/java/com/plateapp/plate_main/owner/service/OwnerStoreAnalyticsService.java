@@ -21,9 +21,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -55,8 +53,12 @@ public class OwnerStoreAnalyticsService {
         DateRange current = range(from, to);
         DateRange previous = previousRange(current);
 
-        long impressions = countHomeImpressions(context.videoStoreIds(), current);
-        long previousImpressions = countHomeImpressions(context.videoStoreIds(), previous);
+        long videoImpressions = countHomeImpressions(context.videoStoreIds(), current);
+        long previousVideoImpressions = countHomeImpressions(context.videoStoreIds(), previous);
+        long imageImpressions = countImageHomeImpressions(context.imageFeedIds(), current);
+        long previousImageImpressions = countImageHomeImpressions(context.imageFeedIds(), previous);
+        long impressions = videoImpressions + imageImpressions;
+        long previousImpressions = previousVideoImpressions + previousImageImpressions;
         long views = countViews(context.videoStoreIds(), current);
         long previousViews = countViews(context.videoStoreIds(), previous);
         long uniqueViewers = countUniqueViewers(context.videoStoreIds(), current);
@@ -65,8 +67,13 @@ public class OwnerStoreAnalyticsService {
         long newSaves = countNewSaves(context.videoStoreIds(), current);
         long previousNewSaves = countNewSaves(context.videoStoreIds(), previous);
         long activeSaves = countActiveSaves(context.videoStoreIds());
-        long comments = countComments(context.videoStoreIds(), current);
-        long previousComments = countComments(context.videoStoreIds(), previous);
+        long activeImageLikes = countActiveImageLikes(context.imageFeedIds());
+        long newImageLikes = countNewImageLikes(context.imageFeedIds(), current);
+        long previousNewImageLikes = countNewImageLikes(context.imageFeedIds(), previous);
+        long comments = countComments(context.videoStoreIds(), current)
+                + countImageComments(context.imageFeedIds(), current);
+        long previousComments = countComments(context.videoStoreIds(), previous)
+                + countImageComments(context.imageFeedIds(), previous);
         double averageWatchSeconds = averageWatchSeconds(context.videoStoreIds(), current);
         double completionRate = ratio(completedViews, views);
 
@@ -85,6 +92,8 @@ public class OwnerStoreAnalyticsService {
                 List.of(
                         metric("homeImpressions", "Home impressions", impressions,
                                 changeRate(impressions, previousImpressions), "count", "previous_period"),
+                        metric("imageImpressions", "Image impressions", imageImpressions,
+                                changeRate(imageImpressions, previousImageImpressions), "count", "previous_period"),
                         metric("videoViews", "Video views", views,
                                 changeRate(views, previousViews), "count", "previous_period"),
                         metric("uniqueViewers", "Unique viewers", uniqueViewers,
@@ -93,6 +102,10 @@ public class OwnerStoreAnalyticsService {
                                 null, "count", "current"),
                         metric("newSaves", "New saves", newSaves,
                                 changeRate(newSaves, previousNewSaves), "count", "previous_period"),
+                        metric("activeImageLikes", "Active image likes", activeImageLikes,
+                                null, "count", "current"),
+                        metric("newImageLikes", "New image likes", newImageLikes,
+                                changeRate(newImageLikes, previousNewImageLikes), "count", "previous_period"),
                         metric("comments", "Comments", comments,
                                 changeRate(comments, previousComments), "count", "previous_period")
                 ),
@@ -105,8 +118,12 @@ public class OwnerStoreAnalyticsService {
                 ),
                 new OwnerStoreAnalyticsDtos.EngagementSummary(
                         impressions,
+                        videoImpressions,
+                        imageImpressions,
                         activeSaves,
+                        activeImageLikes,
                         newSaves,
+                        newImageLikes,
                         comments
                 ),
                 new OwnerStoreAnalyticsDtos.FunnelSummary(
@@ -141,20 +158,29 @@ public class OwnerStoreAnalyticsService {
             throw new AppException(ErrorCode.COMMON_INVALID_INPUT, "trend range must be 93 days or less.");
         }
 
-        Map<LocalDate, Long> impressions = dailyHomeImpressions(context.videoStoreIds(), dateRange);
+        Map<LocalDate, Long> videoImpressions = dailyHomeImpressions(context.videoStoreIds(), dateRange);
+        Map<LocalDate, Long> imageImpressions = dailyImageHomeImpressions(context.imageFeedIds(), dateRange);
+        Map<LocalDate, Long> impressions = mergeDailyCounts(videoImpressions, imageImpressions);
         Map<LocalDate, Long> views = dailyViews(context.videoStoreIds(), dateRange, false);
         Map<LocalDate, Long> completedViews = dailyViews(context.videoStoreIds(), dateRange, true);
         Map<LocalDate, Long> saves = dailyNewSaves(context.videoStoreIds(), dateRange);
-        Map<LocalDate, Long> comments = dailyComments(context.videoStoreIds(), dateRange);
+        Map<LocalDate, Long> imageLikes = dailyNewImageLikes(context.imageFeedIds(), dateRange);
+        Map<LocalDate, Long> comments = mergeDailyCounts(
+                dailyComments(context.videoStoreIds(), dateRange),
+                dailyImageComments(context.imageFeedIds(), dateRange)
+        );
 
         List<OwnerStoreAnalyticsDtos.TrendPoint> points = new ArrayList<>();
         for (LocalDate date = dateRange.from(); date.isBefore(dateRange.toExclusive()); date = date.plusDays(1)) {
             points.add(new OwnerStoreAnalyticsDtos.TrendPoint(
                     date,
                     impressions.getOrDefault(date, 0L),
+                    videoImpressions.getOrDefault(date, 0L),
+                    imageImpressions.getOrDefault(date, 0L),
                     views.getOrDefault(date, 0L),
                     completedViews.getOrDefault(date, 0L),
                     saves.getOrDefault(date, 0L),
+                    imageLikes.getOrDefault(date, 0L),
                     comments.getOrDefault(date, 0L)
             ));
         }
@@ -181,7 +207,9 @@ public class OwnerStoreAnalyticsService {
         DateRange dateRange = range(from, to);
         int safePage = Math.max(page, 0);
         int safeSize = Math.max(1, Math.min(size, 100));
-        if (context.videoStoreIds().isEmpty()) {
+        boolean hasVideoContent = !context.videoStoreIds().isEmpty();
+        boolean hasImageContent = !context.imageFeedIds().isEmpty();
+        if (!hasVideoContent && !hasImageContent) {
             return new OwnerStoreAnalyticsDtos.ContentPerformanceResponse(
                     context.source(),
                     dateRange.from(),
@@ -195,78 +223,147 @@ public class OwnerStoreAnalyticsService {
             );
         }
 
-        long total = context.videoStoreIds().size();
-        MapSqlParameterSource params = params(context.videoStoreIds(), dateRange)
+        long total = (long) context.videoStoreIds().size() + context.imageFeedIds().size();
+        MapSqlParameterSource params = rangeParams(dateRange)
+                .addValue("storeIds", safeIds(context.videoStoreIds()))
+                .addValue("feedIds", safeIds(context.imageFeedIds()))
+                .addValue("hasVideoContent", hasVideoContent)
+                .addValue("hasImageContent", hasImageContent)
                 .addValue("limit", safeSize)
                 .addValue("offset", safePage * safeSize);
         List<OwnerStoreAnalyticsDtos.ContentPerformanceItem> content = jdbc.query("""
-                select
-                    s.store_id,
-                    s.title,
-                    coalesce(nullif(s.store_name, ''), s.title) as store_name,
-                    s.thumbnail,
-                    s.created_at,
-                    coalesce(i.impressions, 0) as impressions,
-                    coalesce(w.views, 0) as views,
-                    coalesce(w.unique_viewers, 0) as unique_viewers,
-                    coalesce(w.completed_views, 0) as completed_views,
-                    coalesce(w.average_watch_seconds, 0) as average_watch_seconds,
-                    coalesce(l.active_save_count, 0) as active_save_count,
-                    coalesce(ns.new_save_count, 0) as new_save_count,
-                    coalesce(c.comment_count, 0) as comment_count
-                from fp_300 s
-                left join (
-                    select store_id, count(*) as impressions
-                    from fp_376
-                    where content_type = 'VIDEO'
-                      and store_id in (:storeIds)
-                      and impressed_at >= :fromLocal and impressed_at < :toLocal
-                    group by store_id
-                ) i on i.store_id = s.store_id
-                left join (
-                    select store_id,
-                           count(*) as views,
-                           count(distinct username) as unique_viewers,
-                           count(*) filter (where completion_status = true) as completed_views,
-                           avg(duration_watched) as average_watch_seconds
-                    from fp_305 w
-                    where w.store_id in (:storeIds)
-                      and w.use_yn = 'Y'
-                      and w.deleted_at is null
-                      and w.timestamp >= :fromInstant and w.timestamp < :toInstant
-                    group by store_id
-                ) w on w.store_id = s.store_id
-                left join (
-                    select store_id, count(*) as active_save_count
-                    from fp_50
-                    where store_id in (:storeIds)
-                      and use_yn = 'Y'
-                      and deleted_at is null
-                    group by store_id
-                ) l on l.store_id = s.store_id
-                left join (
-                    select store_id, count(*) as new_save_count
-                    from fp_50
-                    where store_id in (:storeIds)
-                      and use_yn = 'Y'
-                      and deleted_at is null
-                      and created_at >= :fromLocal and created_at < :toLocal
-                    group by store_id
-                ) ns on ns.store_id = s.store_id
-                left join (
-                    select store_id, count(*) as comment_count
-                    from fp_440
-                    where store_id in (:storeIds)
-                      and use_yn = 'Y'
-                      and deleted_at is null
-                      and created_at >= :fromLocal and created_at < :toLocal
-                    group by store_id
-                ) c on c.store_id = s.store_id
-                where s.store_id in (:storeIds)
-                order by coalesce(w.views, 0) desc,
-                         coalesce(i.impressions, 0) desc,
-                         s.created_at desc nulls last,
-                         s.store_id desc
+                select *
+                from (
+                    select
+                        'video' as content_type,
+                        s.store_id as content_id,
+                        s.store_id as video_store_id,
+                        null::integer as feed_id,
+                        s.title,
+                        coalesce(nullif(s.store_name, ''), s.title) as store_name,
+                        s.thumbnail,
+                        cast(s.created_at as date) as created_at,
+                        coalesce(i.impressions, 0) as impressions,
+                        coalesce(w.views, 0) as views,
+                        coalesce(w.unique_viewers, 0) as unique_viewers,
+                        coalesce(w.completed_views, 0) as completed_views,
+                        coalesce(w.average_watch_seconds, 0)::double precision as average_watch_seconds,
+                        coalesce(l.active_save_count, 0) as active_save_count,
+                        coalesce(ns.new_save_count, 0) as new_save_count,
+                        coalesce(c.comment_count, 0) as comment_count
+                    from fp_300 s
+                    left join (
+                        select store_id, count(*) as impressions
+                        from fp_376
+                        where content_type = 'VIDEO'
+                          and store_id in (:storeIds)
+                          and impressed_at >= :fromLocal and impressed_at < :toLocal
+                        group by store_id
+                    ) i on i.store_id = s.store_id
+                    left join (
+                        select store_id,
+                               count(*) as views,
+                               count(distinct username) as unique_viewers,
+                               count(*) filter (where completion_status = true) as completed_views,
+                               avg(duration_watched) as average_watch_seconds
+                        from fp_305 w
+                        where w.store_id in (:storeIds)
+                          and w.use_yn = 'Y'
+                          and w.deleted_at is null
+                          and w.timestamp >= :fromInstant and w.timestamp < :toInstant
+                        group by store_id
+                    ) w on w.store_id = s.store_id
+                    left join (
+                        select store_id, count(*) as active_save_count
+                        from fp_50
+                        where store_id in (:storeIds)
+                          and use_yn = 'Y'
+                          and deleted_at is null
+                        group by store_id
+                    ) l on l.store_id = s.store_id
+                    left join (
+                        select store_id, count(*) as new_save_count
+                        from fp_50
+                        where store_id in (:storeIds)
+                          and use_yn = 'Y'
+                          and deleted_at is null
+                          and created_at >= :fromLocal and created_at < :toLocal
+                        group by store_id
+                    ) ns on ns.store_id = s.store_id
+                    left join (
+                        select store_id, count(*) as comment_count
+                        from fp_440
+                        where store_id in (:storeIds)
+                          and use_yn = 'Y'
+                          and deleted_at is null
+                          and created_at >= :fromLocal and created_at < :toLocal
+                        group by store_id
+                    ) c on c.store_id = s.store_id
+                    where :hasVideoContent = true
+                      and s.store_id in (:storeIds)
+                
+                    union all
+                
+                    select
+                        'image' as content_type,
+                        f.feed_no as content_id,
+                        null::integer as video_store_id,
+                        f.feed_no as feed_id,
+                        coalesce(nullif(f.feed_title, ''), nullif(f.store_name, ''), left(f.content, 80), concat('Image #', f.feed_no)) as title,
+                        f.store_name,
+                        coalesce(nullif(f.thumbnail, ''), nullif(split_part(f.images, ',', 1), '')) as thumbnail,
+                        cast(f.created_at as date) as created_at,
+                        coalesce(i.impressions, 0) as impressions,
+                        0::bigint as views,
+                        0::bigint as unique_viewers,
+                        0::bigint as completed_views,
+                        0::double precision as average_watch_seconds,
+                        coalesce(l.active_save_count, 0) as active_save_count,
+                        coalesce(ns.new_save_count, 0) as new_save_count,
+                        coalesce(c.comment_count, 0) as comment_count
+                    from fp_400 f
+                    left join (
+                        select feed_no, count(*) as impressions
+                        from fp_376
+                        where content_type = 'IMAGE'
+                          and feed_no in (:feedIds)
+                          and impressed_at >= :fromLocal and impressed_at < :toLocal
+                        group by feed_no
+                    ) i on i.feed_no = f.feed_no
+                    left join (
+                        select feed_id, count(*) as active_save_count
+                        from fp_60
+                        where feed_id in (:feedIds)
+                          and use_yn = 'Y'
+                          and deleted_at is null
+                        group by feed_id
+                    ) l on l.feed_id = f.feed_no
+                    left join (
+                        select feed_id, count(*) as new_save_count
+                        from fp_60
+                        where feed_id in (:feedIds)
+                          and use_yn = 'Y'
+                          and deleted_at is null
+                          and created_at >= :fromLocal and created_at < :toLocal
+                        group by feed_id
+                    ) ns on ns.feed_id = f.feed_no
+                    left join (
+                        select feed_id, count(*) as comment_count
+                        from fp_460
+                        where feed_id in (:feedIds)
+                          and use_yn = 'Y'
+                          and deleted_at is null
+                          and created_at >= :fromLocal and created_at < :toLocal
+                        group by feed_id
+                    ) c on c.feed_id = f.feed_no
+                    where :hasImageContent = true
+                      and f.feed_no in (:feedIds)
+                ) content
+                order by views desc,
+                         impressions desc,
+                         new_save_count desc,
+                         created_at desc nulls last,
+                         content_id desc
                 limit :limit offset :offset
                 """, params, contentMapper());
 
@@ -296,16 +393,20 @@ public class OwnerStoreAnalyticsService {
         Restaurant restaurant = restaurantRepository.findById(storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.COMMON_NOT_FOUND));
         List<Integer> videoStoreIds = linkedVideoStoreIds(storeId);
+        List<Integer> imageFeedIds = linkedImageFeedIds(storeId);
 
         OwnerStoreAnalyticsDtos.AnalyticsSource source = new OwnerStoreAnalyticsDtos.AnalyticsSource(
                 storeId,
                 restaurant.getTitle(),
                 restaurant.getAddress(),
                 videoStoreIds,
+                imageFeedIds,
                 "restaurant_id",
-                !videoStoreIds.isEmpty()
+                !videoStoreIds.isEmpty(),
+                !imageFeedIds.isEmpty(),
+                !videoStoreIds.isEmpty() || !imageFeedIds.isEmpty()
         );
-        return new AnalyticsContext(source, videoStoreIds);
+        return new AnalyticsContext(source, videoStoreIds, imageFeedIds);
     }
 
     private List<Integer> linkedVideoStoreIds(Long storeId) {
@@ -316,6 +417,18 @@ public class OwnerStoreAnalyticsService {
                   and s.use_yn = 'Y'
                   and s.deleted_at is null
                 order by s.created_at desc nulls last, s.store_id desc
+                """, new MapSqlParameterSource()
+                .addValue("restaurantId", storeId), Integer.class);
+        return List.copyOf(new LinkedHashSet<>(ids));
+    }
+
+    private List<Integer> linkedImageFeedIds(Long storeId) {
+        List<Integer> ids = jdbc.queryForList("""
+                select f.feed_no
+                from fp_400 f
+                where f.restaurant_id = :restaurantId
+                  and f.use_yn = 'Y'
+                order by f.created_at desc nulls last, f.feed_no desc
                 """, new MapSqlParameterSource()
                 .addValue("restaurantId", storeId), Integer.class);
         return List.copyOf(new LinkedHashSet<>(ids));
@@ -355,8 +468,12 @@ public class OwnerStoreAnalyticsService {
     }
 
     private MapSqlParameterSource params(List<Integer> storeIds, DateRange range) {
+        return rangeParams(range)
+                .addValue("storeIds", storeIds);
+    }
+
+    private MapSqlParameterSource rangeParams(DateRange range) {
         return new MapSqlParameterSource()
-                .addValue("storeIds", storeIds)
                 .addValue("fromLocal", range.from().atStartOfDay())
                 .addValue("toLocal", range.toExclusive().atStartOfDay())
                 .addValue("fromInstant", range.from().atStartOfDay(SEOUL).toOffsetDateTime())
@@ -369,6 +486,16 @@ public class OwnerStoreAnalyticsService {
                 from fp_376
                 where content_type = 'VIDEO'
                   and store_id in (:storeIds)
+                  and impressed_at >= :fromLocal and impressed_at < :toLocal
+                """, range);
+    }
+
+    private long countImageHomeImpressions(List<Integer> feedIds, DateRange range) {
+        return countWhenLinked(feedIds, "feedIds", """
+                select count(*)
+                from fp_376
+                where content_type = 'IMAGE'
+                  and feed_no in (:feedIds)
                   and impressed_at >= :fromLocal and impressed_at < :toLocal
                 """, range);
     }
@@ -420,6 +547,19 @@ public class OwnerStoreAnalyticsService {
                 """, new MapSqlParameterSource("storeIds", storeIds), Number.class));
     }
 
+    private long countActiveImageLikes(List<Integer> feedIds) {
+        if (feedIds.isEmpty()) {
+            return 0;
+        }
+        return number(jdbc.queryForObject("""
+                select count(*)
+                from fp_60
+                where feed_id in (:feedIds)
+                  and use_yn = 'Y'
+                  and deleted_at is null
+                """, new MapSqlParameterSource("feedIds", feedIds), Number.class));
+    }
+
     private long countNewSaves(List<Integer> storeIds, DateRange range) {
         return countWhenLinked(storeIds, """
                 select count(*)
@@ -431,11 +571,33 @@ public class OwnerStoreAnalyticsService {
                 """, range);
     }
 
+    private long countNewImageLikes(List<Integer> feedIds, DateRange range) {
+        return countWhenLinked(feedIds, "feedIds", """
+                select count(*)
+                from fp_60
+                where feed_id in (:feedIds)
+                  and use_yn = 'Y'
+                  and deleted_at is null
+                  and created_at >= :fromLocal and created_at < :toLocal
+                """, range);
+    }
+
     private long countComments(List<Integer> storeIds, DateRange range) {
         return countWhenLinked(storeIds, """
                 select count(*)
                 from fp_440
                 where store_id in (:storeIds)
+                  and use_yn = 'Y'
+                  and deleted_at is null
+                  and created_at >= :fromLocal and created_at < :toLocal
+                """, range);
+    }
+
+    private long countImageComments(List<Integer> feedIds, DateRange range) {
+        return countWhenLinked(feedIds, "feedIds", """
+                select count(*)
+                from fp_460
+                where feed_id in (:feedIds)
                   and use_yn = 'Y'
                   and deleted_at is null
                   and created_at >= :fromLocal and created_at < :toLocal
@@ -486,6 +648,17 @@ public class OwnerStoreAnalyticsService {
                 """);
     }
 
+    private Map<LocalDate, Long> dailyImageHomeImpressions(List<Integer> feedIds, DateRange range) {
+        return dailyCounts(feedIds, "feedIds", range, """
+                select cast(impressed_at as date) as bucket, count(*) as cnt
+                from fp_376
+                where content_type = 'IMAGE'
+                  and feed_no in (:feedIds)
+                  and impressed_at >= :fromLocal and impressed_at < :toLocal
+                group by cast(impressed_at as date)
+                """);
+    }
+
     private Map<LocalDate, Long> dailyViews(List<Integer> storeIds, DateRange range, boolean completedOnly) {
         String completedClause = completedOnly ? " and w.completion_status = true\n" : "";
         return dailyCounts(storeIds, range, """
@@ -512,6 +685,18 @@ public class OwnerStoreAnalyticsService {
                 """);
     }
 
+    private Map<LocalDate, Long> dailyNewImageLikes(List<Integer> feedIds, DateRange range) {
+        return dailyCounts(feedIds, "feedIds", range, """
+                select cast(created_at as date) as bucket, count(*) as cnt
+                from fp_60
+                where feed_id in (:feedIds)
+                  and use_yn = 'Y'
+                  and deleted_at is null
+                  and created_at >= :fromLocal and created_at < :toLocal
+                group by cast(created_at as date)
+                """);
+    }
+
     private Map<LocalDate, Long> dailyComments(List<Integer> storeIds, DateRange range) {
         return dailyCounts(storeIds, range, """
                 select cast(created_at as date) as bucket, count(*) as cnt
@@ -524,33 +709,71 @@ public class OwnerStoreAnalyticsService {
                 """);
     }
 
+    private Map<LocalDate, Long> dailyImageComments(List<Integer> feedIds, DateRange range) {
+        return dailyCounts(feedIds, "feedIds", range, """
+                select cast(created_at as date) as bucket, count(*) as cnt
+                from fp_460
+                where feed_id in (:feedIds)
+                  and use_yn = 'Y'
+                  and deleted_at is null
+                  and created_at >= :fromLocal and created_at < :toLocal
+                group by cast(created_at as date)
+                """);
+    }
+
     private Map<LocalDate, Long> dailyCounts(List<Integer> storeIds, DateRange range, String sql) {
-        if (storeIds.isEmpty()) {
+        return dailyCounts(storeIds, "storeIds", range, sql);
+    }
+
+    private Map<LocalDate, Long> dailyCounts(List<Integer> ids, String idParam, DateRange range, String sql) {
+        if (ids.isEmpty()) {
             return Collections.emptyMap();
         }
         Map<LocalDate, Long> result = new LinkedHashMap<>();
-        jdbc.query(sql, params(storeIds, range), rs -> {
+        jdbc.query(sql, rangeParams(range).addValue(idParam, ids), rs -> {
             result.put(toLocalDate(rs.getObject("bucket")), rs.getLong("cnt"));
         });
         return result;
     }
 
     private long countWhenLinked(List<Integer> storeIds, String sql, DateRange range) {
-        if (storeIds.isEmpty()) {
+        return countWhenLinked(storeIds, "storeIds", sql, range);
+    }
+
+    private long countWhenLinked(List<Integer> ids, String idParam, String sql, DateRange range) {
+        if (ids.isEmpty()) {
             return 0;
         }
-        return number(jdbc.queryForObject(sql, params(storeIds, range), Number.class));
+        return number(jdbc.queryForObject(sql, rangeParams(range).addValue(idParam, ids), Number.class));
+    }
+
+    private Map<LocalDate, Long> mergeDailyCounts(Map<LocalDate, Long> first, Map<LocalDate, Long> second) {
+        Map<LocalDate, Long> result = new LinkedHashMap<>(first);
+        second.forEach((date, count) -> result.merge(date, count, Long::sum));
+        return result;
+    }
+
+    private List<Integer> safeIds(List<Integer> ids) {
+        return ids.isEmpty() ? List.of(-1) : ids;
     }
 
     private RowMapper<OwnerStoreAnalyticsDtos.ContentPerformanceItem> contentMapper() {
         return (rs, rowNum) -> {
+            String contentType = rs.getString("content_type");
+            String thumbnail = rs.getString("thumbnail");
+            String thumbnailUrl = "image".equalsIgnoreCase(contentType)
+                    ? s3UploadService.toFeedImageUrl(thumbnail)
+                    : s3UploadService.toImageUrl(thumbnail);
             long views = rs.getLong("views");
             long completedViews = rs.getLong("completed_views");
             return new OwnerStoreAnalyticsDtos.ContentPerformanceItem(
-                    rs.getInt("store_id"),
+                    contentType,
+                    (Integer) rs.getObject("content_id"),
+                    (Integer) rs.getObject("video_store_id"),
+                    (Integer) rs.getObject("feed_id"),
                     rs.getString("title"),
                     rs.getString("store_name"),
-                    s3UploadService.toImageUrl(rs.getString("thumbnail")),
+                    thumbnailUrl,
                     toLocalDate(rs.getObject("created_at")),
                     rs.getLong("impressions"),
                     views,
@@ -623,7 +846,8 @@ public class OwnerStoreAnalyticsService {
 
     private record AnalyticsContext(
             OwnerStoreAnalyticsDtos.AnalyticsSource source,
-            List<Integer> videoStoreIds
+            List<Integer> videoStoreIds,
+            List<Integer> imageFeedIds
     ) {
     }
 

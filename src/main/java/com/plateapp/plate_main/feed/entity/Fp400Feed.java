@@ -43,6 +43,9 @@ public class Fp400Feed {
   @Column(name = "store_name", length = 50)
   private String storeName;
 
+  @Column(name = "restaurant_id")
+  private Long restaurantId;
+
   @Column(name = "place_id", length = 255)
   private String placeId;
 
@@ -62,6 +65,7 @@ public class Fp400Feed {
   public String getFeedTitle() { return feedTitle; }
   public String getLocation() { return location; }
   public String getStoreName() { return storeName; }
+  public Long getRestaurantId() { return restaurantId; }
   public String getPlaceId() { return placeId; }
   public String getUseYn() { return useYn; }
   public String getThumbnail() { return thumbnail; }

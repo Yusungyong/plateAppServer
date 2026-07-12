@@ -13,8 +13,11 @@ public final class OwnerStoreAnalyticsDtos {
             String storeName,
             String address,
             List<Integer> videoStoreIds,
+            List<Integer> imageFeedIds,
             String matchStrategy,
-            boolean hasLinkedVideoContent
+            boolean hasLinkedVideoContent,
+            boolean hasLinkedImageContent,
+            boolean hasLinkedContent
     ) {
     }
 
@@ -39,8 +42,12 @@ public final class OwnerStoreAnalyticsDtos {
 
     public record EngagementSummary(
             long impressions,
+            long videoImpressions,
+            long imageImpressions,
             long activeSaveCount,
+            long activeImageLikeCount,
             long newSaveCount,
+            long newImageLikeCount,
             long commentCount
     ) {
     }
@@ -72,9 +79,12 @@ public final class OwnerStoreAnalyticsDtos {
     public record TrendPoint(
             LocalDate date,
             long impressions,
+            long videoImpressions,
+            long imageImpressions,
             long views,
             long completedViews,
             long saves,
+            long imageLikes,
             long comments
     ) {
     }
@@ -89,7 +99,10 @@ public final class OwnerStoreAnalyticsDtos {
     }
 
     public record ContentPerformanceItem(
+            String contentType,
+            Integer contentId,
             Integer videoStoreId,
+            Integer feedId,
             String title,
             String storeName,
             String thumbnailUrl,
