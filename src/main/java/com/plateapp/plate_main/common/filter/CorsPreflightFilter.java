@@ -65,7 +65,7 @@ public class CorsPreflightFilter extends OncePerRequestFilter {
             }
         }
 
-        response.setStatus(HttpStatus.NO_CONTENT.value());
+        response.setStatus(HttpStatus.OK.value());
     }
 
     private boolean isAllowedOrigin(String origin) {
