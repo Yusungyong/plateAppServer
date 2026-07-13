@@ -52,6 +52,20 @@ public final class OwnerStoreAnalyticsDtos {
     ) {
     }
 
+    public record StoreActionSummary(
+            long detailViews,
+            long mapImpressions,
+            long searchImpressions,
+            long phoneClicks,
+            long directionClicks,
+            long shareClicks,
+            long menuViews,
+            long menuSaves,
+            long visitConversions,
+            long reviewConversions
+    ) {
+    }
+
     public record FunnelSummary(
             long impressions,
             long clicks,
@@ -72,6 +86,7 @@ public final class OwnerStoreAnalyticsDtos {
             List<Metric> metrics,
             WatchSummary watch,
             EngagementSummary engagement,
+            StoreActionSummary storeActions,
             FunnelSummary funnel
     ) {
     }
@@ -85,7 +100,17 @@ public final class OwnerStoreAnalyticsDtos {
             long completedViews,
             long saves,
             long imageLikes,
-            long comments
+            long comments,
+            long detailViews,
+            long mapImpressions,
+            long searchImpressions,
+            long phoneClicks,
+            long directionClicks,
+            long shareClicks,
+            long menuViews,
+            long menuSaves,
+            long visitConversions,
+            long reviewConversions
     ) {
     }
 

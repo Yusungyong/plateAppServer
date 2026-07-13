@@ -10,5 +10,7 @@ public interface RestaurantMenuRepository extends JpaRepository<RestaurantMenu, 
 
     long countByRestaurantId(Long restaurantId);
 
+    boolean existsByIdAndRestaurantId(Long id, Long restaurantId);
+
     void deleteByRestaurantId(Long restaurantId);
 }

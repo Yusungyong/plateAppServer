@@ -74,6 +74,18 @@ public class OwnerStoreAnalyticsService {
                 + countImageComments(context.imageFeedIds(), current);
         long previousComments = countComments(context.videoStoreIds(), previous)
                 + countImageComments(context.imageFeedIds(), previous);
+        Map<String, Long> storeActions = storeActionCounts(storeId, current);
+        Map<String, Long> previousStoreActions = storeActionCounts(storeId, previous);
+        long detailViews = actionCount(storeActions, "DETAIL_VIEW");
+        long mapImpressions = actionCount(storeActions, "MAP_IMPRESSION");
+        long searchImpressions = actionCount(storeActions, "SEARCH_IMPRESSION");
+        long phoneClicks = actionCount(storeActions, "PHONE_CLICK");
+        long directionClicks = actionCount(storeActions, "DIRECTION_CLICK");
+        long shareClicks = actionCount(storeActions, "SHARE_CLICK");
+        long menuViews = actionCount(storeActions, "MENU_VIEW");
+        long menuSaves = actionCount(storeActions, "MENU_SAVE");
+        long visitConversions = actionCount(storeActions, "VISIT_CONVERSION");
+        long reviewConversions = actionCount(storeActions, "REVIEW_CONVERSION");
         double averageWatchSeconds = averageWatchSeconds(context.videoStoreIds(), current);
         double completionRate = ratio(completedViews, views);
 
@@ -107,7 +119,37 @@ public class OwnerStoreAnalyticsService {
                         metric("newImageLikes", "New image likes", newImageLikes,
                                 changeRate(newImageLikes, previousNewImageLikes), "count", "previous_period"),
                         metric("comments", "Comments", comments,
-                                changeRate(comments, previousComments), "count", "previous_period")
+                                changeRate(comments, previousComments), "count", "previous_period"),
+                        metric("storeDetailViews", "Store detail views", detailViews,
+                                changeRate(detailViews, actionCount(previousStoreActions, "DETAIL_VIEW")),
+                                "count", "previous_period"),
+                        metric("mapImpressions", "Map impressions", mapImpressions,
+                                changeRate(mapImpressions, actionCount(previousStoreActions, "MAP_IMPRESSION")),
+                                "count", "previous_period"),
+                        metric("searchImpressions", "Search impressions", searchImpressions,
+                                changeRate(searchImpressions, actionCount(previousStoreActions, "SEARCH_IMPRESSION")),
+                                "count", "previous_period"),
+                        metric("phoneClicks", "Phone clicks", phoneClicks,
+                                changeRate(phoneClicks, actionCount(previousStoreActions, "PHONE_CLICK")),
+                                "count", "previous_period"),
+                        metric("directionClicks", "Direction clicks", directionClicks,
+                                changeRate(directionClicks, actionCount(previousStoreActions, "DIRECTION_CLICK")),
+                                "count", "previous_period"),
+                        metric("shareClicks", "Share clicks", shareClicks,
+                                changeRate(shareClicks, actionCount(previousStoreActions, "SHARE_CLICK")),
+                                "count", "previous_period"),
+                        metric("menuViews", "Menu views", menuViews,
+                                changeRate(menuViews, actionCount(previousStoreActions, "MENU_VIEW")),
+                                "count", "previous_period"),
+                        metric("menuSaves", "Menu saves", menuSaves,
+                                changeRate(menuSaves, actionCount(previousStoreActions, "MENU_SAVE")),
+                                "count", "previous_period"),
+                        metric("visitConversions", "Visit conversions", visitConversions,
+                                changeRate(visitConversions, actionCount(previousStoreActions, "VISIT_CONVERSION")),
+                                "count", "previous_period"),
+                        metric("reviewConversions", "Review conversions", reviewConversions,
+                                changeRate(reviewConversions, actionCount(previousStoreActions, "REVIEW_CONVERSION")),
+                                "count", "previous_period")
                 ),
                 new OwnerStoreAnalyticsDtos.WatchSummary(
                         views,
@@ -125,6 +167,18 @@ public class OwnerStoreAnalyticsService {
                         newSaves,
                         newImageLikes,
                         comments
+                ),
+                new OwnerStoreAnalyticsDtos.StoreActionSummary(
+                        detailViews,
+                        mapImpressions,
+                        searchImpressions,
+                        phoneClicks,
+                        directionClicks,
+                        shareClicks,
+                        menuViews,
+                        menuSaves,
+                        visitConversions,
+                        reviewConversions
                 ),
                 new OwnerStoreAnalyticsDtos.FunnelSummary(
                         eventImpressions,
@@ -169,9 +223,11 @@ public class OwnerStoreAnalyticsService {
                 dailyComments(context.videoStoreIds(), dateRange),
                 dailyImageComments(context.imageFeedIds(), dateRange)
         );
+        Map<LocalDate, Map<String, Long>> storeActions = dailyStoreActionCounts(storeId, dateRange);
 
         List<OwnerStoreAnalyticsDtos.TrendPoint> points = new ArrayList<>();
         for (LocalDate date = dateRange.from(); date.isBefore(dateRange.toExclusive()); date = date.plusDays(1)) {
+            Map<String, Long> dailyActions = storeActions.getOrDefault(date, Collections.emptyMap());
             points.add(new OwnerStoreAnalyticsDtos.TrendPoint(
                     date,
                     impressions.getOrDefault(date, 0L),
@@ -181,7 +237,17 @@ public class OwnerStoreAnalyticsService {
                     completedViews.getOrDefault(date, 0L),
                     saves.getOrDefault(date, 0L),
                     imageLikes.getOrDefault(date, 0L),
-                    comments.getOrDefault(date, 0L)
+                    comments.getOrDefault(date, 0L),
+                    actionCount(dailyActions, "DETAIL_VIEW"),
+                    actionCount(dailyActions, "MAP_IMPRESSION"),
+                    actionCount(dailyActions, "SEARCH_IMPRESSION"),
+                    actionCount(dailyActions, "PHONE_CLICK"),
+                    actionCount(dailyActions, "DIRECTION_CLICK"),
+                    actionCount(dailyActions, "SHARE_CLICK"),
+                    actionCount(dailyActions, "MENU_VIEW"),
+                    actionCount(dailyActions, "MENU_SAVE"),
+                    actionCount(dailyActions, "VISIT_CONVERSION"),
+                    actionCount(dailyActions, "REVIEW_CONVERSION")
             ));
         }
 
@@ -637,6 +703,38 @@ public class OwnerStoreAnalyticsService {
         return result;
     }
 
+    private Map<String, Long> storeActionCounts(Long restaurantId, DateRange range) {
+        Map<String, Long> result = new LinkedHashMap<>();
+        jdbc.query("""
+                select event_type, count(*) as cnt
+                from restaurant_analytics_events
+                where restaurant_id = :restaurantId
+                  and server_event_at >= :fromInstant and server_event_at < :toInstant
+                group by event_type
+                """, rangeParams(range).addValue("restaurantId", restaurantId), rs -> {
+            result.put(rs.getString("event_type"), rs.getLong("cnt"));
+        });
+        return result;
+    }
+
+    private Map<LocalDate, Map<String, Long>> dailyStoreActionCounts(Long restaurantId, DateRange range) {
+        Map<LocalDate, Map<String, Long>> result = new LinkedHashMap<>();
+        jdbc.query("""
+                select cast(server_event_at at time zone 'Asia/Seoul' as date) as bucket,
+                       event_type,
+                       count(*) as cnt
+                from restaurant_analytics_events
+                where restaurant_id = :restaurantId
+                  and server_event_at >= :fromInstant and server_event_at < :toInstant
+                group by cast(server_event_at at time zone 'Asia/Seoul' as date), event_type
+                """, rangeParams(range).addValue("restaurantId", restaurantId), rs -> {
+            LocalDate date = toLocalDate(rs.getObject("bucket"));
+            result.computeIfAbsent(date, ignored -> new LinkedHashMap<>())
+                    .put(rs.getString("event_type"), rs.getLong("cnt"));
+        });
+        return result;
+    }
+
     private Map<LocalDate, Long> dailyHomeImpressions(List<Integer> storeIds, DateRange range) {
         return dailyCounts(storeIds, range, """
                 select cast(impressed_at as date) as bucket, count(*) as cnt
@@ -786,6 +884,10 @@ public class OwnerStoreAnalyticsService {
                     rs.getLong("comment_count")
             );
         };
+    }
+
+    private long actionCount(Map<String, Long> counts, String eventType) {
+        return counts.getOrDefault(eventType, 0L);
     }
 
     private OwnerStoreAnalyticsDtos.Metric metric(

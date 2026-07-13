@@ -7,7 +7,7 @@
 - Base path: `/api/owner/stores/{storeId}/analytics`
 - Auth: 점주 JWT 필요
 - `{storeId}`는 `restaurants.id`입니다.
-- 권한은 `store_owners.store_id = restaurants.id` 기준으로 확인합니다.
+- 점주 권한은 `store_owners.store_id = restaurants.id` 기준으로 확인합니다.
 - `from`, `to`는 `YYYY-MM-DD` 형식이며 양 끝 날짜를 모두 포함합니다.
 - 응답은 공통 `ApiResponse<T>` 래퍼로 내려갑니다.
 
@@ -44,6 +44,75 @@
   }
 }
 ```
+
+## 클라이언트 행동 이벤트 수집
+
+서버가 자동으로 알 수 없는 식당 행동은 앱/프론트가 이벤트 API로 알려줘야 합니다.
+
+```http
+POST /api/restaurants/{restaurantId}/events
+Content-Type: application/json
+```
+
+Auth는 optional입니다. 로그인 유저면 JWT를 같이 보내고, 비로그인/게스트면 `guestId`, `sessionId`, `deviceId`를 가능한 범위에서 보내면 됩니다.
+
+### Request
+
+```json
+{
+  "eventType": "DETAIL_VIEW",
+  "eventUid": "client-generated-uuid",
+  "isGuest": false,
+  "guestId": null,
+  "sessionId": "session-123",
+  "deviceId": "device-abc",
+  "surface": "store_detail",
+  "source": "map",
+  "menuId": null,
+  "contentType": null,
+  "contentId": null,
+  "clientEventAt": "2026-07-13T12:34:56+09:00"
+}
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "eventId": 91,
+    "recorded": true,
+    "eventType": "DETAIL_VIEW"
+  }
+}
+```
+
+`eventUid`는 중복 전송 방지용입니다. 같은 `eventUid`가 다시 오면 `recorded=false`로 내려갈 수 있습니다.
+
+### Supported Event Types
+
+| eventType | 프론트 호출 시점 | 점주 화면 의미 |
+| --- | --- | --- |
+| `DETAIL_VIEW` | 매장 상세 화면 진입 | 매장 상세 조회 |
+| `MAP_IMPRESSION` | 지도 마커/매장 카드가 노출됨 | 지도 노출 |
+| `SEARCH_IMPRESSION` | 검색 결과에 매장이 노출됨 | 검색 노출 |
+| `PHONE_CLICK` | 전화 버튼 클릭 | 전화 관심 |
+| `DIRECTION_CLICK` | 길찾기 버튼 클릭 | 방문 의도 |
+| `SHARE_CLICK` | 공유 버튼 클릭 | 공유 관심 |
+| `MENU_VIEW` | 메뉴 영역/메뉴 상세 조회 | 메뉴 조회 |
+| `MENU_SAVE` | 메뉴 저장/찜 | 메뉴 저장 |
+| `VISIT_CONVERSION` | 방문 인증/방문 기록 완료 | 방문 전환 |
+| `REVIEW_CONVERSION` | 후기/피드 작성 완료 | 후기 전환 |
+
+권장 호출 위치:
+
+- 매장 상세 화면 mount 또는 최초 가시화: `DETAIL_VIEW`
+- 지도 목록/마커가 화면에 실제 노출될 때: `MAP_IMPRESSION`
+- 검색 결과 카드가 화면에 실제 노출될 때: `SEARCH_IMPRESSION`
+- 전화/길찾기/공유 버튼 클릭 직후: `PHONE_CLICK`, `DIRECTION_CLICK`, `SHARE_CLICK`
+- 메뉴 탭 진입 또는 메뉴 리스트 로드 완료: `MENU_VIEW`
+- 방문 인증 또는 후기 작성 성공 후: `VISIT_CONVERSION`, `REVIEW_CONVERSION`
 
 ## 콘텐츠 등록 시 매핑
 
@@ -105,6 +174,7 @@ GET /api/owner/stores/{storeId}/analytics/summary?from=2026-07-01&to=2026-07-07
 - `activeSaves`, `newSaves`: 비디오 저장 지표
 - `activeImageLikes`, `newImageLikes`: 이미지 좋아요 지표
 - `comments`: 비디오 댓글 + 이미지 댓글 합계
+- `storeActions`: 식당 자체 행동 이벤트 요약
 - `funnel`: `fp_370` 기반 비디오 이벤트 퍼널
 
 ```json
@@ -126,9 +196,10 @@ GET /api/owner/stores/{storeId}/analytics/summary?from=2026-07-01&to=2026-07-07
     { "key": "homeImpressions", "label": "Home impressions", "value": 1200, "changeRate": 12.5, "unit": "count", "comparison": "previous_period" },
     { "key": "imageImpressions", "label": "Image impressions", "value": 300, "changeRate": 8.0, "unit": "count", "comparison": "previous_period" },
     { "key": "videoViews", "label": "Video views", "value": 340, "changeRate": -3.2, "unit": "count", "comparison": "previous_period" },
-    { "key": "activeSaves", "label": "Active saves", "value": 82, "changeRate": null, "unit": "count", "comparison": "current" },
     { "key": "activeImageLikes", "label": "Active image likes", "value": 44, "changeRate": null, "unit": "count", "comparison": "current" },
-    { "key": "comments", "label": "Comments", "value": 15, "changeRate": 0.0, "unit": "count", "comparison": "previous_period" }
+    { "key": "storeDetailViews", "label": "Store detail views", "value": 210, "changeRate": 18.0, "unit": "count", "comparison": "previous_period" },
+    { "key": "directionClicks", "label": "Direction clicks", "value": 16, "changeRate": 33.3, "unit": "count", "comparison": "previous_period" },
+    { "key": "phoneClicks", "label": "Phone clicks", "value": 9, "changeRate": null, "unit": "count", "comparison": "previous_period" }
   ],
   "watch": {
     "totalViews": 340,
@@ -146,6 +217,18 @@ GET /api/owner/stores/{storeId}/analytics/summary?from=2026-07-01&to=2026-07-07
     "newSaveCount": 14,
     "newImageLikeCount": 7,
     "commentCount": 15
+  },
+  "storeActions": {
+    "detailViews": 210,
+    "mapImpressions": 80,
+    "searchImpressions": 45,
+    "phoneClicks": 9,
+    "directionClicks": 16,
+    "shareClicks": 3,
+    "menuViews": 52,
+    "menuSaves": 4,
+    "visitConversions": 2,
+    "reviewConversions": 1
   },
   "funnel": {
     "impressions": 900,
@@ -172,6 +255,7 @@ GET /api/owner/stores/{storeId}/analytics/trends?from=2026-07-01&to=2026-07-07&i
 - `impressions`는 비디오 + 이미지 합계입니다.
 - `saves`는 비디오 저장, `imageLikes`는 이미지 좋아요입니다.
 - `comments`는 비디오 댓글 + 이미지 댓글 합계입니다.
+- 식당 행동 이벤트도 일자별 필드로 같이 내려갑니다.
 
 ```json
 {
@@ -188,7 +272,17 @@ GET /api/owner/stores/{storeId}/analytics/trends?from=2026-07-01&to=2026-07-07&i
       "completedViews": 11,
       "saves": 2,
       "imageLikes": 5,
-      "comments": 1
+      "comments": 1,
+      "detailViews": 18,
+      "mapImpressions": 7,
+      "searchImpressions": 4,
+      "phoneClicks": 1,
+      "directionClicks": 2,
+      "shareClicks": 0,
+      "menuViews": 5,
+      "menuSaves": 1,
+      "visitConversions": 0,
+      "reviewConversions": 0
     }
   ]
 }
@@ -292,9 +386,11 @@ GET /api/owner/stores/{storeId}/analytics/contents?from=2026-07-01&to=2026-07-07
 
 | Case | HTTP | errorCode | Notes |
 | --- | --- | --- | --- |
-| 미로그인 | 401 | `AUTH_UNAUTHORIZED` | JWT 필요 |
+| 미로그인 | 401 | `AUTH_UNAUTHORIZED` | 점주 통계 조회는 JWT 필요 |
 | 내 매장이 아님 | 404 | `COMMON_NOT_FOUND` | 소유권 노출 방지 |
+| 이벤트 대상 식당 없음 | 404 | `COMMON_NOT_FOUND` | 이벤트 수집 API |
 | 날짜 누락 | 400 | `COMMON_MISSING_PARAMETER` | `from`, `to` 필요 |
 | 날짜 역전 | 400 | `COMMON_INVALID_INPUT` | `from <= to` |
+| 미지원 eventType | 400 | `COMMON_INVALID_INPUT` | 이벤트 수집 API |
 | trends 기간 초과 | 400 | `COMMON_INVALID_INPUT` | 최대 93일 |
 | interval 미지원 | 400 | `COMMON_INVALID_INPUT` | 현재 `day`만 지원 |
