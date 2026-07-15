@@ -60,6 +60,8 @@ public class SecurityConfig {
                     "/api/email/**",
                     "/api/auth/reset-password",
                     "/api/health",
+                    "/actuator/health/liveness",
+                    "/actuator/health/readiness",
                     "/api/home/random-candidates/**",
                     "/api/map/stores/**",
                     "/files/**"

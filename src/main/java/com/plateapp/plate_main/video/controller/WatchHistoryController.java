@@ -35,18 +35,24 @@ public class WatchHistoryController {
     @PutMapping("/videos/{storeId}/watch/progress")
     public ApiResponse<WatchHistoryDto.UpdateProgressResponse> updateProgress(
             @PathVariable Integer storeId,
-            @RequestBody WatchHistoryDto.UpdateProgressRequest request
+            @RequestBody WatchHistoryDto.UpdateProgressRequest request,
+            Authentication authentication
     ) {
-        WatchHistoryDto.UpdateProgressResponse response = watchHistoryService.updateProgress(storeId, request);
+        String username = authentication.getName();
+        WatchHistoryDto.UpdateProgressResponse response =
+                watchHistoryService.updateProgress(username, storeId, request);
         return ApiResponse.ok(response);
     }
 
     @PostMapping("/videos/{storeId}/watch/complete")
     public ApiResponse<WatchHistoryDto.CompleteWatchResponse> completeWatch(
             @PathVariable Integer storeId,
-            @RequestBody WatchHistoryDto.CompleteWatchRequest request
+            @RequestBody WatchHistoryDto.CompleteWatchRequest request,
+            Authentication authentication
     ) {
-        WatchHistoryDto.CompleteWatchResponse response = watchHistoryService.completeWatch(storeId, request);
+        String username = authentication.getName();
+        WatchHistoryDto.CompleteWatchResponse response =
+                watchHistoryService.completeWatch(username, storeId, request);
         return ApiResponse.ok(response);
     }
 

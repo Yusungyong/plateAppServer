@@ -21,9 +21,11 @@ log "Application directory is ready."
 if [ ! -f "$ENV_FILE" ]; then
   log "Environment file does not exist. Creating ${ENV_FILE}"
   touch "$ENV_FILE"
-  chmod 600 "$ENV_FILE"
   log "Environment file created."
 else
   log "Environment file already exists: ${ENV_FILE}"
 fi
+chown root:root "$ENV_FILE"
+chmod 600 "$ENV_FILE"
+log "Environment file ownership and mode enforced: root:root 0600."
 log "BeforeInstall hook completed."

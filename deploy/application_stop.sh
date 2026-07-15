@@ -5,7 +5,7 @@ log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S %Z')] [application_stop] $*"
 }
 
-STOP_TIMEOUT_SECONDS=20
+STOP_TIMEOUT_SECONDS=30
 KILL_WAIT_SECONDS=5
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

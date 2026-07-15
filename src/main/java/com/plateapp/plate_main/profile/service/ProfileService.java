@@ -112,6 +112,10 @@ public class ProfileService {
             user.setActiveRegion(request.getActiveRegion());
             changed = true;
         }
+        if (request.getBio() != null) {
+            user.setBio(request.getBio());
+            changed = true;
+        }
         if (request.getEmail() != null) {
             user.setEmail(request.getEmail());
             changed = true;
@@ -477,6 +481,7 @@ public class ProfileService {
                 .username(user.getUsername())
                 .nickname(user.getNickname())
                 .profileImageUrl(user.getProfileImageUrl())
+                .bio(user.getBio())
                 .activeRegion(user.getActiveRegion())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt());

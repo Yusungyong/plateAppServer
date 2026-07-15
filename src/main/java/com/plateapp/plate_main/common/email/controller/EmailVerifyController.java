@@ -45,12 +45,12 @@ public class EmailVerifyController {
         try {
             emailVerifyService.sendVerificationEmail(emailVerifyVO);
             // 유저가 없더라도 동일 응답 (보안상 계정 존재 여부 노출 방지)
-            logger.info("이메일 {} 로 인증 코드 발송 요청 처리 완료", emailVerifyVO.getEmail());
+            logger.info("이메일 {} 로 인증 코드 발송 요청 처리 완료", maskEmail(emailVerifyVO.getEmail()));
             return ResponseEntity.ok(
                     Map.of("success", true, "message", "인증 코드가 이메일로 전송되었습니다.")
             );
         } catch (Exception e) {
-            logger.error("인증 코드 발송 실패: {}", e.getMessage(), e);
+            logger.error("인증 코드 발송 실패. type={}", e.getClass().getSimpleName());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("success", false, "message", "이메일 발송 중 오류가 발생했습니다."));
         }
@@ -73,17 +73,17 @@ public class EmailVerifyController {
             boolean ok = emailVerifyService.verifyEmail(emailVerifyVO);
 
             if (ok) {
-                logger.info("이메일 {} 인증 성공", emailVerifyVO.getEmail());
+                logger.info("이메일 {} 인증 성공", maskEmail(emailVerifyVO.getEmail()));
                 return ResponseEntity.ok(
                         Map.of("success", true, "message", "이메일 인증 성공!")
                 );
             } else {
-                logger.warn("이메일 {} 인증 실패", emailVerifyVO.getEmail());
+                logger.warn("이메일 {} 인증 실패", maskEmail(emailVerifyVO.getEmail()));
                 return ResponseEntity.badRequest()
                         .body(Map.of("success", false, "message", "인증 코드가 올바르지 않거나 만료되었습니다."));
             }
         } catch (Exception e) {
-            logger.error("이메일 인증 처리 중 오류: {}", e.getMessage(), e);
+            logger.error("이메일 인증 처리 중 오류. type={}", e.getClass().getSimpleName());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("success", false, "message", "이메일 인증 처리 중 오류가 발생했습니다."));
         }
@@ -112,7 +112,7 @@ public class EmailVerifyController {
                         Map.of("success", true, "message", "가입된 아이디를 이메일로 발송했습니다.")
                 );
             } catch (Exception e) {
-                logger.error("아이디 안내 메일 발송 실패: {}", e.getMessage(), e);
+                logger.error("아이디 안내 메일 발송 실패. type={}", e.getClass().getSimpleName());
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                         .body(Map.of("success", false, "message", "메일 발송 실패"));
             }
@@ -121,5 +121,23 @@ public class EmailVerifyController {
                     Map.of("success", false, "message", "일치하는 계정을 찾을 수 없습니다.")
             );
         }
+    }
+
+    static String maskEmail(String email) {
+        if (email == null || email.isBlank() || email.length() > 254) {
+            return "***";
+        }
+        int separator = email.indexOf('@');
+        if (separator <= 0
+                || separator != email.lastIndexOf('@')
+                || separator == email.length() - 1
+                || !Character.isLetterOrDigit(email.charAt(0))) {
+            return "***";
+        }
+        String domain = email.substring(separator + 1);
+        if (!domain.matches("[A-Za-z0-9.-]+")) {
+            return "***";
+        }
+        return email.charAt(0) + "***@" + domain;
     }
 }

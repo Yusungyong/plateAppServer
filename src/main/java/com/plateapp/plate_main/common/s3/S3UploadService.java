@@ -28,6 +28,8 @@ public class S3UploadService {
     private final String feedImagePrefix;
     private final String profilePrefix;
     private final String thumbnailPrefix;
+    private final String restaurantPrefix;
+    private final String newsImagePrefix;
 
     public S3UploadService(
             S3Client s3Client,
@@ -39,6 +41,8 @@ public class S3UploadService {
             @Value("${aws.s3.feedImagePath:}") String feedImagePrefix,
             @Value("${aws.s3.profileImagePath:}") String profilePrefix,
             @Value("${aws.s3.thumbnailPath:thumbnail/}") String thumbnailPrefix,
+            @Value("${aws.s3.restaurantFilePath:restaurants/}") String restaurantPrefix,
+            @Value("${aws.s3.newsImagePath:newsImage/}") String newsImagePrefix,
             @Value("${aws.s3.region}") String region
     ) {
         this.s3Client = s3Client;
@@ -51,6 +55,8 @@ public class S3UploadService {
         this.feedImagePrefix = normalizePrefix(feedImagePrefix);
         this.profilePrefix = normalizePrefix(profilePrefix);
         this.thumbnailPrefix = normalizePrefix(thumbnailPrefix);
+        this.restaurantPrefix = normalizePrefix(restaurantPrefix);
+        this.newsImagePrefix = normalizePrefix(newsImagePrefix);
     }
 
     public String uploadImage(String originalFilename, InputStream inputStream, long contentLength, String contentType) {
@@ -165,24 +171,21 @@ public class S3UploadService {
     }
 
     public void deleteObjectByUrl(String objectUrl) {
-        String key = extractKey(objectUrl);
+        String key = extractOwnedKey(objectUrl);
         if (key == null) {
             return;
         }
-        DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
-                .bucket(bucket)
-                .key(key)
-                .build();
-        s3Client.deleteObject(deleteRequest);
+        deleteObjectByKey(key);
     }
 
     public void deleteObjectByKey(String key) {
-        if (key == null || key.isBlank()) {
+        String safeKey = normalizeManagedKey(key);
+        if (safeKey == null) {
             return;
         }
         DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
                 .bucket(bucket)
-                .key(key)
+                .key(safeKey)
                 .build();
         s3Client.deleteObject(deleteRequest);
     }
@@ -270,7 +273,7 @@ public class S3UploadService {
     }
 
     public String toObjectKey(String objectUrlOrKey) {
-        return extractKey(objectUrlOrKey);
+        return extractOwnedKey(objectUrlOrKey);
     }
 
     public String toDeliveryUrl(String objectUrlOrKey) {
@@ -378,24 +381,121 @@ public class S3UploadService {
         }
     }
 
+    /**
+     * Resolve a key only when the caller supplied a raw object key or a URL that
+     * belongs to one of this application's configured delivery origins.  The
+     * permissive {@link #extractKey(String)} method is intentionally retained for
+     * read/display conversion of legacy URLs, but must not be used for deletion.
+     */
+    private String extractOwnedKey(String objectUrlOrKey) {
+        if (objectUrlOrKey == null || objectUrlOrKey.isBlank()) {
+            return null;
+        }
+        if (!objectUrlOrKey.contains("://")) {
+            return normalizeManagedKey(objectUrlOrKey);
+        }
+
+        String key = stripBaseUrl(objectUrlOrKey, cdnBaseUrl);
+        if (key == null && baseUrl.contains(bucket)) {
+            key = stripBaseUrl(objectUrlOrKey, baseUrl);
+        }
+        if (key == null) {
+            key = stripBaseUrl(objectUrlOrKey, bucketHost);
+        }
+        return normalizeManagedKey(key);
+    }
+
     private String stripBaseUrl(String objectUrl, String candidateBaseUrl) {
         if (candidateBaseUrl == null || candidateBaseUrl.isBlank()) {
             return null;
         }
-        String prefix = candidateBaseUrl + "/";
-        if (!objectUrl.startsWith(prefix)) {
+        try {
+            URI objectUri = URI.create(objectUrl);
+            URI baseUri = URI.create(candidateBaseUrl);
+            if (!sameOrigin(objectUri, baseUri)) {
+                return null;
+            }
+
+            String objectPath = objectUri.getPath();
+            String basePath = baseUri.getPath();
+            if (objectPath == null) {
+                return null;
+            }
+            String normalizedBasePath = basePath == null ? "" : basePath;
+            while (normalizedBasePath.endsWith("/") && normalizedBasePath.length() > 1) {
+                normalizedBasePath = normalizedBasePath.substring(0, normalizedBasePath.length() - 1);
+            }
+            String requiredPrefix = normalizedBasePath.isBlank() || "/".equals(normalizedBasePath)
+                    ? "/"
+                    : normalizedBasePath + "/";
+            if (!objectPath.startsWith(requiredPrefix)) {
+                return null;
+            }
+            String key = objectPath.substring(requiredPrefix.length());
+            return key.isBlank() ? null : key;
+        } catch (IllegalArgumentException e) {
             return null;
         }
-        String key = objectUrl.substring(prefix.length());
-        int queryIndex = key.indexOf('?');
-        if (queryIndex >= 0) {
-            key = key.substring(0, queryIndex);
+    }
+
+    private boolean sameOrigin(URI left, URI right) {
+        return left.getScheme() != null
+                && right.getScheme() != null
+                && left.getHost() != null
+                && right.getHost() != null
+                && left.getScheme().equalsIgnoreCase(right.getScheme())
+                && left.getHost().equalsIgnoreCase(right.getHost())
+                && effectivePort(left) == effectivePort(right);
+    }
+
+    private int effectivePort(URI uri) {
+        if (uri.getPort() >= 0) {
+            return uri.getPort();
         }
-        int fragmentIndex = key.indexOf('#');
-        if (fragmentIndex >= 0) {
-            key = key.substring(0, fragmentIndex);
+        return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
+    }
+
+    private String normalizeSafeKey(String key) {
+        if (key == null || key.isBlank()) {
+            return null;
         }
-        return key.isBlank() ? null : key;
+        String normalized = key.startsWith("/") ? key.substring(1) : key;
+        String lower = normalized.toLowerCase(java.util.Locale.ROOT);
+        if (normalized.isBlank()
+                || normalized.contains("://")
+                || normalized.indexOf('\\') >= 0
+                || normalized.chars().anyMatch(Character::isISOControl)
+                || lower.contains("%2e")
+                || lower.contains("%2f")
+                || lower.contains("%5c")) {
+            return null;
+        }
+        for (String segment : normalized.split("/", -1)) {
+            if (segment.equals(".") || segment.equals("..")) {
+                return null;
+            }
+        }
+        return normalized;
+    }
+
+    private String normalizeManagedKey(String key) {
+        String safeKey = normalizeSafeKey(key);
+        if (safeKey == null) {
+            return null;
+        }
+        return hasPrefix(safeKey, videoPrefix)
+                || hasPrefix(safeKey, imagePrefix)
+                || hasPrefix(safeKey, feedImagePrefix)
+                || hasPrefix(safeKey, profilePrefix)
+                || hasPrefix(safeKey, thumbnailPrefix)
+                || hasPrefix(safeKey, restaurantPrefix)
+                || hasPrefix(safeKey, newsImagePrefix)
+                ? safeKey
+                : null;
+    }
+
+    private boolean hasPrefix(String key, String prefix) {
+        return prefix != null && !prefix.isBlank() && key.startsWith(prefix);
     }
 
     private String normalizePrefix(String prefix) {

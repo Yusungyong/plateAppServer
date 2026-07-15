@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import com.plateapp.plate_main.auth.repository.RefreshTokenRepository;
 import com.plateapp.plate_main.auth.repository.SocialAccountRepository;
 import com.plateapp.plate_main.auth.repository.UserRepository;
+import com.plateapp.plate_main.auth.domain.User;
 import com.plateapp.plate_main.auth.service.ProfileHistoryService;
 import com.plateapp.plate_main.auth.service.SocialAuthService;
 import com.plateapp.plate_main.common.image.ImageProcessingService;
@@ -16,10 +17,13 @@ import com.plateapp.plate_main.feed.repository.ImageFeedRepository;
 import com.plateapp.plate_main.friend.repository.Fp150FriendRepository;
 import com.plateapp.plate_main.notification.service.UserPushTokenService;
 import com.plateapp.plate_main.profile.dto.UserStatsDTO;
+import com.plateapp.plate_main.profile.dto.UpdateProfileRequest;
+import com.plateapp.plate_main.profile.dto.UserProfileDTO;
 import com.plateapp.plate_main.video.repository.Fp300StoreRepository;
 import com.plateapp.plate_main.video.repository.Fp305WatchHistoryRepository;
 import com.plateapp.plate_main.video.repository.Fp440CommentRepository;
 import java.sql.ResultSet;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -96,5 +100,23 @@ class ProfileServiceTest {
         assertThat(stats.getPostsCount()).isEqualTo(7L);
         assertThat(stats.getLikesCount()).isEqualTo(11L);
         assertThat(stats.getVisitedStoresCount()).isEqualTo(4L);
+    }
+
+    @Test
+    void updateProfilePersistsAndReturnsBio() {
+        User user = User.builder()
+                .username("tester")
+                .nickname("nickname")
+                .bio("old bio")
+                .build();
+        UpdateProfileRequest request = new UpdateProfileRequest();
+        request.setBio("new bio");
+        when(userRepository.findById("tester")).thenReturn(Optional.of(user));
+        when(userRepository.save(user)).thenReturn(user);
+
+        UserProfileDTO result = profileService.updateProfile("tester", request);
+
+        assertThat(user.getBio()).isEqualTo("new bio");
+        assertThat(result.getBio()).isEqualTo("new bio");
     }
 }

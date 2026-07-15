@@ -8,6 +8,7 @@ import com.plateapp.plate_main.video.entity.Fp305WatchHistory;
 import com.plateapp.plate_main.video.repository.Fp300StoreRepository;
 import com.plateapp.plate_main.video.repository.Fp305WatchHistoryRepository;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -70,6 +71,7 @@ public class WatchHistoryService {
 
     @Transactional
     public WatchHistoryDto.UpdateProgressResponse updateProgress(
+            String username,
             Integer storeId,
             WatchHistoryDto.UpdateProgressRequest request
     ) {
@@ -78,7 +80,8 @@ public class WatchHistoryService {
         }
 
         Fp305WatchHistory history = watchHistoryRepository
-                .findBySessionIdAndUseYnAndDeletedAtIsNull(request.getSessionId(), USE_Y)
+                .findFirstBySessionIdAndUsernameAndStoreIdAndUseYnAndDeletedAtIsNullOrderByTimestampDesc(
+                        request.getSessionId(), username, storeId, USE_Y)
                 .orElseThrow(() -> new IllegalArgumentException("Active watch session not found"));
 
         int sanitizedDuration = sanitizeDuration(request.getDurationWatched());
@@ -100,6 +103,7 @@ public class WatchHistoryService {
 
     @Transactional
     public WatchHistoryDto.CompleteWatchResponse completeWatch(
+            String username,
             Integer storeId,
             WatchHistoryDto.CompleteWatchRequest request
     ) {
@@ -108,7 +112,8 @@ public class WatchHistoryService {
         }
 
         Fp305WatchHistory history = watchHistoryRepository
-                .findBySessionIdAndUseYnAndDeletedAtIsNull(request.getSessionId(), USE_Y)
+                .findFirstBySessionIdAndUsernameAndStoreIdAndUseYnAndDeletedAtIsNullOrderByTimestampDesc(
+                        request.getSessionId(), username, storeId, USE_Y)
                 .orElseThrow(() -> new IllegalArgumentException("Active watch session not found"));
 
         int sanitizedDuration = sanitizeDuration(request.getDurationWatched());
@@ -197,19 +202,10 @@ public class WatchHistoryService {
             completionRate = (double) completedViews / totalViews;
         }
 
-        WatchHistoryDto.QualityDistribution qualityDist = WatchHistoryDto.QualityDistribution.builder()
-                .quality1080p(0L)
-                .quality720p(0L)
-                .quality360p(0L)
-                .qualityAuto(0L)
-                .build();
-
-        WatchHistoryDto.DeviceDistribution deviceDist = WatchHistoryDto.DeviceDistribution.builder()
-                .ios(0L)
-                .android(0L)
-                .web(0L)
-                .other(0L)
-                .build();
+        WatchHistoryDto.QualityDistribution qualityDist = buildQualityDistribution(
+                watchHistoryRepository.countVideoQualityByStoreId(storeId));
+        WatchHistoryDto.DeviceDistribution deviceDist = buildDeviceDistribution(
+                watchHistoryRepository.countDeviceInfoByStoreId(storeId));
 
         return WatchHistoryDto.VideoWatchStatsResponse.builder()
                 .storeId(storeId)
@@ -221,6 +217,94 @@ public class WatchHistoryService {
                 .qualityDistribution(qualityDist)
                 .deviceDistribution(deviceDist)
                 .build();
+    }
+
+    private WatchHistoryDto.QualityDistribution buildQualityDistribution(
+            List<Fp305WatchHistoryRepository.AttributeCount> counts
+    ) {
+        long quality1080p = 0L;
+        long quality720p = 0L;
+        long quality360p = 0L;
+        long qualityAuto = 0L;
+
+        for (Fp305WatchHistoryRepository.AttributeCount count : counts) {
+            String quality = normalizeAttribute(count.getValue());
+            long total = safeCount(count.getTotal());
+            if (quality.contains("1080")) {
+                quality1080p += total;
+            } else if (quality.contains("720")) {
+                quality720p += total;
+            } else if (quality.contains("360")) {
+                quality360p += total;
+            } else {
+                // Missing, adaptive, and future quality labels all use the existing AUTO bucket.
+                qualityAuto += total;
+            }
+        }
+
+        return WatchHistoryDto.QualityDistribution.builder()
+                .quality1080p(quality1080p)
+                .quality720p(quality720p)
+                .quality360p(quality360p)
+                .qualityAuto(qualityAuto)
+                .build();
+    }
+
+    private WatchHistoryDto.DeviceDistribution buildDeviceDistribution(
+            List<Fp305WatchHistoryRepository.AttributeCount> counts
+    ) {
+        long ios = 0L;
+        long android = 0L;
+        long web = 0L;
+        long other = 0L;
+
+        for (Fp305WatchHistoryRepository.AttributeCount count : counts) {
+            String device = normalizeAttribute(count.getValue());
+            long total = safeCount(count.getTotal());
+            if (containsAny(device, "ios", "iphone", "ipad")) {
+                ios += total;
+            } else if (device.contains("android")) {
+                android += total;
+            } else if (containsAny(
+                    device,
+                    "web",
+                    "mozilla",
+                    "windows",
+                    "macintosh",
+                    "chrome",
+                    "safari",
+                    "firefox",
+                    "edge"
+            )) {
+                web += total;
+            } else {
+                other += total;
+            }
+        }
+
+        return WatchHistoryDto.DeviceDistribution.builder()
+                .ios(ios)
+                .android(android)
+                .web(web)
+                .other(other)
+                .build();
+    }
+
+    private String normalizeAttribute(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private long safeCount(Long count) {
+        return count == null ? 0L : count;
+    }
+
+    private boolean containsAny(String value, String... candidates) {
+        for (String candidate : candidates) {
+            if (value.contains(candidate)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Integer getVideoDuration(Integer storeId) {

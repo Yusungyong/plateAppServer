@@ -1,13 +1,16 @@
 package com.plateapp.plate_main.common.video;
 
 import java.io.BufferedReader;
+import java.io.Closeable;
 import java.io.File;
-import java.nio.file.Files;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,7 +27,11 @@ public class FfmpegService {
     @Value("${ffprobe.path:ffprobe}")
     private String ffprobePath;
 
-    private static final long COMMAND_TIMEOUT_SECONDS = 60;
+    @Value("${ffmpeg.command-timeout-millis:60000}")
+    private long commandTimeoutMillis = 60_000;
+
+    private static final int MAX_CAPTURED_OUTPUT_CHARS = 64 * 1024;
+    private static final long TERMINATION_WAIT_MILLIS = 1_000;
 
     public Integer probeDurationSeconds(File videoFile) {
         List<String> cmd = List.of(
@@ -123,40 +130,161 @@ public class FfmpegService {
     }
 
     private void exec(List<String> cmd) throws IOException, InterruptedException {
-        Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
+        Process p = startProcess(cmd);
         drainAsync(p);
-        if (!p.waitFor(COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-            p.destroyForcibly();
-            throw new IOException("ffmpeg command timed out");
-        }
-        if (p.exitValue() != 0) {
-            throw new IOException("ffmpeg exited with code " + p.exitValue());
+        try {
+            if (!p.waitFor(configuredTimeoutMillis(), TimeUnit.MILLISECONDS)) {
+                terminateForcibly(p);
+                throw new IOException("ffmpeg command timed out");
+            }
+            if (p.exitValue() != 0) {
+                throw new IOException("ffmpeg exited with code " + p.exitValue());
+            }
+        } finally {
+            if (p.isAlive()) {
+                terminateForcibly(p);
+            }
+            closeProcessStreams(p);
         }
     }
 
-    private String execAndRead(List<String> cmd) throws IOException, InterruptedException {
-        Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
-        StringBuilder sb = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                sb.append(line).append("\n");
+    String execAndRead(List<String> cmd) throws IOException, InterruptedException {
+        Process p = startProcess(cmd);
+        StringBuilder output = new StringBuilder();
+        AtomicReference<IOException> readFailure = new AtomicReference<>();
+        AtomicBoolean outputTooLarge = new AtomicBoolean(false);
+        Thread outputReader = collectOutputAsync(p, output, readFailure, outputTooLarge);
+        long timeoutMillis = configuredTimeoutMillis();
+        long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+
+        try {
+            if (!p.waitFor(timeoutMillis, TimeUnit.MILLISECONDS)) {
+                terminateForcibly(p);
+                throw new IOException("ffprobe command timed out");
             }
+
+            if (outputReader.isAlive()) {
+                long remainingMillis = remainingMillis(deadlineNanos);
+                if (remainingMillis > 0) {
+                    outputReader.join(remainingMillis);
+                }
+            }
+            if (outputReader.isAlive()) {
+                terminateForcibly(p);
+                throw new IOException("ffprobe output read timed out");
+            }
+            if (readFailure.get() != null) {
+                throw readFailure.get();
+            }
+            if (outputTooLarge.get()) {
+                throw new IOException("ffprobe output exceeded limit");
+            }
+            if (p.exitValue() != 0) {
+                throw new IOException("ffprobe exited with code " + p.exitValue());
+            }
+            return output.toString();
+        } finally {
+            if (p.isAlive()) {
+                terminateForcibly(p);
+            }
+            closeProcessStreams(p);
+            stopOutputReader(outputReader);
         }
-        if (!p.waitFor(COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-            p.destroyForcibly();
-            throw new IOException("ffprobe command timed out");
+    }
+
+    private Thread collectOutputAsync(
+            Process process,
+            StringBuilder output,
+            AtomicReference<IOException> readFailure,
+            AtomicBoolean outputTooLarge
+    ) {
+        Thread thread = new Thread(() -> {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                char[] buffer = new char[1_024];
+                int read;
+                while ((read = reader.read(buffer)) != -1) {
+                    int remaining = MAX_CAPTURED_OUTPUT_CHARS - output.length();
+                    if (remaining > 0) {
+                        output.append(buffer, 0, Math.min(read, remaining));
+                    }
+                    if (read > remaining) {
+                        outputTooLarge.set(true);
+                    }
+                }
+            } catch (IOException e) {
+                readFailure.compareAndSet(null, e);
+            }
+        }, "ffprobe-output-drain");
+        thread.setDaemon(true);
+        thread.start();
+        return thread;
+    }
+
+    Process startProcess(List<String> cmd) throws IOException {
+        return new ProcessBuilder(cmd).redirectErrorStream(true).start();
+    }
+
+    private long configuredTimeoutMillis() {
+        return Math.max(1L, commandTimeoutMillis);
+    }
+
+    private long remainingMillis(long deadlineNanos) {
+        long remainingNanos = deadlineNanos - System.nanoTime();
+        if (remainingNanos <= 0) {
+            return 0;
         }
-        if (p.exitValue() != 0) {
-            throw new IOException("ffprobe exited with code " + p.exitValue());
+        return Math.max(1L, TimeUnit.NANOSECONDS.toMillis(remainingNanos));
+    }
+
+    private void terminateForcibly(Process process) {
+        process.descendants().forEach(handle -> {
+            try {
+                handle.destroyForcibly();
+            } catch (RuntimeException e) {
+                log.debug("Unable to terminate media process descendant", e);
+            }
+        });
+        process.destroyForcibly();
+        try {
+            if (!process.waitFor(TERMINATION_WAIT_MILLIS, TimeUnit.MILLISECONDS)) {
+                log.warn("Media process did not terminate after forced shutdown");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
-        return sb.toString();
+    }
+
+    private void closeProcessStreams(Process process) {
+        closeQuietly(process.getInputStream());
+        closeQuietly(process.getErrorStream());
+        closeQuietly(process.getOutputStream());
+    }
+
+    private void stopOutputReader(Thread outputReader) {
+        if (!outputReader.isAlive()) {
+            return;
+        }
+        outputReader.interrupt();
+        try {
+            outputReader.join(250);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void closeQuietly(Closeable closeable) {
+        try {
+            closeable.close();
+        } catch (IOException ignored) {
+            // Best-effort cleanup after process completion or forced termination.
+        }
     }
 
     private void drainAsync(Process p) {
         Thread t = new Thread(() -> {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
-                while (reader.readLine() != null) {
+                char[] buffer = new char[4_096];
+                while (reader.read(buffer) != -1) {
                     // drain output to avoid blocking
                 }
             } catch (IOException ignored) {

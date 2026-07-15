@@ -8,7 +8,10 @@ import org.hibernate.annotations.JdbcTypeCode;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
@@ -20,6 +23,13 @@ import lombok.Setter;
 public class Fp300Store {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "fp300_store_id_generator")
+    @SequenceGenerator(
+            name = "fp300_store_id_generator",
+            sequenceName = "fp_300_store_id_seq",
+            schema = "public",
+            allocationSize = 1
+    )
     @Column(name = "store_id")
     private Integer storeId;
 

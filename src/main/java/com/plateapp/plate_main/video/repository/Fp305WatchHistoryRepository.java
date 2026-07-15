@@ -1,6 +1,7 @@
 package com.plateapp.plate_main.video.repository;
 
 import com.plateapp.plate_main.video.entity.Fp305WatchHistory;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -11,7 +12,13 @@ import org.springframework.data.repository.query.Param;
 
 public interface Fp305WatchHistoryRepository extends JpaRepository<Fp305WatchHistory, Integer> {
 
-    Optional<Fp305WatchHistory> findBySessionIdAndUseYnAndDeletedAtIsNull(String sessionId, String useYn);
+    Optional<Fp305WatchHistory>
+            findFirstBySessionIdAndUsernameAndStoreIdAndUseYnAndDeletedAtIsNullOrderByTimestampDesc(
+                    String sessionId,
+                    String username,
+                    Integer storeId,
+                    String useYn
+            );
 
     Optional<Fp305WatchHistory> findFirstByUsernameAndStoreIdAndUseYnAndDeletedAtIsNullOrderByTimestampDesc(
             String username,
@@ -60,6 +67,26 @@ public interface Fp305WatchHistoryRepository extends JpaRepository<Fp305WatchHis
     """)
     Double getAverageDurationByStoreId(@Param("storeId") Integer storeId);
 
+    @Query("""
+        SELECT w.videoQuality AS value, COUNT(w) AS total
+        FROM Fp305WatchHistory w
+        WHERE w.storeId = :storeId
+          AND w.useYn = 'Y'
+          AND w.deletedAt IS NULL
+        GROUP BY w.videoQuality
+    """)
+    List<AttributeCount> countVideoQualityByStoreId(@Param("storeId") Integer storeId);
+
+    @Query("""
+        SELECT w.deviceInfo AS value, COUNT(w) AS total
+        FROM Fp305WatchHistory w
+        WHERE w.storeId = :storeId
+          AND w.useYn = 'Y'
+          AND w.deletedAt IS NULL
+        GROUP BY w.deviceInfo
+    """)
+    List<AttributeCount> countDeviceInfoByStoreId(@Param("storeId") Integer storeId);
+
     @Modifying
     @Query("delete from Fp305WatchHistory w where w.storeId = :storeId")
     int deleteByStoreId(@Param("storeId") Integer storeId);
@@ -72,33 +99,10 @@ public interface Fp305WatchHistoryRepository extends JpaRepository<Fp305WatchHis
     """)
     int clearUserIdByUserId(@Param("userId") Integer userId);
 
-    @Modifying
-    @Query("""
-        UPDATE Fp305WatchHistory w
-        SET w.durationWatched = :durationWatched,
-            w.videoQuality = :videoQuality,
-            w.timestamp = CURRENT_TIMESTAMP
-        WHERE w.sessionId = :sessionId
-          AND w.useYn = 'Y'
-    """)
-    int updateProgressBySessionId(
-            @Param("sessionId") String sessionId,
-            @Param("durationWatched") Integer durationWatched,
-            @Param("videoQuality") String videoQuality
-    );
+    interface AttributeCount {
+        String getValue();
 
-    @Modifying
-    @Query("""
-        UPDATE Fp305WatchHistory w
-        SET w.completionStatus = :completionStatus,
-            w.durationWatched = :durationWatched,
-            w.timestamp = CURRENT_TIMESTAMP
-        WHERE w.sessionId = :sessionId
-          AND w.useYn = 'Y'
-    """)
-    int updateCompletionBySessionId(
-            @Param("sessionId") String sessionId,
-            @Param("completionStatus") Boolean completionStatus,
-            @Param("durationWatched") Integer durationWatched
-    );
+        Long getTotal();
+    }
+
 }

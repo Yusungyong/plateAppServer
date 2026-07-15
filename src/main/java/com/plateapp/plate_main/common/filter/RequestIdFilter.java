@@ -3,6 +3,7 @@ package com.plateapp.plate_main.common.filter;
 
 import java.io.IOException;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import org.slf4j.MDC;
 import org.springframework.core.Ordered;
@@ -21,6 +22,8 @@ public class RequestIdFilter extends OncePerRequestFilter {
 
     public static final String HEADER_REQUEST_ID = "X-Request-Id";
     public static final String MDC_KEY_REQUEST_ID = "requestId";
+    static final int MAX_REQUEST_ID_LENGTH = 128;
+    private static final Pattern VALID_REQUEST_ID = Pattern.compile("[A-Za-z0-9._-]+");
 
     @Override
     protected void doFilterInternal(
@@ -30,9 +33,7 @@ public class RequestIdFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
 
         String incoming = request.getHeader(HEADER_REQUEST_ID);
-        String requestId = (incoming != null && !incoming.isBlank())
-                ? incoming.trim()
-                : UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        String requestId = isValidRequestId(incoming) ? incoming : newRequestId();
 
         MDC.put(MDC_KEY_REQUEST_ID, requestId);
         response.setHeader(HEADER_REQUEST_ID, requestId);
@@ -42,5 +43,16 @@ public class RequestIdFilter extends OncePerRequestFilter {
         } finally {
             MDC.remove(MDC_KEY_REQUEST_ID);
         }
+    }
+
+    private boolean isValidRequestId(String requestId) {
+        return requestId != null
+                && !requestId.isEmpty()
+                && requestId.length() <= MAX_REQUEST_ID_LENGTH
+                && VALID_REQUEST_ID.matcher(requestId).matches();
+    }
+
+    private String newRequestId() {
+        return UUID.randomUUID().toString().replace("-", "").substring(0, 16);
     }
 }

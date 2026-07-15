@@ -50,6 +50,9 @@ public class User {
     @Column(name = "active_region")
     private String activeRegion;
 
+    @Column(name = "bio", length = 200)
+    private String bio;
+
     @Column(name = "created_at")
     private LocalDate createdAt;
 

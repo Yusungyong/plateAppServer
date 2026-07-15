@@ -1,9 +1,9 @@
 // src/main/java/com/plateapp/platemain/common/email/service/impl/EmailVerifyServiceImpl.java
 package com.plateapp.plate_main.common.email.service.impl;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Optional;
-import java.util.Random;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -28,6 +28,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class EmailVerifyServiceImpl implements EmailVerifyService {
 
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
     private final EmailVerificationRepository emailVerificationRepository;
     private final UserRepository userRepository;
     private final JavaMailSender mailSender;
@@ -37,7 +39,7 @@ public class EmailVerifyServiceImpl implements EmailVerifyService {
 
     // 6자리 인증 코드 생성
     private String generateVerificationCode() {
-        return String.valueOf(100000 + new Random().nextInt(900000));
+        return String.valueOf(100000 + SECURE_RANDOM.nextInt(900000));
     }
 
     @Override
@@ -103,7 +105,7 @@ public class EmailVerifyServiceImpl implements EmailVerifyService {
             mailSender.send(message);
         } catch (Exception e) {
             // 🔴 개발 단계에서는 그냥 로그만 찍고 진행 (클라이언트에 500 안 던지도록)
-            log.warn("이메일 전송 실패: {}", e.getMessage());
+            log.warn("이메일 전송 실패. type={}", e.getClass().getSimpleName());
             // e.printStackTrace(); // 필요하면 자세히
         }
     }

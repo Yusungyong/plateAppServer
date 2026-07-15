@@ -76,10 +76,6 @@ public class VideoUploadService {
         VideoMediaResult media = processVideoUpload(file, thumbnailFile);
 
         Fp300Store store = new Fp300Store();
-        Long newId = fp300StoreRepository.nextStoreIdFallback();
-        if (newId != null) {
-            store.setStoreId(newId.intValue());
-        }
         store.setTitle(storeName);
         store.setFileName(s3UploadService.toStoredVideoPath(media.fileUrl));
         store.setAddress(address);

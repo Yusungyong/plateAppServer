@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -56,6 +57,9 @@ public class LocalFileStorageService {
                 safeFilename
         );
         Path targetPath = rootPath.resolve(relativePath).normalize();
+        if (!targetPath.startsWith(rootPath)) {
+            throw new AppException(ErrorCode.COMMON_INVALID_INPUT, "Invalid upload path.");
+        }
 
         try {
             Files.createDirectories(targetPath.getParent());
@@ -76,8 +80,20 @@ public class LocalFileStorageService {
         if (relativePath == null) {
             return;
         }
+        Path targetPath = rootPath.resolve(relativePath).normalize();
+        if (!targetPath.startsWith(rootPath)) {
+            return;
+        }
         try {
-            Files.deleteIfExists(rootPath.resolve(relativePath).normalize());
+            if (!Files.exists(targetPath, LinkOption.NOFOLLOW_LINKS)) {
+                return;
+            }
+            Path realRootPath = rootPath.toRealPath();
+            Path realParentPath = targetPath.getParent().toRealPath();
+            if (!realParentPath.startsWith(realRootPath)) {
+                return;
+            }
+            Files.deleteIfExists(targetPath);
         } catch (IOException e) {
             throw new AppException(ErrorCode.COMMON_INTERNAL_ERROR, "File delete failed.");
         }
@@ -100,7 +116,7 @@ public class LocalFileStorageService {
         if (path == null || path.isBlank()) {
             return null;
         }
-        if (!path.startsWith(publicBasePath)) {
+        if (!path.equals(publicBasePath) && !path.startsWith(publicBasePath + "/")) {
             return null;
         }
         String relative = path.substring(publicBasePath.length());

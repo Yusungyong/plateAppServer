@@ -29,6 +29,8 @@
 	<properties>
 		<java.version>17</java.version>
 		<lombok.version>1.18.32</lombok.version>
+		<jacoco.version>0.8.13</jacoco.version>
+		<cyclonedx.version>2.9.1</cyclonedx.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -53,6 +55,10 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 
 		<dependency>
@@ -146,6 +152,79 @@
 
 	<build>
 		<plugins>
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>${jacoco.version}</version>
+				<executions>
+					<execution>
+						<id>prepare-agent</id>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>report</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>coverage-ratchet</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<rule>
+									<element>BUNDLE</element>
+									<limits>
+										<limit>
+											<counter>LINE</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.17</minimum>
+										</limit>
+										<limit>
+											<counter>BRANCH</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.06</minimum>
+										</limit>
+									</limits>
+								</rule>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.cyclonedx</groupId>
+				<artifactId>cyclonedx-maven-plugin</artifactId>
+				<version>${cyclonedx.version}</version>
+				<executions>
+					<!-- Disable Spring Boot parent's early duplicate SBOM execution. -->
+					<execution>
+						<id>default</id>
+						<phase>none</phase>
+					</execution>
+					<execution>
+						<id>generate-sbom</id>
+						<phase>package</phase>
+						<goals>
+							<goal>makeAggregateBom</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<projectType>application</projectType>
+					<schemaVersion>1.6</schemaVersion>
+					<includeBomSerialNumber>true</includeBomSerialNumber>
+					<includeTestScope>false</includeTestScope>
+					<outputFormat>json</outputFormat>
+					<outputName>sbom</outputName>
+				</configuration>
+			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>

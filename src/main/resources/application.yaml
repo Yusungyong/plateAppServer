@@ -2,6 +2,10 @@ spring:
   application:
     name: foodPlayerServer
 
+  lifecycle:
+    # Keep below systemd TimeoutStopSec (25s) and deployment stop wait (30s).
+    timeout-per-shutdown-phase: 15s
+
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/mainproject_2}
     username: ${DB_USERNAME:postgres}
@@ -67,12 +71,16 @@ spring:
           auth: true
           starttls:
             enable: true
+            required: true
+          ssl:
+            checkserveridentity: true
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
 
 server:
   port: ${SERVER_PORT:8090}
+  shutdown: graceful
   tomcat:
     uri-encoding: UTF-8
   error:
@@ -141,10 +149,23 @@ management:
   endpoints:
     web:
       exposure:
-        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:health,info}
+        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:health}
   endpoint:
     health:
       show-details: ${MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS:never}
+      show-components: ${MANAGEMENT_ENDPOINT_HEALTH_SHOW_COMPONENTS:never}
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
 
 springdoc:
   api-docs:

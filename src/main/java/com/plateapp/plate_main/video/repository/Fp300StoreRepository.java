@@ -238,9 +238,6 @@ public interface Fp300StoreRepository extends JpaRepository<Fp300Store, Integer>
             @Param("limit") int limit
     );
 
-    @Query(value = "select coalesce(max(store_id),0)+1 from fp_300", nativeQuery = true)
-    Long nextStoreIdFallback();
-
     long countByUsernameAndUseYn(String username, String useYn);
 
     List<Fp300Store> findByStoreIdIn(List<Integer> storeIds);

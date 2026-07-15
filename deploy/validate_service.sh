@@ -8,7 +8,7 @@ log() {
 ENV_FILE="/etc/plate-main.env"
 SERVER_PORT="$(grep -E "^[[:space:]]*SERVER_PORT=" "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' || true)"
 SERVER_PORT="${SERVER_PORT:-8090}"
-APP_URL="http://127.0.0.1:${SERVER_PORT}/api/health"
+APP_URL="http://127.0.0.1:${SERVER_PORT}/actuator/health/readiness"
 CORS_SMOKE_ORIGIN="$(grep -E "^[[:space:]]*CORS_SMOKE_ORIGIN=" "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' || true)"
 MAX_RETRIES="$(grep -E "^[[:space:]]*HEALTH_MAX_RETRIES=" "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' || true)"
 SLEEP_SECONDS="$(grep -E "^[[:space:]]*HEALTH_SLEEP_SECONDS=" "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' || true)"
@@ -24,7 +24,7 @@ if ! systemctl is-active --quiet plate-main; then
   journalctl -u plate-main -n 200 --no-pager || true
   exit 1
 fi
-log "plate-main is active. Starting health checks: ${APP_URL} max_retries=${MAX_RETRIES} sleep_seconds=${SLEEP_SECONDS} curl_timeout_seconds=${CURL_TIMEOUT_SECONDS}"
+log "plate-main is active. Starting DB-aware readiness checks: ${APP_URL} max_retries=${MAX_RETRIES} sleep_seconds=${SLEEP_SECONDS} curl_timeout_seconds=${CURL_TIMEOUT_SECONDS}"
 
 for ((i=1; i<=MAX_RETRIES; i++)); do
   log "Health check attempt ${i}/${MAX_RETRIES}"
@@ -44,7 +44,7 @@ for ((i=1; i<=MAX_RETRIES; i++)); do
 
   http_code="$(curl -sS -o /tmp/plate-main-health.out -w "%{http_code}" --max-time "$CURL_TIMEOUT_SECONDS" "$APP_URL" || true)"
   if [ "$http_code" = "200" ]; then
-    log "Health check succeeded."
+    log "Readiness check succeeded."
     if [ -n "$CORS_SMOKE_ORIGIN" ]; then
       cors_code="$(curl -sS -o /dev/null -D /tmp/plate-main-cors.headers -w "%{http_code}" \
         --max-time "$CURL_TIMEOUT_SECONDS" -X OPTIONS \
@@ -61,11 +61,11 @@ for ((i=1; i<=MAX_RETRIES; i++)); do
     fi
     exit 0
   fi
-  log "Health check failed with http_code=${http_code}. Sleeping ${SLEEP_SECONDS}s before retry."
+  log "Readiness check failed with http_code=${http_code}. Sleeping ${SLEEP_SECONDS}s before retry."
   sleep "$SLEEP_SECONDS"
 done
 
-log "Health check failed after ${MAX_RETRIES} attempts: $APP_URL"
+log "Readiness check failed after ${MAX_RETRIES} attempts: $APP_URL"
 if [ -s /tmp/plate-main-health.out ]; then
   log "Last health response body:"
   tail -c 2000 /tmp/plate-main-health.out || true
