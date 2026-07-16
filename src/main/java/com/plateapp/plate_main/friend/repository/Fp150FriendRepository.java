@@ -24,6 +24,20 @@ public interface Fp150FriendRepository extends JpaRepository<Fp150Friend, Intege
 
     boolean existsByUsernameAndFriendNameAndStatus(String username, String friendName, String status);
 
+    @Query("""
+        SELECT CASE WHEN COUNT(f) > 0 THEN true ELSE false END
+        FROM Fp150Friend f
+        WHERE LOWER(f.status) IN ('accepted', 'cd_002')
+          AND (
+            (f.username = :firstUsername AND f.friendName = :secondUsername)
+            OR (f.username = :secondUsername AND f.friendName = :firstUsername)
+          )
+    """)
+    boolean existsAcceptedRelationship(
+            @Param("firstUsername") String firstUsername,
+            @Param("secondUsername") String secondUsername
+    );
+
     @Modifying
     @Query("DELETE FROM Fp150Friend f WHERE f.username = :username AND f.friendName = :friendName")
     void deleteByUsernameAndFriendName(@Param("username") String username, @Param("friendName") String friendName);

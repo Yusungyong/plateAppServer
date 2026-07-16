@@ -276,6 +276,24 @@ public class S3UploadService {
         return extractOwnedKey(objectUrlOrKey);
     }
 
+    public String toVideoObjectKey(String storedPathOrUrl) {
+        if (storedPathOrUrl == null || storedPathOrUrl.isBlank()) {
+            return null;
+        }
+        String key;
+        if (storedPathOrUrl.contains("://")) {
+            key = extractOwnedKey(storedPathOrUrl);
+        } else {
+            String safePath = normalizeSafeKey(storedPathOrUrl);
+            if (safePath == null) {
+                return null;
+            }
+            key = safePath.startsWith(videoPrefix) ? safePath : videoPrefix + safePath;
+            key = normalizeManagedKey(key);
+        }
+        return key != null && hasPrefix(key, videoPrefix) ? key : null;
+    }
+
     public String toDeliveryUrl(String objectUrlOrKey) {
         if (objectUrlOrKey == null || objectUrlOrKey.isBlank()) {
             return objectUrlOrKey;

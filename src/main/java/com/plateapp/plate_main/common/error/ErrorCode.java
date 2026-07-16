@@ -32,6 +32,13 @@ public enum ErrorCode {
     // USER (예시)
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_404", "사용자를 찾을 수 없습니다."),
 
+    // MY PAGE
+    MY_HUB_FEATURE_DISABLED(
+            HttpStatus.SERVICE_UNAVAILABLE,
+            "MY_HUB_FEATURE_DISABLED",
+            "마이페이지 허브 기능을 현재 사용할 수 없습니다."
+    ),
+
     // VIDEO/COMMENT 등
     VIDEO_NOT_FOUND(HttpStatus.NOT_FOUND, "VIDEO_404", "동영상을 찾을 수 없습니다."),
     COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "COMMENT_404", "댓글을 찾을 수 없습니다."),

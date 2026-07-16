@@ -61,6 +61,22 @@ public class ContentPlaceResolver {
         );
     }
 
+    /**
+     * Resolve only the content's explicit canonical place link. This is used by
+     * ID-based detail contracts where name/address inference could attach the
+     * content to a different legacy place.
+     */
+    @Transactional(readOnly = true)
+    public ResolvedPlace resolveDirect(String placeId, String address) {
+        String safePlaceId = trimToNull(placeId);
+        String safeAddress = trimToNull(address);
+        Optional<Fp310Place> directPlace = findPlaceById(safePlaceId);
+        if (directPlace.isPresent()) {
+            return toResolvedPlace(directPlace.get(), safeAddress);
+        }
+        return new ResolvedPlace(safePlaceId, null, null, safeAddress);
+    }
+
     private Optional<Fp310Place> findPlaceById(String placeId) {
         if (placeId == null) {
             return Optional.empty();

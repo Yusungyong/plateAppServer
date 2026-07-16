@@ -98,6 +98,12 @@ app:
     allow-credentials: ${CORS_ALLOW_CREDENTIALS:false}
     max-age: ${CORS_MAX_AGE:1h}
 
+features:
+  my-hub:
+    enabled: ${MY_HUB_ENABLED:false}
+    image-visibility-ready: ${MY_HUB_IMAGE_VISIBILITY_READY:false}
+  private-media-delivery-ready: ${PRIVATE_MEDIA_DELIVERY_READY:false}
+
 feedback:
   contact-retention-days: ${FEEDBACK_CONTACT_RETENTION_DAYS:90}
   contact-purge-cron: "${FEEDBACK_CONTACT_PURGE_CRON:0 30 3 * * *}"

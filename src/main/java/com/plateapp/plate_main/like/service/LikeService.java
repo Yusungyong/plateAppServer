@@ -54,17 +54,21 @@ public class LikeService {
 
   @Transactional(readOnly = true)
   public boolean isLiked(String username, Integer storeId) {
-    return likeRepository.existsByIdUsernameAndIdStoreIdAndUseYn(username, storeId, USE_Y);
+    return likeRepository.existsByIdUsernameAndIdStoreIdAndUseYnAndDeletedAtIsNull(
+        username,
+        storeId,
+        USE_Y
+    );
   }
 
   @Transactional(readOnly = true)
   public long countLikes(Integer storeId) {
-    return likeRepository.countByIdStoreIdAndUseYn(storeId, USE_Y);
+    return likeRepository.countByIdStoreIdAndUseYnAndDeletedAtIsNull(storeId, USE_Y);
   }
 
   @Transactional(readOnly = true)
   public List<Integer> myLikedStoreIds(String username) {
-    return likeRepository.findByIdUsernameAndUseYn(username, USE_Y)
+    return likeRepository.findByIdUsernameAndUseYnAndDeletedAtIsNull(username, USE_Y)
         .stream()
         .map(l -> l.getId().getStoreId())
         .collect(Collectors.toList());

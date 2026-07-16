@@ -16,17 +16,22 @@ public interface Fp50LikeRepository extends JpaRepository<Fp50Like, Fp50LikeId> 
   // ✅ 기존 CRUD/조회용 (LikeService에서 사용)
   Optional<Fp50Like> findByIdUsernameAndIdStoreId(String username, Integer storeId);
 
-  long countByIdStoreIdAndUseYn(Integer storeId, String useYn);
+  long countByIdStoreIdAndUseYnAndDeletedAtIsNull(Integer storeId, String useYn);
 
-  boolean existsByIdUsernameAndIdStoreIdAndUseYn(String username, Integer storeId, String useYn);
+  boolean existsByIdUsernameAndIdStoreIdAndUseYnAndDeletedAtIsNull(
+      String username,
+      Integer storeId,
+      String useYn
+  );
 
-  List<Fp50Like> findByIdUsernameAndUseYn(String username, String useYn);
+  List<Fp50Like> findByIdUsernameAndUseYnAndDeletedAtIsNull(String username, String useYn);
 
   // ✅ (A) storeIds별 좋아요 카운트 배치
   @Query("""
     select l.id.storeId as storeId, count(l) as cnt
     from Fp50Like l
     where l.useYn = 'Y'
+      and l.deletedAt is null
       and l.id.storeId in :storeIds
     group by l.id.storeId
   """)
@@ -42,6 +47,7 @@ public interface Fp50LikeRepository extends JpaRepository<Fp50Like, Fp50LikeId> 
     select l.id.storeId
     from Fp50Like l
     where l.useYn = 'Y'
+      and l.deletedAt is null
       and l.id.username = :username
       and l.id.storeId in :storeIds
   """)

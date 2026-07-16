@@ -36,6 +36,18 @@ class S3UploadServiceTest {
     }
 
     @Test
+    void resolvesOnlyOwnedVideoKeysForPrivatePlayback() {
+        S3UploadService service = service(CDN_URL);
+        String videoKey = "foodvideos/2026-07-16/video.mp4";
+
+        assertThat(service.toVideoObjectKey("2026-07-16/video.mp4")).isEqualTo(videoKey);
+        assertThat(service.toVideoObjectKey(videoKey)).isEqualTo(videoKey);
+        assertThat(service.toVideoObjectKey(CDN_URL + "/" + videoKey)).isEqualTo(videoKey);
+        assertThat(service.toVideoObjectKey(CDN_URL + "/" + OBJECT_KEY)).isNull();
+        assertThat(service.toVideoObjectKey("https://attacker.example/" + videoKey)).isNull();
+    }
+
+    @Test
     void buildsDeliveryUrlWithConfiguredCdnBaseUrl() {
         S3UploadService service = service(CDN_URL);
 

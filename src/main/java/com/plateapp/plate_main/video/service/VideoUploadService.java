@@ -275,6 +275,7 @@ public class VideoUploadService {
         String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "video.bin";
         String contentType = file.getContentType();
         validateFileType(originalName, contentType);
+        String storedVideoName = randomStoredFileName("mp4");
 
         File tempVideo = null;
         File transVideo = null;
@@ -294,7 +295,7 @@ public class VideoUploadService {
             try (FileInputStream inputStream = new FileInputStream(uploadTarget)) {
                 fileUrl = s3UploadService.uploadStreamWithPrefix(
                         s3UploadService.getVideoPrefix(),
-                        originalName,
+                        storedVideoName,
                         inputStream,
                         uploadSize,
                         "video/mp4"
@@ -320,7 +321,7 @@ public class VideoUploadService {
         String thumbnailUrl = buildThumbnailPlaceholder(fileUrl);
         if (thumbnailFile != null && !thumbnailFile.isEmpty()) {
             try {
-                String thumbName = safeThumbnailFileName(thumbnailFile.getOriginalFilename(), "thumb.jpg");
+                String thumbName = randomThumbnailFileName();
                 byte[] originalBytes = thumbnailFile.getBytes();
                 byte[] optimized = imageProcessingService.resizeMax(originalBytes, 1280, 1280, "jpg");
                 byte[] thumb300 = imageProcessingService.resizeCropCenter(originalBytes, 300, 300, "jpg");
@@ -343,7 +344,7 @@ public class VideoUploadService {
             }
         } else if (thumbBytes != null && thumbBytes.length > 0) {
             try {
-                String thumbName = safeThumbnailFileName(originalName, "thumb.jpg");
+                String thumbName = randomThumbnailFileName();
                 byte[] optimized = imageProcessingService.resizeMax(thumbBytes, 1280, 1280, "jpg");
                 byte[] thumb300 = imageProcessingService.resizeCropCenter(thumbBytes, 300, 300, "jpg");
 
@@ -388,21 +389,12 @@ public class VideoUploadService {
         return fileUrl.replaceFirst("[^/]+$", "") + "thumb-" + today + "-" + uuid + ".jpg";
     }
 
-    private String safeFileName(String original, String fallback) {
-        if (original == null || original.isBlank()) {
-            return fallback;
-        }
-        return original;
+    private String randomThumbnailFileName() {
+        return randomStoredFileName("jpg");
     }
 
-    private String safeThumbnailFileName(String original, String fallback) {
-        String safeName = safeFileName(original, fallback);
-        int dotIndex = safeName.lastIndexOf('.');
-        String baseName = dotIndex > 0 ? safeName.substring(0, dotIndex) : safeName;
-        if (baseName.isBlank()) {
-            return fallback;
-        }
-        return baseName + ".jpg";
+    private String randomStoredFileName(String extension) {
+        return UUID.randomUUID().toString().replace("-", "") + "." + extension;
     }
 
     private void validateFileType(String originalName, String contentType) {

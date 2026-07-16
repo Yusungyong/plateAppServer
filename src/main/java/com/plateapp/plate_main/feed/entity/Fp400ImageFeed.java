@@ -62,6 +62,9 @@ public class Fp400ImageFeed {
   @Column(name = "use_yn", nullable = false)
   private String useYn;
 
+  @Column(name = "open_yn", length = 1)
+  private String openYn;
+
   @Column(name = "thumbnail")
   private String thumbnail;
 
@@ -78,6 +81,7 @@ public class Fp400ImageFeed {
   public Long getRestaurantId() { return restaurantId; }
   public String getPlaceId() { return placeId; }
   public String getUseYn() { return useYn; }
+  public String getOpenYn() { return openYn; }
   public String getThumbnail() { return thumbnail; }
 
   public void setUsername(String username) { this.username = username; }
@@ -91,5 +95,6 @@ public class Fp400ImageFeed {
   public void setRestaurantId(Long restaurantId) { this.restaurantId = restaurantId; }
   public void setPlaceId(String placeId) { this.placeId = placeId; }
   public void setUseYn(String useYn) { this.useYn = useYn; }
+  public void setOpenYn(String openYn) { this.openYn = openYn; }
   public void setThumbnail(String thumbnail) { this.thumbnail = thumbnail; }
 }

@@ -22,4 +22,32 @@ public interface ReportRepository extends JpaRepository<Fp40Report, Integer> {
     Page<Fp40Report> findByTargetTypeIgnoreCaseAndTargetId(String targetType, Integer targetId, Pageable pageable);
 
     long countByTargetTypeIgnoreCaseAndTargetId(String targetType, Integer targetId);
+
+    boolean existsByReporterUsernameAndTargetTypeIgnoreCaseAndTargetIdAndTargetFlagAndUnflaggedAtIsNull(
+            String reporterUsername,
+            String targetType,
+            Integer targetId,
+            String targetFlag
+    );
+
+    @Query("""
+        select case when count(r) > 0 then true else false end
+        from Fp40Report r
+        where r.reporterUsername = :reporterUsername
+          and lower(r.targetType) = lower(:targetType)
+          and r.targetFlag = :targetFlag
+          and r.unflaggedAt is null
+          and (
+            r.targetUsername = :targetUsername
+            or r.targetUserId = :targetUserId
+            or r.targetId = :targetUserId
+          )
+    """)
+    boolean existsActiveUserReport(
+            @Param("reporterUsername") String reporterUsername,
+            @Param("targetUsername") String targetUsername,
+            @Param("targetUserId") Integer targetUserId,
+            @Param("targetType") String targetType,
+            @Param("targetFlag") String targetFlag
+    );
 }

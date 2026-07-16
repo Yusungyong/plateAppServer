@@ -78,6 +78,7 @@ public class ImageFeedUploadController {
                 body.restaurantId,
                 body.lat,
                 body.lng,
+                body.openYn,
                 body.useYn,
                 username
         );

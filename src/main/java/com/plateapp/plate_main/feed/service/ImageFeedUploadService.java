@@ -83,8 +83,8 @@ public class ImageFeedUploadService {
             throw new IllegalArgumentException("address is required");
         }
 
-        String safeUseYn = (useYn == null || useYn.isBlank()) ? "Y" : useYn;
-        String safeOpenYn = (openYn == null || openYn.isBlank()) ? "Y" : openYn;
+        String safeUseYn = normalizeYn(useYn, "Y");
+        String storedOpenYn = normalizeYn(openYn, null);
 
         List<String> imageUrls = new ArrayList<>();
         for (MultipartFile file : files) {
@@ -111,6 +111,7 @@ public class ImageFeedUploadService {
         feed.setRestaurantId(resolveRestaurantId(restaurantId, storeName, address));
         feed.setPlaceId(placeId);
         feed.setUseYn(safeUseYn);
+        feed.setOpenYn(storedOpenYn);
 
         Fp400ImageFeed saved = imageFeedRepository.save(feed);
         upsertPlace(placeId, address, lat, lng);
@@ -123,7 +124,7 @@ public class ImageFeedUploadService {
         response.placeId = saved.getPlaceId();
         response.address = saved.getLocation();
         response.useYn = saved.getUseYn();
-        response.openYn = safeOpenYn;
+        response.openYn = legacyCompatibleOpenYn(saved.getOpenYn());
         response.createdAt = OffsetDateTime.of(now, ZoneOffset.UTC);
         response.withFriends = parseWithFriends(withFriendsRaw);
         response.images = buildImageItems(imageUrls);
@@ -140,6 +141,7 @@ public class ImageFeedUploadService {
             Long restaurantId,
             Double lat,
             Double lng,
+            String openYn,
             String useYn,
             String username
     ) {
@@ -162,7 +164,10 @@ public class ImageFeedUploadService {
             feed.setPlaceId(placeId);
         }
         if (useYn != null && !useYn.isBlank()) {
-            feed.setUseYn(useYn);
+            feed.setUseYn(normalizeYn(useYn, feed.getUseYn()));
+        }
+        if (openYn != null && !openYn.isBlank()) {
+            feed.setOpenYn(normalizeYn(openYn, feed.getOpenYn()));
         }
         feed.setRestaurantId(resolveRestaurantId(restaurantId, feed.getStoreName(), feed.getLocation()));
         feed.setUpdatedAt(LocalDateTime.now());
@@ -213,7 +218,7 @@ public class ImageFeedUploadService {
         response.placeId = feed.getPlaceId();
         response.address = feed.getLocation();
         response.useYn = feed.getUseYn();
-        response.openYn = "Y";
+        response.openYn = legacyCompatibleOpenYn(feed.getOpenYn());
         response.createdAt = OffsetDateTime.of(feed.getCreatedAt(), ZoneOffset.UTC);
         response.withFriends = List.of();
         return response;
@@ -343,7 +348,7 @@ public class ImageFeedUploadService {
         response.placeId = feed.getPlaceId();
         response.address = feed.getLocation();
         response.useYn = feed.getUseYn();
-        response.openYn = "Y";
+        response.openYn = legacyCompatibleOpenYn(feed.getOpenYn());
         response.createdAt = OffsetDateTime.of(feed.getCreatedAt(), ZoneOffset.UTC);
         response.withFriends = List.of();
         return response;
@@ -611,5 +616,25 @@ public class ImageFeedUploadService {
             return "";
         }
         return value.startsWith("/") ? value.substring(1) : value;
+    }
+
+    private String normalizeYn(String value, String fallback) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        if (!"Y".equals(normalized) && !"N".equals(normalized)) {
+            throw new IllegalArgumentException("value must be Y or N");
+        }
+        return normalized;
+    }
+
+    /**
+     * The existing upload response historically returned Y when no visibility
+     * value was supplied. Keep that response contract while storing NULL so the
+     * legacy row is not silently classified as explicitly public.
+     */
+    private String legacyCompatibleOpenYn(String storedOpenYn) {
+        return storedOpenYn == null ? "Y" : storedOpenYn;
     }
 }

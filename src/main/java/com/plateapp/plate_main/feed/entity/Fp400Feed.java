@@ -52,6 +52,9 @@ public class Fp400Feed {
   @Column(name = "use_yn", nullable = false, length = 1)
   private String useYn = "Y";
 
+  @Column(name = "open_yn", length = 1)
+  private String openYn;
+
   // 현재 데이터 없음(그래도 컬럼은 매핑 유지)
   @Column(name = "thumbnail", length = 255)
   private String thumbnail;
@@ -68,5 +71,6 @@ public class Fp400Feed {
   public Long getRestaurantId() { return restaurantId; }
   public String getPlaceId() { return placeId; }
   public String getUseYn() { return useYn; }
+  public String getOpenYn() { return openYn; }
   public String getThumbnail() { return thumbnail; }
 }

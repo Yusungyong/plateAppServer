@@ -60,6 +60,7 @@ public class AuthService {
                 .email(email)
                 .password(passwordEncoder.encode(rawPassword))
                 .nickname(nickname)
+                .isPrivate(false)
                 .createdAt(today)
                 .updatedAt(today)
                 .build();
