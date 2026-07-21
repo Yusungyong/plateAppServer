@@ -35,6 +35,8 @@ class ContentAnalyticsQueryRepositoryTest {
     @BeforeEach
     void setUp() {
         jdbc.execute("drop all objects");
+        // Keep H2's TIMESTAMP WITH TIME ZONE date buckets aligned with the API contract.
+        jdbc.execute("set time zone 'Asia/Seoul'");
         createTables();
         insertContents();
         insertAnalytics();

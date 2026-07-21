@@ -329,7 +329,7 @@ public class ContentAnalyticsQueryRepository {
                 """;
 
         return jdbc.query(sql, params(username, range), (rs, rowNum) -> new DailyMetric(
-                toLocalDate(rs.getObject("bucket")),
+                rs.getObject("bucket", LocalDate.class),
                 rs.getString("metric"),
                 rs.getLong("metric_value")
         ));
