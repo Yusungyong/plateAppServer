@@ -27,7 +27,7 @@ public class Fp400ImageFeed {
   @Column(name = "feed_no")
   private Integer feedId; // DB는 feed_no지만, 코드에서는 feedId로 쓰자
 
-  @Column(name = "username", nullable = false)
+  @Column(name = "username", nullable = false, length = 50)
   private String username;
 
   // ✅ 작성자 정보 (fp_100)
@@ -62,7 +62,7 @@ public class Fp400ImageFeed {
   @Column(name = "place_id")
   private String placeId;
 
-  @Column(name = "use_yn", nullable = false)
+  @Column(name = "use_yn", nullable = false, length = 1)
   private String useYn;
 
   @JdbcTypeCode(SqlTypes.CHAR)

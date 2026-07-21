@@ -40,10 +40,10 @@ public class Fp400Feed {
   @Column(name = "feed_title", length = 255)
   private String feedTitle;
 
-  @Column(name = "location", length = 50)
+  @Column(name = "location", length = 255)
   private String location;
 
-  @Column(name = "store_name", length = 50)
+  @Column(name = "store_name", length = 255)
   private String storeName;
 
   @Column(name = "restaurant_id")
