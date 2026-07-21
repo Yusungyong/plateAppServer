@@ -75,15 +75,17 @@ jobs:
           import json
           import os
           import sys
+          import textwrap
 
           app_download_url = os.environ["APP_DOWNLOAD_URL"]
-          deploy_script = f"""set -euo pipefail
+          deploy_script = textwrap.dedent("""\
+          set -euo pipefail
 
-          log() {{
+          log() {
             echo "[$(date '+%Y-%m-%d %H:%M:%S %Z')] [ssm_deploy] $*"
-          }}
+          }
 
-          print_service_diagnostics() {{
+          print_service_diagnostics() {
             log "plate-main status"
             systemctl status plate-main -l --no-pager || true
 
@@ -94,28 +96,28 @@ jobs:
             journalctl -u plate-main -n 1000 --no-pager -o cat 2>/dev/null \\
               | grep -Ei "Caused by|Schema-validation|missing column|missing table|Flyway|Validate failed|BeanCreationException|PersistenceException|PSQLException|Exception|ERROR" \\
               | tail -n 80 || true
-          }}
+          }
 
           APP_DIR="/opt/plate-main"
           ENV_FILE="/etc/plate-main.env"
           TMP_JAR="/tmp/plate-main-app.jar"
-          BACKUP_JAR="${{APP_DIR}}/app.jar.previous"
+          BACKUP_JAR="${APP_DIR}/app.jar.previous"
           APP_URL=""
 
-          log "Preparing app directory: ${{APP_DIR}}"
-          mkdir -p "${{APP_DIR}}"
+          log "Preparing app directory: ${APP_DIR}"
+          mkdir -p "${APP_DIR}"
 
           log "Downloading app jar from presigned S3 URL"
-          curl -fL --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 300 -o "${{TMP_JAR}}" "{app_download_url}"
-          chown ec2-user:ec2-user "${{TMP_JAR}}" || true
-          chmod 0640 "${{TMP_JAR}}"
+          curl -fL --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 300 -o "${TMP_JAR}" "__APP_DOWNLOAD_URL__"
+          chown ec2-user:ec2-user "${TMP_JAR}" || true
+          chmod 0640 "${TMP_JAR}"
 
-          if [ -f "${{APP_DIR}}/app.jar" ]; then
-            cp -f "${{APP_DIR}}/app.jar" "${{BACKUP_JAR}}"
+          if [ -f "${APP_DIR}/app.jar" ]; then
+            cp -f "${APP_DIR}/app.jar" "${BACKUP_JAR}"
           fi
-          mv -f "${{TMP_JAR}}" "${{APP_DIR}}/app.jar"
-          chown ec2-user:ec2-user "${{APP_DIR}}/app.jar" || true
-          chmod 0640 "${{APP_DIR}}/app.jar"
+          mv -f "${TMP_JAR}" "${APP_DIR}/app.jar"
+          chown ec2-user:ec2-user "${APP_DIR}/app.jar" || true
+          chmod 0640 "${APP_DIR}/app.jar"
 
           log "Writing systemd service"
           cat <<'SERVICE_EOF' > /etc/systemd/system/plate-main.service
@@ -157,44 +159,45 @@ jobs:
           log "Restarting plate-main"
           systemctl restart plate-main
 
-          if [ -f "${{ENV_FILE}}" ]; then
+          if [ -f "${ENV_FILE}" ]; then
             set -a
-            . "${{ENV_FILE}}"
+            . "${ENV_FILE}"
             set +a
           fi
-          SERVER_PORT="${{SERVER_PORT:-8090}}"
-          HEALTH_MAX_RETRIES="${{HEALTH_MAX_RETRIES:-90}}"
-          HEALTH_SLEEP_SECONDS="${{HEALTH_SLEEP_SECONDS:-2}}"
-          HEALTH_CURL_TIMEOUT_SECONDS="${{HEALTH_CURL_TIMEOUT_SECONDS:-5}}"
-          APP_URL="http://127.0.0.1:${{SERVER_PORT}}/actuator/health/readiness"
+          SERVER_PORT="${SERVER_PORT:-8090}"
+          HEALTH_MAX_RETRIES="${HEALTH_MAX_RETRIES:-90}"
+          HEALTH_SLEEP_SECONDS="${HEALTH_SLEEP_SECONDS:-2}"
+          HEALTH_CURL_TIMEOUT_SECONDS="${HEALTH_CURL_TIMEOUT_SECONDS:-5}"
+          APP_URL="http://127.0.0.1:${SERVER_PORT}/actuator/health/readiness"
 
-          log "Waiting for readiness: ${{APP_URL}} max_retries=${{HEALTH_MAX_RETRIES}} sleep_seconds=${{HEALTH_SLEEP_SECONDS}}"
-          for i in $(seq 1 "${{HEALTH_MAX_RETRIES}}"); do
+          log "Waiting for readiness: ${APP_URL} max_retries=${HEALTH_MAX_RETRIES} sleep_seconds=${HEALTH_SLEEP_SECONDS}"
+          for i in $(seq 1 "${HEALTH_MAX_RETRIES}"); do
             if systemctl is-failed --quiet plate-main; then
               log "plate-main entered failed state"
               print_service_diagnostics
               exit 1
             fi
 
-            http_code="$(curl -sS -o /tmp/plate-main-health.out -w "%{{http_code}}" --max-time "${{HEALTH_CURL_TIMEOUT_SECONDS}}" "${{APP_URL}}" || true)"
-            if [ "${{http_code}}" = "200" ]; then
+            http_code="$(curl -sS -o /tmp/plate-main-health.out -w "%{http_code}" --max-time "${HEALTH_CURL_TIMEOUT_SECONDS}" "${APP_URL}" || true)"
+            if [ "${http_code}" = "200" ]; then
               log "Readiness check succeeded"
               systemctl status plate-main -l --no-pager || true
               exit 0
             fi
 
-            log "Readiness attempt ${{i}}/${{HEALTH_MAX_RETRIES}} failed with http_code=${{http_code}}"
-            sleep "${{HEALTH_SLEEP_SECONDS}}"
+            log "Readiness attempt ${i}/${HEALTH_MAX_RETRIES} failed with http_code=${http_code}"
+            sleep "${HEALTH_SLEEP_SECONDS}"
           done
 
-          log "Readiness check failed after ${{HEALTH_MAX_RETRIES}} attempts"
+          log "Readiness check failed after ${HEALTH_MAX_RETRIES} attempts"
           if [ -s /tmp/plate-main-health.out ]; then
             log "Last health response body"
             tail -c 2000 /tmp/plate-main-health.out || true
           fi
           print_service_diagnostics
           exit 1
-          """
+          """).strip()
+          deploy_script = deploy_script.replace("__APP_DOWNLOAD_URL__", app_download_url)
 
           json.dump({"commands": [deploy_script], "executionTimeout": ["900"]}, fp=sys.stdout)
           PY
