@@ -15,14 +15,10 @@ permissions:
 env:
   AWS_REGION: ap-northeast-2
   S3_BUCKET: foodplayerbucket
-  CODEDEPLOY_APP: plate-app-server
-  CODEDEPLOY_GROUP: plate-main-deploy-group
   ROLE_ARN: arn:aws:iam::174977828951:role/GitHubActions-CodeDeploy
-  CODEDEPLOY_WAIT_ATTEMPTS: "24"
-  CODEDEPLOY_WAIT_SECONDS: "5"
-  # Recover from the previous revision's stuck ApplicationStop hook.
-  # ApplicationStart restarts the service after the new revision is installed.
-  CODEDEPLOY_IGNORE_APPLICATION_STOP_FAILURES: "true"
+  EC2_INSTANCE_ID: i-030405301637ebd87
+  SSM_WAIT_ATTEMPTS: "60"
+  SSM_WAIT_SECONDS: "5"
 
 concurrency:
   group: deploy-main
@@ -49,10 +45,7 @@ jobs:
           github-token: ${{ github.token }}
           path: build-artifact
 
-      - name: Prepare scripts
-        run: chmod +x deploy/*.sh
-
-      - name: Prepare bundle
+      - name: Prepare app jar
         run: |
           set -euo pipefail
           jar_count="$(find build-artifact -maxdepth 1 -type f -name '*.jar' | wc -l | tr -d ' ')"
@@ -63,9 +56,6 @@ jobs:
           fi
           cp "$(find build-artifact -maxdepth 1 -type f -name '*.jar' -print -quit)" app.jar
 
-      - name: Package deployment bundle
-        run: zip -r deployment.zip appspec.yml deploy app.jar
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d # v6.2.2
         with:
@@ -73,119 +63,190 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Upload to S3
-        run: aws s3api put-object --bucket ${{ env.S3_BUCKET }} --key deployments/${{ github.event.workflow_run.head_sha }}.zip --body deployment.zip
+        run: aws s3api put-object --bucket ${{ env.S3_BUCKET }} --key deployments/${{ github.event.workflow_run.head_sha }}/app.jar --body app.jar
 
-      - name: Create CodeDeploy deployment
-        id: codedeploy
+      - name: Deploy with SSM
         run: |
           set -euo pipefail
-          create_args=()
-          if [ "${CODEDEPLOY_IGNORE_APPLICATION_STOP_FAILURES}" = "true" ]; then
-            create_args+=(--ignore-application-stop-failures)
-            echo "ApplicationStop failures will not block this deployment."
+          app_s3_uri="s3://${S3_BUCKET}/deployments/${{ github.event.workflow_run.head_sha }}/app.jar"
+          app_download_url="$(aws s3 presign "${app_s3_uri}" --expires-in 900)"
+          parameters_file="$(mktemp)"
+          APP_DOWNLOAD_URL="${app_download_url}" python3 - <<'PY' > "${parameters_file}"
+          import json
+          import os
+          import sys
+
+          app_download_url = os.environ["APP_DOWNLOAD_URL"]
+          deploy_script = f"""set -euo pipefail
+
+          log() {{
+            echo "[$(date '+%Y-%m-%d %H:%M:%S %Z')] [ssm_deploy] $*"
+          }}
+
+          print_service_diagnostics() {{
+            log "plate-main status"
+            systemctl status plate-main -l --no-pager || true
+
+            log "plate-main recent journal tail"
+            journalctl -u plate-main -n 160 --no-pager || true
+
+            log "plate-main root-cause candidates from journal"
+            journalctl -u plate-main -n 1000 --no-pager -o cat 2>/dev/null \\
+              | grep -Ei "Caused by|Schema-validation|missing column|missing table|Flyway|Validate failed|BeanCreationException|PersistenceException|PSQLException|Exception|ERROR" \\
+              | tail -n 80 || true
+          }}
+
+          APP_DIR="/opt/plate-main"
+          ENV_FILE="/etc/plate-main.env"
+          TMP_JAR="/tmp/plate-main-app.jar"
+          BACKUP_JAR="${{APP_DIR}}/app.jar.previous"
+          APP_URL=""
+
+          log "Preparing app directory: ${{APP_DIR}}"
+          mkdir -p "${{APP_DIR}}"
+
+          log "Downloading app jar from presigned S3 URL"
+          curl -fL --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 300 -o "${{TMP_JAR}}" "{app_download_url}"
+          chown ec2-user:ec2-user "${{TMP_JAR}}" || true
+          chmod 0640 "${{TMP_JAR}}"
+
+          if [ -f "${{APP_DIR}}/app.jar" ]; then
+            cp -f "${{APP_DIR}}/app.jar" "${{BACKUP_JAR}}"
           fi
+          mv -f "${{TMP_JAR}}" "${{APP_DIR}}/app.jar"
+          chown ec2-user:ec2-user "${{APP_DIR}}/app.jar" || true
+          chmod 0640 "${{APP_DIR}}/app.jar"
 
-          deployment_id=$(
-            aws deploy create-deployment \
-              --application-name "${{ env.CODEDEPLOY_APP }}" \
-              --deployment-group-name "${{ env.CODEDEPLOY_GROUP }}" \
-              --s3-location "bucket=${{ env.S3_BUCKET }},key=deployments/${{ github.event.workflow_run.head_sha }}.zip,bundleType=zip" \
-              --file-exists-behavior OVERWRITE \
-              --description "GitHub Actions deploy ${{ github.event.workflow_run.head_sha }}" \
-              "${create_args[@]}" \
-              --query deploymentId \
+          log "Writing systemd service"
+          cat <<'SERVICE_EOF' > /etc/systemd/system/plate-main.service
+          [Unit]
+          Description=plate-main service
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=ec2-user
+          WorkingDirectory=/opt/plate-main
+          EnvironmentFile=/etc/plate-main.env
+          ExecStart=/usr/bin/java -jar /opt/plate-main/app.jar
+          Restart=on-failure
+          RestartSec=5
+          TimeoutStartSec=90
+          TimeoutStopSec=25
+          KillMode=control-group
+          SendSIGKILL=yes
+          SuccessExitStatus=143
+          NoNewPrivileges=true
+          PrivateTmp=true
+          ProtectSystem=full
+          ProtectKernelTunables=true
+          ProtectKernelModules=true
+          ProtectControlGroups=true
+          RestrictSUIDSGID=true
+          UMask=0027
+          StandardOutput=journal
+          StandardError=journal
+
+          [Install]
+          WantedBy=multi-user.target
+          SERVICE_EOF
+
+          systemctl daemon-reload
+          systemctl enable plate-main
+
+          log "Restarting plate-main"
+          systemctl restart plate-main
+
+          if [ -f "${{ENV_FILE}}" ]; then
+            set -a
+            . "${{ENV_FILE}}"
+            set +a
+          fi
+          SERVER_PORT="${{SERVER_PORT:-8090}}"
+          HEALTH_MAX_RETRIES="${{HEALTH_MAX_RETRIES:-90}}"
+          HEALTH_SLEEP_SECONDS="${{HEALTH_SLEEP_SECONDS:-2}}"
+          HEALTH_CURL_TIMEOUT_SECONDS="${{HEALTH_CURL_TIMEOUT_SECONDS:-5}}"
+          APP_URL="http://127.0.0.1:${{SERVER_PORT}}/actuator/health/readiness"
+
+          log "Waiting for readiness: ${{APP_URL}} max_retries=${{HEALTH_MAX_RETRIES}} sleep_seconds=${{HEALTH_SLEEP_SECONDS}}"
+          for i in $(seq 1 "${{HEALTH_MAX_RETRIES}}"); do
+            if systemctl is-failed --quiet plate-main; then
+              log "plate-main entered failed state"
+              print_service_diagnostics
+              exit 1
+            fi
+
+            http_code="$(curl -sS -o /tmp/plate-main-health.out -w "%{{http_code}}" --max-time "${{HEALTH_CURL_TIMEOUT_SECONDS}}" "${{APP_URL}}" || true)"
+            if [ "${{http_code}}" = "200" ]; then
+              log "Readiness check succeeded"
+              systemctl status plate-main -l --no-pager || true
+              exit 0
+            fi
+
+            log "Readiness attempt ${{i}}/${{HEALTH_MAX_RETRIES}} failed with http_code=${{http_code}}"
+            sleep "${{HEALTH_SLEEP_SECONDS}}"
+          done
+
+          log "Readiness check failed after ${{HEALTH_MAX_RETRIES}} attempts"
+          if [ -s /tmp/plate-main-health.out ]; then
+            log "Last health response body"
+            tail -c 2000 /tmp/plate-main-health.out || true
+          fi
+          print_service_diagnostics
+          exit 1
+          """
+
+          json.dump({"commands": [deploy_script], "executionTimeout": ["900"]}, fp=sys.stdout)
+          PY
+
+          command_id="$(
+            aws ssm send-command \
+              --instance-ids "${EC2_INSTANCE_ID}" \
+              --document-name "AWS-RunShellScript" \
+              --comment "GitHub Actions deploy ${{ github.event.workflow_run.head_sha }}" \
+              --parameters "file://${parameters_file}" \
+              --query "Command.CommandId" \
               --output text
-          )
-          echo "deployment_id=${deployment_id}" >> "$GITHUB_OUTPUT"
-          echo "Created CodeDeploy deployment: ${deployment_id}"
+          )"
+          echo "Created SSM command: ${command_id}"
 
-      - name: Wait for CodeDeploy deployment
-        run: |
-          set -euo pipefail
-          deployment_id="${{ steps.codedeploy.outputs.deployment_id }}"
-          echo "Waiting for CodeDeploy deployment: ${deployment_id}"
-
-          print_deployment_diagnostics() {
-            echo "::group::CodeDeploy deployment details"
-            aws deploy get-deployment --deployment-id "${deployment_id}" --output json || true
-            echo "::endgroup::"
-
-            target_error_file="$(mktemp)"
-            target_ids="$(aws deploy list-deployment-targets --deployment-id "${deployment_id}" --query 'targetIds[]' --output text 2>"${target_error_file}" || true)"
-            if [ -s "${target_error_file}" ]; then
-              echo "CodeDeploy target diagnostics are unavailable. Grant codedeploy:ListDeploymentTargets and codedeploy:BatchGetDeploymentTargets to ${{ env.ROLE_ARN }}."
-              sed 's/^/AWS diagnostic permission error: /' "${target_error_file}"
-            fi
-            if [ -n "${target_ids}" ] && [ "${target_ids}" != "None" ]; then
-              echo "CodeDeploy target IDs: ${target_ids}"
-              echo "CodeDeploy target lifecycle summary"
-              # shellcheck disable=SC2086
-              aws deploy batch-get-deployment-targets \
-                --deployment-id "${deployment_id}" \
-                --target-ids ${target_ids} \
-                --query 'deploymentTargets[].{type:deploymentTargetType,targetId:instanceTarget.targetId,status:instanceTarget.status,lastUpdatedAt:instanceTarget.lastUpdatedAt,lifecycleEvents:instanceTarget.lifecycleEvents[].{name:lifecycleEventName,status:status,script:diagnostics.scriptName,error:diagnostics.errorCode,message:diagnostics.message,logTail:diagnostics.logTail}}' \
-                --output json || true
-              echo "::group::CodeDeploy target diagnostics"
-              # shellcheck disable=SC2086
-              aws deploy batch-get-deployment-targets --deployment-id "${deployment_id}" --target-ids ${target_ids} --output json || true
-              echo "::endgroup::"
-            else
-              echo "No CodeDeploy target IDs were returned for ${deployment_id}."
-            fi
-
-            instance_error_file="$(mktemp)"
-            instance_ids="$(aws deploy list-deployment-instances --deployment-id "${deployment_id}" --query 'instancesList[]' --output text 2>"${instance_error_file}" || true)"
-            if [ -s "${instance_error_file}" ]; then
-              echo "CodeDeploy EC2 instance diagnostics are unavailable. Grant codedeploy:ListDeploymentInstances and codedeploy:GetDeploymentInstance to ${{ env.ROLE_ARN }}."
-              sed 's/^/AWS diagnostic permission error: /' "${instance_error_file}"
-            fi
-            if [ -n "${instance_ids}" ] && [ "${instance_ids}" != "None" ]; then
-              echo "CodeDeploy EC2 instance IDs: ${instance_ids}"
-              echo "CodeDeploy EC2 lifecycle summary"
-              for instance_id in ${instance_ids}; do
-                echo "Deployment instance lifecycle summary for ${instance_id}"
-                aws deploy get-deployment-instance \
-                  --deployment-id "${deployment_id}" \
-                  --instance-id "${instance_id}" \
-                  --query 'instanceSummary.lifecycleEvents[].{name:lifecycleEventName,status:status,script:diagnostics.scriptName,error:diagnostics.errorCode,message:diagnostics.message,logTail:diagnostics.logTail}' \
-                  --output json || true
-              done
-              echo "::group::CodeDeploy EC2 instance diagnostics"
-              for instance_id in ${instance_ids}; do
-                echo "Deployment instance diagnostics for ${instance_id}"
-                aws deploy get-deployment-instance --deployment-id "${deployment_id}" --instance-id "${instance_id}" --output json || true
-              done
-              echo "::endgroup::"
-            else
-              echo "No CodeDeploy EC2 instance IDs were returned for ${deployment_id}."
-            fi
-          }
-
-          for attempt in $(seq 1 "${CODEDEPLOY_WAIT_ATTEMPTS}"); do
-            read -r status pending in_progress succeeded failed skipped ready < <(
-              aws deploy get-deployment \
-                --deployment-id "${deployment_id}" \
-                --query 'deploymentInfo.[status,deploymentOverview.Pending,deploymentOverview.InProgress,deploymentOverview.Succeeded,deploymentOverview.Failed,deploymentOverview.Skipped,deploymentOverview.Ready]' \
-                --output text
-            )
-            echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] attempt=${attempt}/${CODEDEPLOY_WAIT_ATTEMPTS} status=${status} overview={Pending:${pending},InProgress:${in_progress},Succeeded:${succeeded},Failed:${failed},Skipped:${skipped},Ready:${ready}}"
+          for attempt in $(seq 1 "${SSM_WAIT_ATTEMPTS}"); do
+            status="$(
+              aws ssm get-command-invocation \
+                --command-id "${command_id}" \
+                --instance-id "${EC2_INSTANCE_ID}" \
+                --query "Status" \
+                --output text 2>/dev/null || true
+            )"
+            status="${status:-Pending}"
+            echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] attempt=${attempt}/${SSM_WAIT_ATTEMPTS} status=${status}"
 
             case "${status}" in
               Succeeded)
-                echo "CodeDeploy deployment succeeded: ${deployment_id}"
+                aws ssm get-command-invocation \
+                  --command-id "${command_id}" \
+                  --instance-id "${EC2_INSTANCE_ID}" \
+                  --query "{Status:Status,ResponseCode:ResponseCode,StandardOutputContent:StandardOutputContent,StandardErrorContent:StandardErrorContent}" \
+                  --output json
                 exit 0
                 ;;
-              Failed|Stopped)
-                echo "CodeDeploy deployment ${status}: ${deployment_id}"
-                aws deploy get-deployment --deployment-id "${deployment_id}" --query 'deploymentInfo.errorInformation' --output json || true
-                print_deployment_diagnostics
+              Failed|Cancelled|TimedOut|Cancelling)
+                aws ssm get-command-invocation \
+                  --command-id "${command_id}" \
+                  --instance-id "${EC2_INSTANCE_ID}" \
+                  --query "{Status:Status,ResponseCode:ResponseCode,StandardOutputContent:StandardOutputContent,StandardErrorContent:StandardErrorContent}" \
+                  --output json || true
                 exit 1
                 ;;
             esac
 
-            sleep "${CODEDEPLOY_WAIT_SECONDS}"
+            sleep "${SSM_WAIT_SECONDS}"
           done
 
-          echo "Timed out waiting for CodeDeploy deployment: ${deployment_id}"
-          print_deployment_diagnostics
+          echo "Timed out waiting for SSM command: ${command_id}"
+          aws ssm get-command-invocation \
+            --command-id "${command_id}" \
+            --instance-id "${EC2_INSTANCE_ID}" \
+            --query "{Status:Status,ResponseCode:ResponseCode,StandardOutputContent:StandardOutputContent,StandardErrorContent:StandardErrorContent}" \
+            --output json || true
           exit 1
