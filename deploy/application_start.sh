@@ -5,6 +5,19 @@ log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S %Z')] [application_start] $*"
 }
 
+print_service_diagnostics() {
+  log "plate-main status"
+  systemctl status plate-main --no-pager -l || true
+
+  log "plate-main root-cause candidates from journal"
+  journalctl -u plate-main -n 800 --no-pager -o cat 2>/dev/null \
+    | grep -Ei "Caused by|Schema-validation|missing column|missing table|Flyway|Validate failed|BeanCreationException|PersistenceException|PSQLException|Exception|ERROR" \
+    | tail -n 120 || true
+
+  log "plate-main journal tail"
+  journalctl -u plate-main -n 800 --no-pager || true
+}
+
 APP_DIR="/opt/plate-main"
 SERVICE_FILE="/etc/systemd/system/plate-main.service"
 ENV_FILE="/etc/plate-main.env"
@@ -76,5 +89,10 @@ systemctl enable plate-main
 log "Restarting plate-main service."
 systemctl restart plate-main
 log "plate-main restart command completed."
+if ! systemctl is-active --quiet plate-main; then
+  log "plate-main is not active after restart."
+  print_service_diagnostics
+  exit 1
+fi
 systemctl status plate-main --no-pager -l || true
 log "ApplicationStart hook completed."
