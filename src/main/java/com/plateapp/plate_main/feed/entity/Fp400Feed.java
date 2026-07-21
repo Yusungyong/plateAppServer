@@ -52,7 +52,7 @@ public class Fp400Feed {
   @Column(name = "use_yn", nullable = false, length = 1)
   private String useYn = "Y";
 
-  @Column(name = "open_yn", length = 1)
+  @Column(name = "open_yn", columnDefinition = "char(1)")
   private String openYn;
 
   // 현재 데이터 없음(그래도 컬럼은 매핑 유지)

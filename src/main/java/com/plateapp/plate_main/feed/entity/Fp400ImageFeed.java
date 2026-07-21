@@ -62,7 +62,7 @@ public class Fp400ImageFeed {
   @Column(name = "use_yn", nullable = false)
   private String useYn;
 
-  @Column(name = "open_yn", length = 1)
+  @Column(name = "open_yn", columnDefinition = "char(1)")
   private String openYn;
 
   @Column(name = "thumbnail")
