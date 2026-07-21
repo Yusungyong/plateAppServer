@@ -9,13 +9,13 @@ print_service_diagnostics() {
   log "plate-main status"
   systemctl status plate-main -l --no-pager || true
 
-  log "plate-main root-cause candidates from journal"
-  journalctl -u plate-main -n 800 --no-pager -o cat 2>/dev/null \
-    | grep -Ei "Caused by|Schema-validation|missing column|missing table|Flyway|Validate failed|BeanCreationException|PersistenceException|PSQLException|Exception|ERROR" \
-    | tail -n 120 || true
+  log "plate-main recent journal tail"
+  journalctl -u plate-main -n 160 --no-pager || true
 
-  log "plate-main journal tail"
-  journalctl -u plate-main -n 800 --no-pager || true
+  log "plate-main root-cause candidates from journal (printed last for CodeDeploy logTail)"
+  journalctl -u plate-main -n 1000 --no-pager -o cat 2>/dev/null \
+    | grep -Ei "Caused by|Schema-validation|missing column|missing table|Flyway|Validate failed|BeanCreationException|PersistenceException|PSQLException|Exception|ERROR" \
+    | tail -n 80 || true
 }
 
 ENV_FILE="/etc/plate-main.env"
