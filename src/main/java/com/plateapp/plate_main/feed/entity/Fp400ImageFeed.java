@@ -3,6 +3,9 @@ package com.plateapp.plate_main.feed.entity;
 
 import java.time.LocalDateTime;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import com.plateapp.plate_main.user.entity.Fp100User;
 
 import jakarta.persistence.Column;
@@ -62,6 +65,7 @@ public class Fp400ImageFeed {
   @Column(name = "use_yn", nullable = false)
   private String useYn;
 
+  @JdbcTypeCode(SqlTypes.CHAR)
   @Column(name = "open_yn", columnDefinition = "char(1)")
   private String openYn;
 
